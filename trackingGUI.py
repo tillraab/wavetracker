@@ -378,7 +378,7 @@ class EOD_extraxt(QThread):
             pool = multiprocessing.Pool(core_count - 1)
             nfft = next_power_of_two(self.samplerate / self.SpecSettings.fresolution)
 
-            func = partial(spectrogram, samplerate=self.samplerate, freq_resolution=self.SpecSettings.fresolution, overlap_frac=self.SpecSettings.overlap_frac)
+            func = partial(spectrogram, ratetime=self.samplerate, freq_resolution=self.SpecSettings.fresolution, overlap_frac=self.SpecSettings.overlap_frac)
 
             if len(np.shape(self.data)) == 1:
                 a = pool.map(func, [self.data[start_idx: start_idx + self.SpecSettings.data_snippet_idxs]])
@@ -471,7 +471,7 @@ class EOD_extraxt(QThread):
             pool = multiprocessing.Pool(core_count - 1)
             nfft = next_power_of_two(self.samplerate / self.SpecSettings.fresolution)
 
-            func = partial(spectrogram, samplerate=self.samplerate, freq_resolution=self.SpecSettings.fresolution, overlap_frac=self.SpecSettings.overlap_frac)
+            func = partial(spectrogram, ratetime=self.samplerate, freq_resolution=self.SpecSettings.fresolution, overlap_frac=self.SpecSettings.overlap_frac)
 
             if len(np.shape(self.data)) == 1:
                 a = pool.map(func, [self.data[start_idx: start_idx + self.SpecSettings.data_snippet_idxs]])  # ret: spec, freq, time
@@ -515,8 +515,8 @@ class EOD_extraxt(QThread):
                     min_y = comp_min_freq
                     max_y = comp_max_freq
 
-                    x_borders = np.linspace(min_x, max_x, no_x * 2)
-                    y_borders = np.linspace(min_y, max_y, no_y * 2)
+                    x_borders = np.linspace(min_x, max_x, int(no_x * 2))
+                    y_borders = np.linspace(min_y, max_y, int(no_y * 2))
 
                     self.tmp_spectra = np.zeros((len(y_borders) - 1, len(x_borders) - 1))
                     self.tmp_spectra_SCH = np.array([np.zeros((len(y_borders) - 1, len(x_borders) - 1)) for ch in self.channel_list])
@@ -525,7 +525,7 @@ class EOD_extraxt(QThread):
                     if (self.tmp_times[1] - self.tmp_times[0]) > (x_borders[1] - x_borders[0]):
                         try:
                             print('da')
-                            x_borders = np.linspace(min_x, max_x, (max_x - min_x) // (self.tmp_times[1] - self.tmp_times[0]) + 1)
+                            x_borders = np.linspace(min_x, max_x, int((max_x - min_x) // (self.tmp_times[1] - self.tmp_times[0]) + 1))
                         except:
                             embed()
                             quit()
