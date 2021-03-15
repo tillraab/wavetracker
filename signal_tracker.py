@@ -9,7 +9,7 @@ from PyQt5.QtCore import *
 class Emit_progress():
     progress = pyqtSignal(float)
 
-def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 10., n_channels=64, max_dt=10., ioi_fti=False,
+def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_channels=64, max_dt=10., ioi_fti=False,
                      freq_lims=(400, 1200), emit = False):
     """
     Sorting algorithm which sorts fundamental EOD frequnecies detected in consecutive powespectra of single or
@@ -227,7 +227,6 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 10., n_cha
                     errors_to_v[i1_m[layer][idx1]] = cp_error_cube[layer - 1][idx0, idx1]
                     not_made_connections[layer - 1, idx0, idx1] = 0
                     made_connections[layer - 1, idx0, idx1] = 1
-
 
             else:
                 if np.isnan(tmp_ident_v[i1_m[layer][idx1]]):
@@ -687,7 +686,7 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 10., n_cha
         if emit == True:
             Emit_progress.progress.emit(i / len(fundamentals) * 100)
 
-        if len(np.hstack(i0_m)) == 0 or len(np.hstack(i0_m)) == 0:
+        if len(np.hstack(i0_m)) == 0 or len(np.hstack(i1_m)) == 0:
             error_cube, i0_m, i1_m, cube_app_idx = create_error_cube(i0_m, i1_m, error_cube, cube_app_idx, freq_lims,
                                                                      update=True)
             start_idx += 1
@@ -701,9 +700,6 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 10., n_cha
             a_error_distribution, f_error_distribution = \
                 get_a_and_f_error_dist(fund_v, idx_v, sign_v, start_idx, idx_comp_range, freq_lims, freq_tolerance)
 
-            if len(np.hstack(i0_m)) == 0 or len(np.hstack(i1_m)) == 0:
-                print('### got the case ###')
-                continue
             tmp_ident_v, errors_to_v = get_tmp_identities(i0_m, i1_m, error_cube, fund_v, idx_v, i, ioi_fti,
                                                           idx_comp_range)
 
@@ -713,8 +709,9 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 10., n_cha
                     next_identity += 1
 
             # assing tmp identities ##################################
-            ident_v, next_identity = assign_tmp_ids(ident_v, tmp_ident_v, idx_v, fund_v, error_cube, idx_comp_range,
-                                                    next_identity, i0_m, i1_m, freq_lims)
+            else:
+                ident_v, next_identity = assign_tmp_ids(ident_v, tmp_ident_v, idx_v, fund_v, error_cube, idx_comp_range,
+                                                        next_identity, i0_m, i1_m, freq_lims)
 
         error_cube, i0_m, i1_m, cube_app_idx = create_error_cube(i0_m, i1_m, error_cube, cube_app_idx, freq_lims,
                                                                  update=True)
@@ -765,7 +762,7 @@ def boltzmann(t, alpha=0.25, beta=0.0, x0=4, dx=0.85):
 
 
 def load_example_data():
-    folder = "/home/raab/data/2016-colombia/2016-04-10-11_12"
+    folder = "/home/raab/paper_create/2021_tracking/data/2016-04-10-11_12"
 
     if os.path.exists(os.path.join(folder, 'fund_v.npy')):
         fund_v = np.load(os.path.join(folder, 'fund_v.npy'))
@@ -781,11 +778,13 @@ def load_example_data():
 
 
 def back_shape_data(fund_v, sign_v, idx_v, times):
-    t0 = 17150
-    # t0 = 1000
-    t1 = 17250
-    # t1 = 1200
-    mask = np.arange(len(idx_v))[(times[idx_v] >= t0) & (times[idx_v] <= t1)]
+    # t0 = 17160
+    # # t0 = 1000
+    # t1 = 17250
+    # # t1 = 1200
+    # mask = np.arange(len(idx_v))[(times[idx_v] >= t0) & (times[idx_v] <= t1)]
+
+    mask = np.arange(len(idx_v))
     fundamentals = []
     signatures = []
 
