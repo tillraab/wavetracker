@@ -24,14 +24,16 @@ class Display_agorithm():
         self.error_dist_i0s = error_dist_i0s
         self.error_dist_i1s = error_dist_i1s
 
+        self.handles = {}
+
     def plot_a_error_dist(self):
         from plottools.axes import tag
 
         X, Y = np.meshgrid(np.arange(8), np.arange(8))
 
         ####
-        fig = plt.figure(figsize=(14 / 2.54, 12 / 2.54))
-        gs = gridspec.GridSpec(3, 3, left=0.15, bottom=0.1, right=0.95, top=0.95, hspace=0.4, wspace=0.4, height_ratios=[2, 2, 1.5])
+        fig = plt.figure(figsize=(17.5 / 2.54, 10 / 2.54))
+        gs = gridspec.GridSpec(3, 4, left=0.1, bottom=0.15, right=0.95, top=0.95, hspace=0.4, wspace=0.4, height_ratios=[2, 2, 1.5])
         ax = []
         ax.append(fig.add_subplot(gs[0, 0]))
         ax.append(fig.add_subplot(gs[1, 0]))
@@ -42,13 +44,17 @@ class Display_agorithm():
         ax.append(fig.add_subplot(gs[0, 2]))
         ax.append(fig.add_subplot(gs[1, 2]))
 
+        ax.append(fig.add_subplot(gs[0, 3]))
+        ax.append(fig.add_subplot(gs[1, 3]))
+
         # gs2 = gridspec.GridSpec(1, 1, left=0.25, bottom=0.1, right=0.85, top=0.3, hspace=0.3, wspace=0.3)
         ax.append(fig.add_subplot(gs[2, :]))
         ####
 
         mask = np.argsort(self.a_error_dist)
-        ex = np.array(np.floor(np.linspace(10, len(mask)-1, 4)), dtype=int)[:-1]
-        ex_color = ['forestgreen', 'darkorange', 'firebrick']
+        ex = np.array(np.floor(np.linspace(10, len(mask)-1, 4)), dtype=int)
+        ex[-1] -= 20
+        ex_color = ['forestgreen', 'gold', 'darkorange', 'firebrick']
 
         ex_i0 = self.error_dist_i0s[mask[ex]]
         ex_i1 = self.error_dist_i1s[mask[ex]]
@@ -75,68 +81,98 @@ class Display_agorithm():
             ax[enu*2+1].set_yticks([])
 
         ax[-1].plot(self.a_error_dist[mask], np.linspace(0, 1, len(self.a_error_dist)), color='midnightblue', clip_on=False)
-        for enu in range(3):
+        for enu in range(4):
             ax[-1].plot(self.a_error_dist[mask[ex[enu]]], np.linspace(0, 1, len(self.a_error_dist))[ex[enu]], 'o', color=ex_color[enu], clip_on=False, markersize=6)
         ax[-1].set_ylim(0, 1)
-        ax[-1].set_yticks([0, 0.5, 1])
+        ax[-1].set_yticks([0, 1])
 
         ax[-1].set_xlim(0, np.max(self.a_error_dist))
         ax[-1].set_ylabel('field error', fontsize=12)
         ax[-1].set_xlabel(r'$\Delta$ field amplitude', fontsize=12)
         ax[-1].tick_params(labelsize=10)
 
-        fig.tag(axes=[ax[0], ax[6]], labels=['A', 'D'], fontsize=15, yoffs=2, xoffs=-6)
-        fig.tag(axes=[ax[2], ax[4]], labels=['B', 'C'], fontsize=15, yoffs=2, xoffs=-3)
+        # fig.tag(axes=[ax[0], ax[8]], labels=['A', 'E'], fontsize=15, yoffs=2, xoffs=-6)
+        # fig.tag(axes=[ax[2], ax[4], ax[6]], labels=['B', 'C', 'D'], fontsize=15, yoffs=2, xoffs=-3)
 
-        plt.savefig('amplitude_error_dist.pdf')
+        plt.close()
+        # plt.savefig('amplitude_error_dist.pdf')
 
     def plot_assign(self, origin_idx, tartget_idx0, alt_target_idx):
-        fig = plt.figure(figsize=(20/2.54, 12/2.54))
-        gs = gridspec.GridSpec(1, 1, left=0.1, bottom=0.15, right=0.75, top=0.75)
-        ax = fig.add_subplot(gs[0, 0])
+        test_alt_idx = alt_target_idx[0] if alt_target_idx[0] != tartget_idx0 else alt_target_idx[1]
 
-        ax.imshow(decibel(self.spec)[::-1], extent=[self.times[0], self.times[-1], 0, 2000],
+        if np.abs(self.fund_v[origin_idx] - self.fund_v[tartget_idx0]) >= np.abs(self.fund_v[origin_idx] - self.fund_v[test_alt_idx]):
+
+            fig = plt.figure(figsize=(20/2.54, 12/2.54))
+            gs = gridspec.GridSpec(1, 1, left=0.1, bottom=0.15, right=0.75, top=0.75)
+            ax = fig.add_subplot(gs[0, 0])
+
+            ax.imshow(decibel(self.spec)[::-1], extent=[self.times[0], self.times[-1], 0, 2000],
+                      aspect='auto', alpha=0.7, cmap='jet', vmax=-50, vmin=-110, interpolation='gaussian', zorder=1)
+
+            ax.plot(self.times[self.idx_v], self.fund_v, '.', color='grey', markersize=3)
+            ax.plot(self.times[self.idx_v[origin_idx]], self.fund_v[origin_idx], '.', color='k', markersize=10)
+            ax.plot(self.times[self.idx_v[tartget_idx0]], self.fund_v[tartget_idx0], '.', color='green', markersize=10)
+
+            for alt_idx in alt_target_idx:
+                if alt_idx != tartget_idx0:
+                    ax.plot(self.times[self.idx_v[alt_idx]], self.fund_v[alt_idx], '.', color='red', markersize=10)
+
+            help_idx = np.concatenate((np.array([origin_idx, tartget_idx0]), np.array(alt_target_idx)))
+            xs = self.times[self.idx_v[help_idx]]
+            ys = self.fund_v[help_idx]
+
+            ax.set_xlim(np.min(xs) - 5, np.max(xs) + 5)
+            ax.set_ylim(np.min(ys) - 30, np.max(ys) + 30)
+
+            gs2 = gridspec.GridSpec(1, 1, left = 0.6, bottom=0.6, right=0.95, top=0.95)
+            ax_ins = fig.add_subplot(gs2[0, 0])
+
+            ax_ins.plot(np.arange(0, 2.5, 0.001), boltzmann(np.arange(0, 2.5, 0.001), alpha=1, beta=0, x0=.35, dx=.08), color='midnightblue')
+
+            ax_ins.set_xlim(-.025, 1)
+            ax_ins.set_xticks([0, 0.5, 1])
+            ax_ins.set_ylim(-.025, 1)
+            ax_ins.set_yticks([0, 1])
+
+            df_target = np.abs(self.fund_v[tartget_idx0] - self.fund_v[origin_idx])
+            f_error = boltzmann(df_target, alpha=1, beta=0, x0=.35, dx=.08)
+
+            ax_ins.plot([df_target, df_target], [-.025, f_error], color='green', lw=4)
+            ax_ins.plot([-.025, df_target], [f_error, f_error], color='green', lw=4)
+
+            for alt_idx in alt_target_idx:
+                if alt_idx != tartget_idx0:
+                    df_target = np.abs(self.fund_v[alt_idx] - self.fund_v[origin_idx])
+                    f_error = boltzmann(df_target, alpha=1, beta=0, x0=.35, dx=.08)
+
+                    ax_ins.plot([df_target, df_target], [-.025, f_error], color='red', lw=4)
+                    ax_ins.plot([-.025, df_target], [f_error, f_error], color='red', lw=4)
+
+            plt.show()
+
+    def life_tmp_ident_init(self, min_i0, max_i1):
+
+        self.fig, self.ax = plt.subplots()
+        self.ax.imshow(decibel(self.spec)[::-1], extent=[self.times[0], self.times[-1], 0, 2000],
                   aspect='auto', alpha=0.7, cmap='jet', vmax=-50, vmin=-110, interpolation='gaussian', zorder=1)
 
-        ax.plot(self.times[self.idx_v], self.fund_v, '.', color='grey', markersize=3)
-        ax.plot(self.times[self.idx_v[origin_idx]], self.fund_v[origin_idx], '.', color='k', markersize=10)
-        ax.plot(self.times[self.idx_v[tartget_idx0]], self.fund_v[tartget_idx0], '.', color='green', markersize=10)
+        self.ax.set_xlim(self.times[self.idx_v[min_i0]], self.times[self.idx_v[max_i1]])
+        self.ax.set_ylim(880, 950)
+        plt.pause(0.05)
 
-        for alt_idx in alt_target_idx:
-            if alt_idx != tartget_idx0:
-                ax.plot(self.times[self.idx_v[alt_idx]], self.fund_v[alt_idx], '.', color='red', markersize=10)
 
-        help_idx = np.concatenate((np.array([origin_idx, tartget_idx0]), np.array(alt_target_idx)))
-        xs = self.times[self.idx_v[help_idx]]
-        ys = self.fund_v[help_idx]
+    def life_tmp_ident_update(self, tmp_indet_v, new=None, update=None, delete=None):
+        if new:
+            self.handles[new], = self.ax.plot(self.times[self.idx_v[tmp_indet_v == new]], self.fund_v[tmp_indet_v == new], marker='.')
+        if update:
+            self.handles[update].set_data(self.times[self.idx_v[tmp_indet_v == update]], self.fund_v[tmp_indet_v == update])
+        if delete:
+            self.handles[delete].remove()
+            del self.handles[delete]
 
-        ax.set_xlim(np.min(xs) - 5, np.max(xs) + 5)
-        ax.set_ylim(np.min(ys) - 30, np.max(ys) + 30)
+        plt.pause(0.05)
 
-        gs2 = gridspec.GridSpec(1, 1, left = 0.6, bottom=0.6, right=0.95, top=0.95)
-        ax_ins = fig.add_subplot(gs2[0, 0])
 
-        ax_ins.plot(np.arange(0, 2.5, 0.001), boltzmann(np.arange(0, 2.5, 0.001), alpha=1, beta=0, x0=.5, dx=.10), color='midnightblue')
-        ax_ins.set_xlim(-.025, 1)
-        ax_ins.set_xticks([0, 0.5, 1])
-        ax_ins.set_ylim(-.025, 1)
-        ax_ins.set_yticks([0, 1])
-
-        df_target = np.abs(self.fund_v[tartget_idx0] - self.fund_v[origin_idx])
-        f_error = boltzmann(df_target, alpha=1, beta=0, x0=.5, dx=.10)
-
-        ax_ins.plot([df_target, df_target], [-.025, f_error], color='green', lw=4)
-        ax_ins.plot([-.025, df_target], [f_error, f_error], color='green', lw=4)
-
-        for alt_idx in alt_target_idx:
-            if alt_idx != tartget_idx0:
-                df_target = np.abs(self.fund_v[alt_idx] - self.fund_v[origin_idx])
-                f_error = boltzmann(df_target, alpha=1, beta=0, x0=.5, dx=.10)
-
-                ax_ins.plot([df_target, df_target], [-.025, f_error], color='red', lw=4)
-                ax_ins.plot([-.025, df_target], [f_error, f_error], color='red', lw=4)
-
-        plt.show()
 
 def aux():
     pass
@@ -507,6 +543,8 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
         # if len(np.unique(tmp_idx_v[targets])) == len(tmp_idx_v[targets]):
         #     print('alternative available')
 
+        da.life_tmp_ident_init(min_i0, max_i1)
+
         for layer, idx0, idx1 in zip(layers[:i_non_nan], idx0s[:i_non_nan], idx1s[:i_non_nan]):
             if np.isnan(cp_error_cube[layer - 1, idx0, idx1]):
                 break
@@ -530,6 +568,13 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
                     not_made_connections[layer - 1, idx0, idx1] = 0
                     made_connections[layer - 1, idx0, idx1] = 1
                     next_tmp_identity += 1
+
+                    tmp_ident_v_ret = np.full(len(fund_v), np.nan)
+                    tmp_ident_v_ret[min_i0:max_i1 + 1] = tmp_ident_v
+
+                    if 850 < tmp_fund_v[i0_m[layer][idx0]] < 950:
+                        da.life_tmp_ident_update(tmp_ident_v_ret, new = tmp_ident_v[i0_m[layer][idx0]])
+                    # TODO: ALL NEW
                 else:
 
                     mask = np.arange(len(tmp_ident_v))[tmp_ident_v == tmp_ident_v[i1_m[layer][idx1]]]  # idxs of target
@@ -557,6 +602,12 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
                     not_made_connections[layer - 1, idx0, idx1] = 0
                     made_connections[layer - 1, idx0, idx1] = 1
 
+                    tmp_ident_v_ret = np.full(len(fund_v), np.nan)
+                    tmp_ident_v_ret[min_i0:max_i1 + 1] = tmp_ident_v
+                    if 850 < tmp_fund_v[i0_m[layer][idx0]] < 950:
+                        da.life_tmp_ident_update(tmp_ident_v_ret, update = tmp_ident_v[i1_m[layer][idx1]])
+                    # TODO: UPDATE I1
+
             else:
                 if np.isnan(tmp_ident_v[i1_m[layer][idx1]]):
                     mask = np.arange(len(tmp_ident_v))[tmp_ident_v == tmp_ident_v[i0_m[layer][idx0]]]
@@ -582,6 +633,12 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
                     not_made_connections[layer - 1, idx0, idx1] = 0
                     made_connections[layer - 1, idx0, idx1] = 1
 
+                    tmp_ident_v_ret = np.full(len(fund_v), np.nan)
+                    tmp_ident_v_ret[min_i0:max_i1 + 1] = tmp_ident_v
+                    if 850 < tmp_fund_v[i0_m[layer][idx0]] < 950:
+                        da.life_tmp_ident_update(tmp_ident_v_ret, update = tmp_ident_v[i0_m[layer][idx0]])
+                    # TODO: UPDATE I0
+
 
                 else:
                     if tmp_ident_v[i0_m[layer][idx0]] == tmp_ident_v[i1_m[layer][idx1]]:
@@ -596,12 +653,20 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 
                     if np.any(np.diff(sorted(np.concatenate((idxs_i0, idxs_i1)))) == 0):
                         continue
+
+                    del_idx = tmp_ident_v[i0_m[layer][idx0]]
                     tmp_ident_v[tmp_ident_v == tmp_ident_v[i0_m[layer][idx0]]] = tmp_ident_v[i1_m[layer][idx1]]
 
                     if np.isnan(errors_to_v[i1_m[layer][idx1]]):
                         errors_to_v[i1_m[layer][idx1]] = cp_error_cube[layer - 1][idx0, idx1]
                         not_made_connections[layer - 1, idx0, idx1] = 0
                         made_connections[layer - 1, idx0, idx1] = 1
+
+                    tmp_ident_v_ret = np.full(len(fund_v), np.nan)
+                    tmp_ident_v_ret[min_i0:max_i1 + 1] = tmp_ident_v
+                    if 850 < tmp_fund_v[i0_m[layer][idx0]] < 950:
+                        da.life_tmp_ident_update(tmp_ident_v_ret, update = tmp_ident_v[i1_m[layer][idx1]], delete = del_idx)
+                    # TODO: UPDATE I1; delete i0
 
             origin_idx = i0_m[layer][idx0]
             targets_mask = np.arange(len(cp_error_cube[layer - 1, idx0, :]))[~np.isnan(cp_error_cube[layer - 1, idx0, :])]
@@ -611,19 +676,16 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
             if len(tmp_idx_v[target_idxs][tmp_idx_v[target_idxs] == tmp_idx_v[target_idx]]) >= 2:
                 alternatives = target_idxs[np.arange(len(target_idxs))[tmp_idx_v[target_idxs] == tmp_idx_v[target_idx]]]
                 da.plot_assign(origin_idx + min_i0, target_idx + min_i0, alternatives + min_i0)
-                # print('alternative available')
-                # embed()
-                # quit()
-            # if len(np.unique(tmp_idx_v[target_idx])) != len(tmp_idx_v[target_idx]):
-            #     print('alternative available')
-            #     embed()
-            #     quit()
+
 
         #### this is new and in progress ####
         # ToDo: cut those strange ones... NOPE identify potential new partner first!!! s.u.
 
         tmp_ident_v_ret = np.full(len(fund_v), np.nan)
         tmp_ident_v_ret[min_i0:max_i1 + 1] = tmp_ident_v
+
+        plt.show()
+        plt.close()
 
         return tmp_ident_v_ret, errors_to_v
 
@@ -862,11 +924,11 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
             next_cleanup += int(idx_comp_range * 120)
 
         if i % idx_comp_range == 0:  # next total sorting step
-            a_error_distribution, f_error_distribution, error_dist_i0s, error_dist_i1s = \
-                get_a_and_f_error_dist(fund_v, idx_v, sign_v, start_idx, idx_comp_range, freq_lims, freq_tolerance)
-            da.a_error_dist = a_error_distribution
-            da.error_dist_i0s = error_dist_i0s
-            da.error_dist_i1s = error_dist_i1s
+            # a_error_distribution, f_error_distribution, error_dist_i0s, error_dist_i1s = \
+            #     get_a_and_f_error_dist(fund_v, idx_v, sign_v, start_idx, idx_comp_range, freq_lims, freq_tolerance)
+            # da.a_error_dist = a_error_distribution
+            # da.error_dist_i0s = error_dist_i0s
+            # da.error_dist_i1s = error_dist_i1s
 
             tmp_ident_v, errors_to_v = get_tmp_identities(i0_m, i1_m, error_cube, fund_v, idx_v, i, ioi_fti,
                                                           idx_comp_range)
@@ -877,9 +939,9 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
                     next_identity += 1
 
             # assing tmp identities ##################################
-            else:
-                ident_v, next_identity = assign_tmp_ids(ident_v, tmp_ident_v, idx_v, fund_v, error_cube, idx_comp_range,
-                                                        next_identity, i0_m, i1_m, freq_lims)
+
+            ident_v, next_identity = assign_tmp_ids(ident_v, tmp_ident_v, idx_v, fund_v, error_cube, idx_comp_range,
+                                                    next_identity, i0_m, i1_m, freq_lims)
 
         error_cube, i0_m, i1_m, cube_app_idx = create_error_cube(i0_m, i1_m, error_cube, cube_app_idx, freq_lims,
                                                                  update=True)
@@ -893,12 +955,22 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 def estimate_error(a_error, f_error, a_error_distribution):
     a_weight = 2. / 3
     f_weight = 1. / 3
+    # a_weight = 3. / 4
+    # f_weight = 1. / 4
     if len(a_error_distribution) > 0:
         a_e = a_weight * len(a_error_distribution[a_error_distribution < a_error]) / len(a_error_distribution)
     else:
         a_e = 1
-    #f_e = f_weight * boltzmann(f_error, alpha=1, beta=0, x0=.25, dx=.15)
-    f_e = f_weight * boltzmann(f_error, alpha=1, beta=0, x0=.50, dx=.10)
+    f_e = f_weight * boltzmann(f_error, alpha=1, beta=0, x0=.35, dx=.08)
+    # f_e = f_weight * boltzmann(f_error, alpha=1, beta=0, x0=.25, dx=.15)
+
+    #f_e = f_weight * boltzmann(f_error, alpha=1, beta=0, x0=.50, dx=.10)
+
+    # newset:
+    #f_e = f_weight * boltzmann(f_error, alpha=1, beta=0, x0=.25, dx=.10)
+    # plt.plot(f_error, boltzmann(f_error, alpha=1, beta=0, x0=.35, dx=.08))
+    # plt.ylim(0, 1)
+    # plt.show()
 
     return [a_e, f_e, 0]
 
