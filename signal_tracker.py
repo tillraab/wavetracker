@@ -25,24 +25,26 @@ class Display_agorithm():
         self.error_dist_i1s = error_dist_i1s
 
     def plot_a_error_dist(self):
-        embed()
-        quit()
+        from plottools.axes import tag
+
         X, Y = np.meshgrid(np.arange(8), np.arange(8))
 
-        fig = plt.figure(figsize=(20/2.54, 12/2.54))
-        gs = gridspec.GridSpec(3, 2, left=0.05, bottom=0.05, right=0.5, top=0.95, hspace=0.3)
+        ####
+        fig = plt.figure(figsize=(14 / 2.54, 12 / 2.54))
+        gs = gridspec.GridSpec(3, 3, left=0.15, bottom=0.1, right=0.95, top=0.95, hspace=0.4, wspace=0.4, height_ratios=[2, 2, 1.5])
         ax = []
-        ax.append(fig.add_subplot(gs[2, 0]))
-        ax.append(fig.add_subplot(gs[2, 1]))
-
+        ax.append(fig.add_subplot(gs[0, 0]))
         ax.append(fig.add_subplot(gs[1, 0]))
+
+        ax.append(fig.add_subplot(gs[0, 1]))
         ax.append(fig.add_subplot(gs[1, 1]))
 
-        ax.append(fig.add_subplot(gs[0, 0]))
-        ax.append(fig.add_subplot(gs[0, 1]))
+        ax.append(fig.add_subplot(gs[0, 2]))
+        ax.append(fig.add_subplot(gs[1, 2]))
 
-        gs2 = gridspec.GridSpec(1, 1, left=0.65, bottom=0.2, right=0.95, top=0.8)
-        ax.append(fig.add_subplot(gs2[0, 0]))
+        # gs2 = gridspec.GridSpec(1, 1, left=0.25, bottom=0.1, right=0.85, top=0.3, hspace=0.3, wspace=0.3)
+        ax.append(fig.add_subplot(gs[2, :]))
+        ####
 
         mask = np.argsort(self.a_error_dist)
         ex = np.array(np.floor(np.linspace(10, len(mask)-1, 4)), dtype=int)[:-1]
@@ -61,9 +63,10 @@ class Display_agorithm():
             for x, y in zip(X, Y):
                 ax[enu*2].plot(x, y, '.', color='k', markersize=2)
                 ax[enu*2+1].plot(x, y, '.', color='k', markersize=2)
-            x0, x1 = ax[enu * 2].get_xlim()
-            ax[enu * 2].arrow(8.5, 3.5, 2, 0, head_width=.7, head_length=.7, clip_on=False, color=ex_color[enu], lw=2.5)
-            ax[enu * 2].set_xlim(x0, x1)
+            y0, y1 = ax[enu * 2].get_ylim()
+            #ax[enu * 2].arrow(8.5, 3.5, 2, 0, head_width=.7, head_length=.7, clip_on=False, color=ex_color[enu], lw=2.5)
+            ax[enu * 2].arrow(3.5, 8.25, 0, .8, head_width=.7, head_length=.7, clip_on=False, color=ex_color[enu], lw=2)
+            ax[enu * 2].set_ylim(y0, y1)
 
             ax[enu*2].set_xticks([])
             ax[enu*2+1].set_xticks([])
@@ -71,13 +74,21 @@ class Display_agorithm():
             ax[enu*2].set_yticks([])
             ax[enu*2+1].set_yticks([])
 
-        ax[-1].plot(self.a_error_dist[mask], np.linspace(0, 1, len(self.a_error_dist)), color='midnightblue')
+        ax[-1].plot(self.a_error_dist[mask], np.linspace(0, 1, len(self.a_error_dist)), color='midnightblue', clip_on=False)
         for enu in range(3):
-            ax[-1].plot(self.a_error_dist[mask[ex[enu]]], np.linspace(0, 1, len(self.a_error_dist))[ex[enu]], 'o', color=ex_color[enu], clip_on=False, markersize=8)
+            ax[-1].plot(self.a_error_dist[mask[ex[enu]]], np.linspace(0, 1, len(self.a_error_dist))[ex[enu]], 'o', color=ex_color[enu], clip_on=False, markersize=6)
         ax[-1].set_ylim(0, 1)
-        ax[-1].set_xlim(left=0)
+        ax[-1].set_yticks([0, 0.5, 1])
+
+        ax[-1].set_xlim(0, np.max(self.a_error_dist))
         ax[-1].set_ylabel('field error', fontsize=12)
         ax[-1].set_xlabel(r'$\Delta$ field amplitude', fontsize=12)
+        ax[-1].tick_params(labelsize=10)
+
+        fig.tag(axes=[ax[0], ax[6]], labels=['A', 'D'], fontsize=15, yoffs=2, xoffs=-6)
+        fig.tag(axes=[ax[2], ax[4]], labels=['B', 'C'], fontsize=15, yoffs=2, xoffs=-3)
+
+        plt.savefig('amplitude_error_dist.pdf')
 
     def plot_assign(self, origin_idx, tartget_idx0, alt_target_idx):
         fig = plt.figure(figsize=(20/2.54, 12/2.54))
