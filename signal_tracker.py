@@ -18,7 +18,8 @@ class Display_agorithm():
         self.ident_v = ident_v
         self.idx_v = idx_v
         self.times = times
-        self.spec = np.load("/home/raab/thesis/code/tracking_display/spec.npy")
+        # self.spec = np.load("/home/raab/thesis/code/tracking_display/spec.npy")
+        self.spec = np.load("/home/raab/writing/2021_tracking/code/tracking_display/spec.npy")
 
         self.a_error_dist = a_error_distribution
         self.error_dist_i0s = error_dist_i0s
@@ -36,10 +37,6 @@ class Display_agorithm():
         X, Y = np.meshgrid(np.arange(8), np.arange(8))
 
         ####
-
-        embed()
-        quit()
-
         fig = plt.figure(figsize=(17.5 / 2.54, 10 / 2.54))
         gs = gridspec.GridSpec(3, 4, left=0.1, bottom=0.15, right=0.95, top=0.95, hspace=0.4, wspace=0.4, height_ratios=[2, 2, 1.5])
         ax = []
@@ -747,9 +744,9 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
             target_idxs = i1_m[layer][targets_mask]
             target_idx = i1_m[layer][idx1]
 
-            if len(tmp_idx_v[target_idxs][tmp_idx_v[target_idxs] == tmp_idx_v[target_idx]]) >= 2:
-                alternatives = target_idxs[np.arange(len(target_idxs))[tmp_idx_v[target_idxs] == tmp_idx_v[target_idx]]]
-                da.plot_assign(origin_idx + min_i0, target_idx + min_i0, alternatives + min_i0)
+            # if len(tmp_idx_v[target_idxs][tmp_idx_v[target_idxs] == tmp_idx_v[target_idx]]) >= 2:
+            #     alternatives = target_idxs[np.arange(len(target_idxs))[tmp_idx_v[target_idxs] == tmp_idx_v[target_idx]]]
+            #     da.plot_assign(origin_idx + min_i0, target_idx + min_i0, alternatives + min_i0)
 
 
         tmp_ident_v_ret = np.full(len(fund_v), np.nan)
@@ -764,8 +761,6 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 
         #print(da.itter_counter)
         plt.show()
-
-        plt.close()
 
         return tmp_ident_v_ret, errors_to_v
 
@@ -984,7 +979,8 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 
     da = Display_agorithm(fund_v, ident_v, idx_v, sign_v, times, a_error_distribution, error_dist_i0s, error_dist_i1s)
 
-    da.plot_a_error_dist()
+    # amplitude error with 4 examples
+    # da.plot_a_error_dist()
 
     next_identity = 0
     next_cleanup = int(idx_comp_range * 120)
@@ -1011,7 +1007,10 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
             # da.error_dist_i1s = error_dist_i1s
 
             #show_plotting = True if 17150 <= times[i] < 17160 else False
-            show_plotting = True if 17160 <= times[i] < 17170 else False
+            if visualize:
+                show_plotting = True if 17160 <= times[i] < 17170 else False
+            else:
+                show_plotting = False
             tmp_ident_v, errors_to_v = get_tmp_identities(i0_m, i1_m, error_cube, fund_v, idx_v, i, ioi_fti,
                                                           idx_comp_range, show=show_plotting)
 
@@ -1087,7 +1086,7 @@ def boltzmann(t, alpha=0.25, beta=0.0, x0=4, dx=0.85):
 def load_example_data():
 
     # folder = "/home/raab/paper_create/2021_tracking/data/2016-04-10-11_12"
-    folder = "/home/raab/thesis/code/tracking_display"
+    folder = "/home/raab/writing/2021_tracking/code/tracking_display"
 
     if os.path.exists(os.path.join(folder, 'fund_v.npy')):
         fund_v = np.load(os.path.join(folder, 'fund_v.npy'))
@@ -1153,9 +1152,12 @@ def main():
     fundamentals, signatures = back_shape_data(fund_v, sign_v, idx_v, times)
 
     fund_v, ident_v, idx_v, sign_v, a_error_distribution, f_error_distribution, idx_of_origin_v, original_sign_v = \
-        freq_tracking_v5(fundamentals, signatures, times, visualize=True)
+        freq_tracking_v5(fundamentals, signatures, times, visualize=False)
 
     plot_tracked_traces(ident_v, fund_v, idx_v, times)
+
+    embed()
+    quit()
 
 if __name__ == '__main__':
     main()
