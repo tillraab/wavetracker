@@ -1,6 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+from matplotlib.patches import ConnectionPatch
+from plottools.colors import *
+colors_params(colors_muted, colors_tableau)
 import os
 from IPython import embed
 from tqdm import tqdm
@@ -19,7 +22,7 @@ class Display_agorithm():
         self.idx_v = idx_v
         self.times = times
         # self.spec = np.load("/home/raab/thesis/code/tracking_display/spec.npy")
-        self.spec = np.load("/home/raab/writing/2021_tracking/code/tracking_display/spec.npy")
+        self.spec = np.load("/home/raab/writing/2021_tracking/data/2016-04-10-11_12/spec.npy")
 
         self.a_error_dist = a_error_distribution
         self.error_dist_i0s = error_dist_i0s
@@ -32,7 +35,7 @@ class Display_agorithm():
         self.itter_counter = 0
 
     def plot_a_error_dist(self):
-        from plottools.axes import tag
+        from plottools.tag import tag
 
         X, Y = np.meshgrid(np.arange(8), np.arange(8))
 
@@ -158,64 +161,69 @@ class Display_agorithm():
     def static_tmp_id_tracking(self, min_i0, max_i1):
         t0 = self.times[self.idx_v[min_i0]]
 
-        self.combo_fig = plt.figure(figsize=(9.5/2.54, 15/2.54))
-        gs = gridspec.GridSpec(4, 1, left=.2, bottom=.1, right=.95, top=.975, height_ratios=[.5, 2, 2, 2], hspace=0.5)
+        self.combo_fig = plt.figure(figsize=(9.5/2.54, 14/2.54))
+        gs = gridspec.GridSpec(3, 1, left=.2, bottom=.1, right=.95, top=.9, height_ratios=[2, 2, 2], hspace=0.3)
         self.combo_ax = []
+        # self.combo_ax.append(self.combo_fig.add_subplot(gs[0, 0]))
         self.combo_ax.append(self.combo_fig.add_subplot(gs[0, 0]))
         self.combo_ax.append(self.combo_fig.add_subplot(gs[1, 0], sharex = self.combo_ax[0]))
         self.combo_ax.append(self.combo_fig.add_subplot(gs[2, 0], sharex = self.combo_ax[0]))
-        self.combo_ax.append(self.combo_fig.add_subplot(gs[3, 0], sharex = self.combo_ax[0]))
-
-        # max_dt = self.times[self.idx_v[max_i1]] - self.times[self.idx_v[min_i0]]
-        # self.combo_ax[0].plot(
-        #     [self.times[self.idx_v[min_i0]] + max_dt * 0 / 3. - t0, self.times[self.idx_v[min_i0]] + max_dt * 1 / 3 - t0],
-        #     [0, 1], color='k', lw=2)
-        # self.combo_ax[0].plot(
-        #     [self.times[self.idx_v[min_i0]] + max_dt * 1 / 3. - t0, self.times[self.idx_v[min_i0]] + max_dt * 2 / 3 - t0],
-        #     [1, 1], color='k', lw=2)
-        # self.combo_ax[0].plot(
-        #     [self.times[self.idx_v[min_i0]] + max_dt * 2 / 3. - t0, self.times[self.idx_v[min_i0]] + max_dt * 3 / 3 - t0],
-        #     [1, 0], color='k', lw=2)
-        self.combo_ax[0].plot([0, 10], [0.5, 1], color='k', lw=2)
-        self.combo_ax[0].plot([10, 20], [1, 1], color='k', lw=2)
-        self.combo_ax[0].plot([20, 30], [1, 0.5], color='k', lw=2)
-        self.combo_ax[0].plot([10, 10], [0.5, 1], '--', lw=1, color='k')
-        self.combo_ax[0].plot([20, 20], [0.5, 1], '--', lw=1, color='k')
 
         for i in np.arange(3):
-            self.combo_ax[i+1].imshow(decibel(self.spec)[::-1], extent=[self.times[0] - t0, self.times[-1] - t0, 0, 2000],
+            self.combo_ax[i].imshow(decibel(self.spec)[::-1], extent=[self.times[0] - t0, self.times[-1] - t0, 0, 2000],
                                     aspect='auto', alpha=0.7, cmap='Greys', vmax=-50, vmin=-110,
                                     interpolation='gaussian', zorder=1)
 
-            self.combo_ax[i+1].set_xlim(self.times[self.idx_v[min_i0]] - t0, self.times[self.idx_v[max_i1]] - t0)
-            self.combo_ax[i+1].set_ylim(905, 930)
-            self.combo_ax[i+1].plot([10, 10], [890, 930], '--', lw=1, color='k')
-            self.combo_ax[i+1].plot([20, 20], [890, 930], '--', lw=1, color='k')
+            self.combo_ax[i].set_xlim(self.times[self.idx_v[min_i0]] - t0, self.times[self.idx_v[max_i1]] - t0)
+            self.combo_ax[i].set_ylim(905, 930)
+            # self.combo_ax[i+1].plot([10, 10], [890, 930], '--', lw=1, color='k')
+            # self.combo_ax[i+1].plot([20, 20], [890, 930], '--', lw=1, color='k')
 
             for id in self.tmp_ident_v_state[i][~np.isnan(self.tmp_ident_v_state[i])]:
                 # if 880 < self.fund_v[self.idx_v[self.tmp_ident_v_state[i] == id]][0] < 930:
-                self.combo_ax[i+1].plot(self.times[self.idx_v[self.tmp_ident_v_state[i] == id]] - t0,
-                                        self.fund_v[self.tmp_ident_v_state[i] == id], marker='.')
+                self.combo_ax[i].plot(self.times[self.idx_v[self.tmp_ident_v_state[i] == id]] - t0,
+                                        self.fund_v[self.tmp_ident_v_state[i] == id], marker='.', markersize=4)
 
-        self.combo_ax[0].set_xlim(0, 30)
-        self.combo_ax[0].set_ylim(0.49, 1.05)
-        self.combo_ax[0].set_yticks([0.5, 1])
-
-        self.combo_ax[0].spines['right'].set_visible(False)
-        self.combo_ax[0].spines['top'].set_visible(False)
-        self.combo_ax[0].yaxis.set_ticks_position('left')
-        self.combo_ax[0].xaxis.set_ticks_position('bottom')
 
         for ax in self.combo_ax[:-1]:
             plt.setp(ax.get_xticklabels(), visible=False)
 
-        self.combo_ax[-1].set_xlabel('time [s]', fontsize=12)
-        self.combo_ax[2].set_ylabel('frequency [Hz]', fontsize=12)
+        self.combo_ax[-1].set_xlabel('time [s]', fontsize=10)
+        self.combo_ax[1].set_ylabel('frequency [Hz]', fontsize=10)
+
+        self.combo_ax[0].fill_between([0, 10], [935, 935], [938, 938], color='grey', clip_on=False)
+        self.combo_ax[0].fill_between([10, 20], [935, 935], [938, 938], color='k', clip_on=False)
+        self.combo_ax[0].fill_between([20, 30], [935, 935], [938, 938], color='grey', clip_on=False)
+
+        for x0 in [0, 10, 20, 30]:
+            con = ConnectionPatch(xyA=(x0, 930), xyB=(x0, 905), coordsA="data", coordsB="data",
+                                  axesA=self.combo_ax[0], axesB=self.combo_ax[-1], color="k", linestyle='-', zorder=10, lw=1)
+            self.combo_ax[-1].add_artist(con)
+            self.combo_ax[0].plot([x0, x0], [930, 935], color='k', lw=1, clip_on=False)
+
+
+        self.combo_ax[0].set_xlim(0, 30)
+        for a in self.combo_ax:
+            a.tick_params(labelsize=9)
 
         plt.savefig('./tmp_ident_tracking.png', dpi=300)
         plt.show()
         self.tmp_ident_v_state = []
 
+    def static_tmp_id_assign_init(self):
+        self.fig2 = plt.figure(figsize=(17.5/2.54, 12/2.54))
+        gs = gridspec.GridSpec(2, 2, left=.2, bottom=.1, right=.95, top=.9, hspace=0.3, wspace=0.3)
+        self.ax2 = []
+        # self.combo_ax.append(self.combo_fig.add_subplot(gs[0, 0]))
+        self.ax2.append(self.fig2.add_subplot(gs[0, 0]))
+        self.ax2.append(self.fig2.add_subplot(gs[0, 1]))
+        self.ax2.append(self.fig2.add_subplot(gs[1, 0]))
+        self.ax2.append(self.fig2.add_subplot(gs[1, 1]))
+
+        for a in self.ax2:
+            a.imshow(decibel(self.spec)[::-1], extent=[self.times[0], self.times[-1], 0, 2000], aspect='auto',
+                     alpha=0.7, cmap='Greys', vmax=-50, vmin=-110, interpolation='gaussian', zorder=1)
+            a.set_ylim(905, 930)
 
     def life_tmp_ident_init(self, min_i0, max_i1):
 
@@ -882,7 +890,9 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
         return error_cube, i0_m, i1_m, cube_app_idx
 
     def assign_tmp_ids(ident_v, tmp_ident_v, idx_v, fund_v, error_cube, idx_comp_range, next_identity, i0_m, i1_m,
-                       freq_lims):
+                       freq_lims, show=False):
+        if show:
+            da.static_tmp_id_assign_init()
 
         max_shape = np.max([np.shape(layer) for layer in error_cube], axis=0)
         cp_error_cube = np.full((len(error_cube), max_shape[0], max_shape[1]), np.nan)
@@ -906,8 +916,7 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 
         already_assigned = []
         for layer, idx0, idx1 in zip(layers[:i_non_nan], idx0s[:i_non_nan], idx1s[:i_non_nan]):
-            idents_to_assigne = p_ident_v[
-                ~np.isnan(p_tmp_ident_v) & (p_idx_v > i + idx_comp_range) & (p_idx_v <= i + idx_comp_range * 2)]
+            idents_to_assigne = p_ident_v[~np.isnan(p_tmp_ident_v) & (p_idx_v > i + idx_comp_range) & (p_idx_v <= i + idx_comp_range * 2)]
 
             if len(idents_to_assigne[np.isnan(idents_to_assigne)]) == 0:
                 break
@@ -1022,7 +1031,7 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
             # assing tmp identities ##################################
 
             ident_v, next_identity = assign_tmp_ids(ident_v, tmp_ident_v, idx_v, fund_v, error_cube, idx_comp_range,
-                                                    next_identity, i0_m, i1_m, freq_lims)
+                                                    next_identity, i0_m, i1_m, freq_lims, show=show_plotting)
 
         error_cube, i0_m, i1_m, cube_app_idx = create_error_cube(i0_m, i1_m, error_cube, cube_app_idx, freq_lims,
                                                                  update=True)
@@ -1086,7 +1095,8 @@ def boltzmann(t, alpha=0.25, beta=0.0, x0=4, dx=0.85):
 def load_example_data():
 
     # folder = "/home/raab/paper_create/2021_tracking/data/2016-04-10-11_12"
-    folder = "/home/raab/writing/2021_tracking/code/tracking_display"
+    # folder = "/home/raab/writing/2021_tracking/code/tracking_display/2016-04-10-11_12"
+    folder = "/home/raab/writing/2021_tracking/data/2016-04-10-11_12"
 
     if os.path.exists(os.path.join(folder, 'fund_v.npy')):
         fund_v = np.load(os.path.join(folder, 'fund_v.npy'))
@@ -1152,7 +1162,7 @@ def main():
     fundamentals, signatures = back_shape_data(fund_v, sign_v, idx_v, times)
 
     fund_v, ident_v, idx_v, sign_v, a_error_distribution, f_error_distribution, idx_of_origin_v, original_sign_v = \
-        freq_tracking_v5(fundamentals, signatures, times, visualize=False)
+        freq_tracking_v5(fundamentals, signatures, times, visualize=True)
 
     plot_tracked_traces(ident_v, fund_v, idx_v, times)
 
