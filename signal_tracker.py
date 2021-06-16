@@ -19,6 +19,7 @@ class Display_agorithm():
         self.fund_v = fund_v
         self.sign_v = sign_v
         self.ident_v = ident_v
+        self.tmp_ident_v = None
         self.idx_v = idx_v
         self.times = times
         # self.spec = np.load("/home/raab/thesis/code/tracking_display/spec.npy")
@@ -29,10 +30,14 @@ class Display_agorithm():
         self.error_dist_i1s = error_dist_i1s
 
         self.tmp_ident_v_state = []
-
         self.handles = {}
-
         self.itter_counter = 0
+
+        self.tmp_trace_handels = {}
+        self.trace_handels = {}
+        self.origin_idx = None
+        self.target_idx = None
+        self.alt_idx = None
 
     def plot_a_error_dist(self):
         from plottools.tag import tag
@@ -601,6 +606,8 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
         # tmp_idx_v -= min_i0
 
         layers, idx0s, idx1s = np.unravel_index(np.argsort(cp_error_cube, axis=None), np.shape(cp_error_cube))
+        embed()
+
         made_connections = np.zeros(np.shape(cp_error_cube))
         not_made_connections = np.zeros(np.shape(cp_error_cube))
         not_made_connections[~np.isnan(cp_error_cube)] = 1
@@ -893,6 +900,7 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
                        freq_lims, show=False):
         if show:
             da.static_tmp_id_assign_init()
+            da.tmp_ident_v = tmp_ident_v
 
         max_shape = np.max([np.shape(layer) for layer in error_cube], axis=0)
         cp_error_cube = np.full((len(error_cube), max_shape[0], max_shape[1]), np.nan)
@@ -956,6 +964,23 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 
             if p_i1_m[layer][idx1] in already_assigned:
                 continue
+
+            #########################################################
+            # if show:
+                # origin_idx = p_i0_m[layer][idx0]
+                # target_idx = p_i1_m[layer][idx1]
+                # alt_mask = cp_error_cube[]
+                # cp_error_cube[layer - 1, idx0, :]
+                # embed()
+                # quit()
+                # targets_mask = np.arange(len(cp_error_cube[layer - 1, idx0, :]))[~np.isnan(cp_error_cube[layer - 1, idx0, :])]
+                # target_idxs = p_i1_m[layer][targets_mask]
+                # target_idx = p_i1_m[layer][idx1]
+                #
+                # if len(p_tmp_ident_v[target_idxs][p_tmp_ident_v[target_idxs] == p_tmp_ident_v[target_idx]]) >= 2:
+                # #     alternatives = target_idxs[np.arange(len(target_idxs))[tmp_idx_v[target_idxs] == tmp_idx_v[target_idx]]]
+                # #     da.plot_assign(origin_idx + min_i0, target_idx + min_i0, alternatives + min_i0)
+            #########################################################
 
             already_assigned.append(p_i1_m[layer][idx1])
 
