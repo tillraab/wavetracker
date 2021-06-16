@@ -605,8 +605,9 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
         i1_m = np.array(i1_m, dtype=object) - min_i0
         # tmp_idx_v -= min_i0
 
-        layers, idx0s, idx1s = np.unravel_index(np.argsort(cp_error_cube, axis=None), np.shape(cp_error_cube))
         embed()
+        quit()
+        layers, idx0s, idx1s = np.unravel_index(np.argsort(cp_error_cube, axis=None), np.shape(cp_error_cube))
 
         made_connections = np.zeros(np.shape(cp_error_cube))
         not_made_connections = np.zeros(np.shape(cp_error_cube))
