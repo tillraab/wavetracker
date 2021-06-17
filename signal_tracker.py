@@ -39,6 +39,9 @@ class Display_agorithm():
         self.target_idx = None
         self.alt_idxs = None
 
+        self.tracking_i = None
+        self.idx_comp_range = None
+
     def plot_a_error_dist(self):
         from plottools.tag import tag
 
@@ -910,6 +913,8 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
                        freq_lims, show=False):
         if show:
             da.tmp_ident_v = tmp_ident_v
+            da.tracking_i = i
+            da.idx_comp_range = idx_comp_range
             da.static_tmp_id_assign_init()
 
         max_shape = np.max([np.shape(layer) for layer in error_cube], axis=0)
