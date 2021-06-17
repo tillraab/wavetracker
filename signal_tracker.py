@@ -35,9 +35,9 @@ class Display_agorithm():
 
         self.tmp_trace_handels = {}
         self.trace_handels = {}
-        self.origin_idx = None
-        self.target_idx = None
-        self.alt_idxs = None
+        self.origin_idx = []
+        self.target_idx = []
+        self.alt_idx = []
 
         self.tracking_i = None
         self.idx_comp_range = None
@@ -219,8 +219,6 @@ class Display_agorithm():
         self.tmp_ident_v_state = []
 
     def static_tmp_id_assign_init(self):
-        embed()
-        quit()
 
         self.fig2 = plt.figure(figsize=(17.5/2.54, 12/2.54))
         gs = gridspec.GridSpec(2, 2, left=.1, bottom=.1, right=.95, top=.95, hspace=0.3, wspace=0.3)
@@ -233,15 +231,38 @@ class Display_agorithm():
 
         for a in self.ax2:
             a.imshow(decibel(self.spec)[::-1], extent=[self.times[0], self.times[-1], 0, 2000], aspect='auto',
-                     alpha=0.7, cmap='Greys', vmax=-50, vmin=-110, interpolation='gaussian', zorder=1)
+                     alpha=0.4, cmap='Greys', vmax=-50, vmin=-110, interpolation='gaussian', zorder=1)
             a.set_ylim(905, 930)
 
         tmp_ident_time0 = self.times[self.idx_v[~np.isnan(self.tmp_ident_v)][0]]
         self.ax2[0].set_xlim(tmp_ident_time0-10, tmp_ident_time0+30)
 
         for tmp_id in np.unique(self.tmp_ident_v[~np.isnan(self.tmp_ident_v)]):
-            self.ax2[0].plot(self.times[self.idx_v[self.tmp_ident_v == tmp_id]], self.fund_v[self.tmp_ident_v == tmp_id], marker='.')
+            # c = np.random.rand(3)
+            Cmask = np.arange(len(self.idx_v))[(self.tmp_ident_v == tmp_id) &
+                                               (self.idx_v > self.tracking_i + self.idx_comp_range) &
+                                               (self.idx_v <= self.tracking_i + 2*self.idx_comp_range)]
 
+            h, = self.ax2[0].plot(self.times[self.idx_v[self.tmp_ident_v == tmp_id]],
+                                  self.fund_v[self.tmp_ident_v == tmp_id], lw=4, alpha=0.4)
+            for a in self.ax2[:-1]:
+
+                c = h.get_color()
+                a.plot(self.times[self.idx_v[Cmask]], self.fund_v[Cmask], marker='.', color=c, markersize=4)
+
+        for id in np.unique(self.ident_v[~np.isnan(self.ident_v)]):
+            self.ax2[2].plot(self.times[self.idx_v[self.ident_v == id]], self.fund_v[self.ident_v == id], marker='.', markersize=4)
+
+        for a in self.ax2[2:3]:
+            a.plot(self.times[self.idx_v[self.origin_idx[0]]], self.fund_v[self.target_idx[0]], marker='o', markersize=6, color='k')
+            a.plot(self.times[self.idx_v[self.target_idx[0]]], self.fund_v[self.target_idx[0]], marker='o', markersize=6, color='forestgreen')
+            a.plot(self.times[self.idx_v[self.alt_idx[0]]], self.fund_v[self.alt_idx[0]], marker='o', markersize=6, color='firebrick')
+
+    def finalize_tmp_id_assign(self, final_ident_v):
+        for id in np.unique(final_ident_v[~np.isnan(final_ident_v)]):
+            self.ax2[3].plot(self.times[self.idx_v[final_ident_v == id]], self.fund_v[final_ident_v == id], marker='.',
+                             markersize=4)
+        plt.show()
 
 
     def life_tmp_ident_init(self, min_i0, max_i1):
@@ -912,10 +933,11 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
     def assign_tmp_ids(ident_v, tmp_ident_v, idx_v, fund_v, error_cube, idx_comp_range, next_identity, i0_m, i1_m,
                        freq_lims, show=False):
         if show:
-            da.tmp_ident_v = tmp_ident_v
+            da.tmp_ident_v = np.copy(tmp_ident_v)
+            da.ident_v = np.copy(ident_v)
             da.tracking_i = i
             da.idx_comp_range = idx_comp_range
-            da.static_tmp_id_assign_init()
+            # da.static_tmp_id_assign_init()
 
         max_shape = np.max([np.shape(layer) for layer in error_cube], axis=0)
         cp_error_cube = np.full((len(error_cube), max_shape[0], max_shape[1]), np.nan)
@@ -989,9 +1011,11 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
                 alt_idxs = i1_m[layer][~np.isnan(error_cube[layer][idx0, :])][np.argsort(alt_e)]
                 if len(np.unique(tmp_ident_v[alt_idxs])) > 1:
                     if fund_v[origin_idx] >= 900:
-                        da.origin_idx = origin_idx
-                        da.target_idx = target_idx
-                        da.alt_idx = alt_idxs[tmp_ident_v[alt_idxs] != tmp_ident_v[target_idx]][0]
+                        da.origin_idx.append(origin_idx)
+                        da.target_idx.append(target_idx)
+                        da.alt_idx.append(alt_idxs[tmp_ident_v[alt_idxs] != tmp_ident_v[target_idx]][0])
+
+                        da.static_tmp_id_assign_init()
 
             #########################################################
 
@@ -1006,6 +1030,9 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
                 p_ident_v[(p_tmp_ident_v == ident) & (p_idx_v > i + idx_comp_range) & (
                         p_idx_v <= i + idx_comp_range * 2)] = next_identity
                 next_identity += 1
+
+        if show:
+            da.finalize_tmp_id_assign(np.copy(ident_v))
 
         return ident_v, next_identity
 
