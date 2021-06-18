@@ -20,6 +20,7 @@ class Display_agorithm():
         self.sign_v = sign_v
         self.ident_v = ident_v
         self.tmp_ident_v = None
+        self.final_ident_v = None
         self.idx_v = idx_v
         self.times = times
         # self.spec = np.load("/home/raab/thesis/code/tracking_display/spec.npy")
@@ -219,44 +220,92 @@ class Display_agorithm():
         self.tmp_ident_v_state = []
 
     def static_tmp_id_assign_init(self):
+        embed()
+        quit()
 
-        self.fig2 = plt.figure(figsize=(17.5/2.54, 12/2.54))
-        gs = gridspec.GridSpec(2, 2, left=.1, bottom=.1, right=.95, top=.95, hspace=0.3, wspace=0.3)
-        self.ax2 = []
-        # self.combo_ax.append(self.combo_fig.add_subplot(gs[0, 0]))
-        self.ax2.append(self.fig2.add_subplot(gs[0, 0]))
-        self.ax2.append(self.fig2.add_subplot(gs[0, 1], sharex=self.ax2[0]))
-        self.ax2.append(self.fig2.add_subplot(gs[1, 0], sharex=self.ax2[0]))
-        self.ax2.append(self.fig2.add_subplot(gs[1, 1], sharex=self.ax2[0]))
+        t0 = self.times[self.tracking_i]
+        for oi, ti, ai in zip(self.origin_idx, self.target_idx, self.alt_idx):
+            self.fig2 = plt.figure(figsize=(17.5/2.54, 12/2.54))
+            gs = gridspec.GridSpec(2, 2, left=.15, bottom=.1, right=.95, top=.9, hspace=0.3, wspace=0.3)
+            self.ax2 = []
+            # self.combo_ax.append(self.combo_fig.add_subplot(gs[0, 0]))
+            self.ax2.append(self.fig2.add_subplot(gs[0, 0]))
+            self.ax2.append(self.fig2.add_subplot(gs[0, 1]))
+            self.ax2.append(self.fig2.add_subplot(gs[1, 0]))
+            self.ax2.append(self.fig2.add_subplot(gs[1, 1]))
 
-        for a in self.ax2:
-            a.imshow(decibel(self.spec)[::-1], extent=[self.times[0], self.times[-1], 0, 2000], aspect='auto',
-                     alpha=0.4, cmap='Greys', vmax=-50, vmin=-110, interpolation='gaussian', zorder=1)
-            a.set_ylim(905, 930)
+            for a in self.ax2:
+                a.imshow(decibel(self.spec)[::-1], extent=[self.times[0]-t0, self.times[-1]-t0, 0, 2000], aspect='auto',
+                         alpha=0.4, cmap='Greys', vmax=-50, vmin=-110, interpolation='gaussian', zorder=1)
+                a.set_ylim(905, 930)
 
-        tmp_ident_time0 = self.times[self.idx_v[~np.isnan(self.tmp_ident_v)][0]]
-        self.ax2[0].set_xlim(tmp_ident_time0-10, tmp_ident_time0+30)
+            # tmp_ident_time0 = self.times[self.idx_v[~np.isnan(self.tmp_ident_v)][0]]
+            # self.ax2[0].set_xlim(tmp_ident_time0-10, tmp_ident_time0+30)
 
-        for tmp_id in np.unique(self.tmp_ident_v[~np.isnan(self.tmp_ident_v)]):
-            # c = np.random.rand(3)
-            Cmask = np.arange(len(self.idx_v))[(self.tmp_ident_v == tmp_id) &
-                                               (self.idx_v > self.tracking_i + self.idx_comp_range) &
-                                               (self.idx_v <= self.tracking_i + 2*self.idx_comp_range)]
+            # tmp_ids
+            for tmp_id in np.unique(self.tmp_ident_v[~np.isnan(self.tmp_ident_v)]):
+                Cmask = np.arange(len(self.idx_v))[(self.tmp_ident_v == tmp_id) &
+                                                   (self.idx_v > self.tracking_i + self.idx_comp_range) &
+                                                   (self.idx_v <= self.tracking_i + 2*self.idx_comp_range)]
 
-            h, = self.ax2[0].plot(self.times[self.idx_v[self.tmp_ident_v == tmp_id]],
-                                  self.fund_v[self.tmp_ident_v == tmp_id], lw=4, alpha=0.4)
-            for a in self.ax2[:-1]:
+                h, = self.ax2[0].plot(self.times[self.idx_v[self.tmp_ident_v == tmp_id]] -t0,
+                                      self.fund_v[self.tmp_ident_v == tmp_id], lw=4, alpha=0.4)
+                for a in self.ax2[:-1]:
 
-                c = h.get_color()
-                a.plot(self.times[self.idx_v[Cmask]], self.fund_v[Cmask], marker='.', color=c, markersize=4)
+                    c = h.get_color()
+                    a.plot(self.times[self.idx_v[Cmask]] -t0, self.fund_v[Cmask], marker='.', color=c, markersize=4)
+            # ids before connect
+            for Cax in self.ax2[1:3]:
+                for id in np.unique(self.ident_v[~np.isnan(self.ident_v)]):
+                    Cax.plot(self.times[self.idx_v[self.ident_v == id]] -t0, self.fund_v[self.ident_v == id], marker='.', markersize=4)
 
-        for id in np.unique(self.ident_v[~np.isnan(self.ident_v)]):
-            self.ax2[2].plot(self.times[self.idx_v[self.ident_v == id]], self.fund_v[self.ident_v == id], marker='.', markersize=4)
+            # ids after connect
+            for id in np.unique(self.final_ident_v[~np.isnan(self.final_ident_v)]):
+                self.ax2[3].plot(self.times[self.idx_v[self.final_ident_v == id]]-t0,
+                                 self.fund_v[self.final_ident_v == id], marker='.', markersize=4)
 
-        for a in self.ax2[2:3]:
-            a.plot(self.times[self.idx_v[self.origin_idx[0]]], self.fund_v[self.target_idx[0]], marker='o', markersize=6, color='k')
-            a.plot(self.times[self.idx_v[self.target_idx[0]]], self.fund_v[self.target_idx[0]], marker='o', markersize=6, color='forestgreen')
-            a.plot(self.times[self.idx_v[self.alt_idx[0]]], self.fund_v[self.alt_idx[0]], marker='o', markersize=6, color='firebrick')
+            # connection points
+
+            self.ax2[2].plot(self.times[self.idx_v[oi]] -t0, self.fund_v[oi], marker='o', markersize=6, color='k')
+            self.ax2[2].plot(self.times[self.idx_v[ti]] -t0, self.fund_v[ti], marker='o', markersize=6, color='forestgreen')
+            self.ax2[2].plot(self.times[self.idx_v[ai]] -t0, self.fund_v[ai], marker='o', markersize=6, color='firebrick')
+
+            self.ax2[2].annotate("", xy=(self.times[self.idx_v[ti]] -t0, self.fund_v[ti]), xycoords='data',
+                        xytext=(self.times[self.idx_v[oi]] -t0, self.fund_v[oi]), textcoords='data',
+                        arrowprops=dict(arrowstyle="->",
+                                        connectionstyle="arc3, rad=-0.7",
+                                        lw=2),
+                        )
+
+            # cosmetics
+            for Cax, Cax2 in zip(self.ax2[:2], self.ax2[2:]):
+                Cax.fill_between([0, 10], [932, 932], [934, 934], color='grey', clip_on=False)
+                Cax.fill_between([10, 20], [932, 932], [934, 934], color='k', clip_on=False)
+                Cax.fill_between([20, 30], [932, 932], [934, 934], color='grey', clip_on=False)
+
+                for x0 in [0, 10, 20, 30]:
+                    con = ConnectionPatch(xyA=(x0, 930), xyB=(x0, 905), coordsA="data", coordsB="data",
+                                          axesA=Cax, axesB=Cax2, color="grey", linestyle='-',
+                                          zorder=10, lw=1)
+                    Cax2.add_artist(con)
+                    Cax.plot([x0, x0], [930, 932], color='grey', lw=1, clip_on=False)
+
+                Cax.set_xticks(np.arange(-10, 31, 10))
+                Cax.set_xticklabels([])
+                Cax2.set_xticks(np.arange(-10, 31, 10))
+                Cax2.set_xticklabels(np.arange(-10, 31, 10))
+                Cax2.set_xlabel('time [s]', fontsize=10)
+
+                Cax.set_xlim(-10, 30)
+                Cax2.set_xlim(-10, 30)
+                Cax.tick_params(labelsize=9)
+                Cax2.tick_params(labelsize=9)
+
+            self.ax2[0].set_ylabel('frequency [Hz]', fontsize=10)
+            self.ax2[2].set_ylabel('frequency [Hz]', fontsize=10)
+        plt.savefig('assign_tmp_identities.pdf')
+        plt.savefig('assign_tmp_identities2.png', dpi=300)
+        plt.show()
 
     def finalize_tmp_id_assign(self, final_ident_v):
         for id in np.unique(final_ident_v[~np.isnan(final_ident_v)]):
@@ -1009,13 +1058,12 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
                 alt_i = np.arange(len(i1_m[layer]))[~np.isnan(error_cube[layer][idx0, :])]
                 alt_e = error_cube[layer][idx0, :][alt_i]
                 alt_idxs = i1_m[layer][~np.isnan(error_cube[layer][idx0, :])][np.argsort(alt_e)]
+                alt_idxs = alt_idxs[idx_v[alt_idxs] >= i + idx_comp_range+1]
                 if len(np.unique(tmp_ident_v[alt_idxs])) > 1:
                     if fund_v[origin_idx] >= 900:
                         da.origin_idx.append(origin_idx)
                         da.target_idx.append(target_idx)
                         da.alt_idx.append(alt_idxs[tmp_ident_v[alt_idxs] != tmp_ident_v[target_idx]][0])
-
-                        da.static_tmp_id_assign_init()
 
             #########################################################
 
@@ -1032,7 +1080,9 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
                 next_identity += 1
 
         if show:
-            da.finalize_tmp_id_assign(np.copy(ident_v))
+            da.final_ident_v = np.copy(ident_v)
+            da.static_tmp_id_assign_init()
+            #da.finalize_tmp_id_assign(np.copy(ident_v))
 
         return ident_v, next_identity
 
