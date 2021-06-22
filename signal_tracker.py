@@ -15,6 +15,14 @@ from thunderfish.powerspectrum import decibel
 class Emit_progress():
     progress = pyqtSignal(float)
 
+def gauss(t, shift, sigma, size, norm = False):
+    g = np.exp(-((t - shift) / sigma) ** 2 / 2) * size
+    if norm:
+        g = g / np.sum(g) / (t[1] - t[0])
+        # print(np.sum(g) * (t[1] - t[0]))
+    return g
+
+
 class Validate():
     def __init__(self):
         self.error_col = {}
@@ -32,28 +40,188 @@ class Validate():
         self.error_col['altern_field_e'] = []
         self.error_col['altern_signal_e'] = []
 
-    def which_is_best(self):
-        for key0, key1 in zip(['target_dfreq', 'target_dfield', 'target_freq_e', 'target_field_e', 'target_signal_e'],
-                              ['altern_dfreq', 'altern_dfield', 'altern_freq_e', 'altern_field_e', 'altern_signal_e']):
+    def hist_kde(self, target_param, altern_param, sigma_factor = 1/10):
+        help_array = np.concatenate((target_param, altern_param))
+        error_steps = np.linspace(0, np.max(help_array) * 501 / 500, 500)
 
-            fig = plt.figure(figsize=(20/2.54, 12/2.54))
-            gs = gridspec.GridSpec(1, 1, left=0.1, bottom=0.1, top=0.95, right=0.95)
-            ax = fig.add_subplot(gs[0,0])
+        kde_target = np.zeros(len(error_steps))
+        for e in target_param:
+            kde_target += gauss(error_steps, e, np.std(target_param) * sigma_factor, 1, norm=True)
+
+        kde_altern = np.zeros(len(error_steps))
+        for e in altern_param:
+            kde_altern += gauss(error_steps, e, np.std(altern_param) * sigma_factor, 1, norm=True)
+
+
+        bin_edges = np.linspace(0, np.max(help_array), int(5 * (1/sigma_factor)))
+
+        n_tar, _ = np.histogram(target_param, bin_edges)
+        n_tar = n_tar / np.sum(n_tar) / (bin_edges[1] - bin_edges[0])
+        n_alt, _ = np.histogram(altern_param, bin_edges)
+        n_alt = n_alt / np.sum(n_alt) / (bin_edges[1] - bin_edges[0])
+
+        return error_steps, kde_target, kde_altern, bin_edges, n_tar, n_alt
+
+    def roc_analysis(self, error_steps, target_param, altern_param):
+        true_pos = np.ones(len(error_steps))
+        false_pos = np.ones(len(error_steps))
+        for i in range(len(error_steps)):
+            true_pos[i] = len(np.array(target_param)[np.array(target_param) < error_steps[i]]) / len(target_param)
+            false_pos[i] = len(np.array(altern_param)[np.array(altern_param) < error_steps[i]]) / len(altern_param)
+        auc_value = np.sum(true_pos[:-1] * np.diff(false_pos))
+
+        return true_pos, false_pos, auc_value
+
+    def error_dist_and_auc_display(self):
+        embed()
+        quit()
+
+        fig = plt.figure(figsize=(15/2.54, 10/2.54))
+        gs = gridspec.GridSpec(2, 2, left=0.1, bottom=0.15, right=0.95, top=0.95, wspace=0.3, hspace=0.5, width_ratios=[2, 1])
+        ax = []
+        ax.append(fig.add_subplot(gs[0, 0]))
+        ax.append(fig.add_subplot(gs[1, 0]))
+        ax_auc = []
+        ax_auc.append(fig.add_subplot(gs[0, 1]))
+        ax_auc.append(fig.add_subplot(gs[1, 1]))
+
+        for enu, key0, key1 in zip(np.arange(2), ['target_dfreq', 'target_dfield'], ['altern_dfreq', 'altern_dfield']):
+            sigma_factor = 1 / 2 if enu in [0] else 1 / 10
+            error_steps, kde_target, kde_altern, bin_edges, n_tar, n_alt = \
+                self.hist_kde(self.error_col[key0], self.error_col[key1], sigma_factor)
+
+            true_pos, false_pos, auc_value = self.roc_analysis(error_steps, self.error_col[key0], self.error_col[key1])
+
+            target_handle, = ax[enu].plot(error_steps, kde_target / len(self.error_col[key0]), lw=2)
+            altern_handle, = ax[enu].plot(error_steps, kde_altern / len(self.error_col[key1]), lw=2)
+
+            ax[enu].bar(bin_edges[:-1] + (bin_edges[1] - bin_edges[0]) / 2, n_tar, width=(bin_edges[1] - bin_edges[0]) * 0.8, alpha=0.4, color=target_handle.get_color())
+            ax[enu].bar(bin_edges[:-1] + (bin_edges[1] - bin_edges[0]) / 2, n_alt, width=(bin_edges[1] - bin_edges[0]) * 0.8, alpha=0.4, color=altern_handle.get_color())
+
+            ax[enu].set_ylabel('KDE')
+            ax[enu].set_xlim(error_steps[0], error_steps[-1])
+
+            ax_auc[enu].fill_between(false_pos, np.zeros(len(false_pos)), true_pos, color='#999999')
+            ax_auc[enu].plot([0, 1], [0, 1], color='k', linestyle='--', linewidth=2)
+            ax_auc[enu].text(0.95, 0.05, '%.1f' % (auc_value * 100) + ' %', fontsize=9, color='k', ha='right', va='bottom')
+            ax_auc[enu].set_xlim(0, 1)
+            ax_auc[enu].set_ylim(0, 1)
+
+            ax_auc[enu].set_xticks([0, 1])
+            ax_auc[enu].set_yticks([0, 1])
+
+        ax[0].set_xlabel(r'$\Delta freq$ [Hz]', fontsize=10)
+        ax[1].set_xlabel(r'field difference ($\Delta p_{f}$)', fontsize=10)
+
+        ax_auc[0].set_ylabel('true positive', fontsize=10)
+        ax_auc[1].set_ylabel('true positive', fontsize=10)
+        ax_auc[1].set_xlabel('false positive', fontsize=10)
+
+        for a in np.hstack([ax, ax_auc]):
+            a.tick_params(labelsize=9)
+        fig.tag(axes=[ax], labels=['A', 'C'], fontsize=15, yoffs=2, xoffs=-6)
+        fig.tag(axes=[ax_auc], labels=['B', 'D'], fontsize=15, yoffs=2, xoffs=-6)
+
+        for enu, key0, key1 in zip(np.arange(5),
+                                   ['target_dfreq', 'target_dfield', 'target_freq_e', 'target_field_e', 'target_signal_e'],
+                                   ['altern_dfreq', 'altern_dfield', 'altern_freq_e', 'altern_field_e', 'altern_signal_e']):
+
+            sigma_factor = 1 / 2 if enu in [0, 2] else 1 / 10
+            error_steps, kde_target, kde_altern, bin_edges, n_tar, n_alt = \
+                self.hist_kde(self.error_col[key0], self.error_col[key1], sigma_factor)
+
+            true_pos, false_pos, auc_value = self.roc_analysis(error_steps, self.error_col[key0], self.error_col[key1])
+
+            fig = plt.figure(figsize=(17.5/2.54, 7/2.54))
+            gs = gridspec.GridSpec(1, 2, left=0.1, bottom=0.2, top=0.95, right=0.95, width_ratios=[2, 1])
+            ax = fig.add_subplot(gs[0, 0])
+            ax_auc = fig.add_subplot(gs[0, 1])
+
+            target_handle, = ax.plot(error_steps, kde_target / len(self.error_col[key0]))
+            altern_handle, = ax.plot(error_steps, kde_altern / len(self.error_col[key1]))
+
+            ax.bar(bin_edges[:-1] + (bin_edges[1] - bin_edges[0]) / 2, n_tar, width=(bin_edges[1] - bin_edges[0]) * 0.8, alpha=0.5, color=target_handle.get_color())
+            ax.bar(bin_edges[:-1] + (bin_edges[1] - bin_edges[0]) / 2, n_alt, width=(bin_edges[1] - bin_edges[0]) * 0.8, alpha=0.5, color=altern_handle.get_color())
+
+            ax.set_ylabel('kde')
+            ax.set_xlabel(key0)
+            ax.set_xlim(left=0)
+
+            ax_auc.fill_between(false_pos, np.zeros(len(false_pos)), true_pos, color='grey')
+            ax_auc.plot([0, 1], [0, 1], color='k', linestyle='--', linewidth=2)
+            ax_auc.text(0.95, 0.05, '%.1f' % (auc_value * 100), fontsize=10, color='k', ha='right', va='bottom')
+            ax_auc.set_xlim(0, 1)
+            ax_auc.set_ylim(0, 1)
+
+    def which_is_best(self):
+        embed()
+        quit()
+
+
+        for enu, key0, key1 in zip(np.arange(5),
+                                   ['target_dfreq', 'target_dfield', 'target_freq_e', 'target_field_e', 'target_signal_e'],
+                                   ['altern_dfreq', 'altern_dfield', 'altern_freq_e', 'altern_field_e', 'altern_signal_e']):
+
+
+            fig = plt.figure(figsize=(17.5/2.54, 7/2.54))
+            gs = gridspec.GridSpec(1, 2, left=0.1, bottom=0.2, top=0.95, right=0.95, width_ratios=[2, 1])
+            ax = fig.add_subplot(gs[0, 0])
+            ax_auc = fig.add_subplot(gs[0, 1])
 
             help_array = np.concatenate((self.error_col[key0], self.error_col[key1]))
-            bin_edges = np.linspace(0, np.percentile(help_array, 95), 100)
+            error_steps = np.linspace(0, np.max(help_array)*501/500, 500)
+            # kde_target = np.sum(np.array(list(map(lambda x: gauss(error_steps, x, np.std(help_array), 1, norm=True), self.error_col[key0]))), axis=0)
+
+            kde_target = np.zeros(len(error_steps))
+            sigma_factor = 1/2 if enu in [0, 2] else 1/10
+
+            for e in self.error_col[key0]:
+                kde_target += gauss(error_steps, e, np.std(self.error_col[key0]) * sigma_factor, 1, norm=True)
+
+            kde_altern = np.zeros(len(error_steps))
+            for e in self.error_col[key1]:
+                kde_altern += gauss(error_steps, e, np.std(self.error_col[key1]) * sigma_factor, 1, norm=True)
+            #
+            # print(np.sum(kde_altern) / len(self.error_col[key1]) * error_steps[1])
+
+            target_handle, = ax.plot(error_steps, kde_target / len(self.error_col[key0]))
+            altern_handle, = ax.plot(error_steps, kde_altern / len(self.error_col[key1]))
+
+            ###########################################################################################################
+
+            bin_edges = np.linspace(0, np.percentile(help_array, 100), 50)
+
             n, _ = np.histogram(self.error_col[key0], bin_edges)
             n = n / np.sum(n) / (bin_edges[1] - bin_edges[0])
             n_alt, _ = np.histogram(self.error_col[key1], bin_edges)
             n_alt = n_alt / np.sum(n_alt) / (bin_edges[1] - bin_edges[0])
 
-            ax.bar(bin_edges[:-1] + (bin_edges[1] - bin_edges[0]) / 2, n, width=(bin_edges[1] - bin_edges[0]) * 0.8, alpha=0.5, color='forestgreen')
-            ax.bar(bin_edges[:-1] + (bin_edges[1] - bin_edges[0]) / 2, n_alt, width=(bin_edges[1] - bin_edges[0]) * 0.8, alpha=0.5, color='firebrick')
+            ax.bar(bin_edges[:-1] + (bin_edges[1] - bin_edges[0]) / 2, n, width=(bin_edges[1] - bin_edges[0]) * 0.8, alpha=0.5, color=target_handle.get_color())
+            ax.bar(bin_edges[:-1] + (bin_edges[1] - bin_edges[0]) / 2, n_alt, width=(bin_edges[1] - bin_edges[0]) * 0.8, alpha=0.5, color=altern_handle.get_color())
+            ###########################################################################################################
 
-            ax.set_xlabel('n')
-            ax.set_ylabel(key0)
-        embed()
-        quit()
+            ax.set_ylabel('kde')
+            ax.set_xlabel(key0)
+            ax.set_xlim(left=0)
+
+            ###
+            true_pos = np.ones(len(error_steps))
+            false_pos = np.ones(len(error_steps))
+            for i in range(len(error_steps)):
+                true_pos[i] = len(np.array(self.error_col[key0])[np.array(self.error_col[key0]) < error_steps[i]]) / len(self.error_col[key0])
+                false_pos[i] = len(np.array(self.error_col[key1])[np.array(self.error_col[key1]) < error_steps[i]]) / len(self.error_col[key1])
+            auc_value = np.sum(true_pos[:-1] * np.diff(false_pos))
+
+
+            # ax_auc.plot(false_pos, true_pos, color='k', lw=1)
+            ax_auc.fill_between(false_pos, np.zeros(len(false_pos)), true_pos, color='grey')
+            ax_auc.plot([0, 1], [0, 1], color='k', linestyle='--', linewidth=2)
+            ax_auc.text(0.95, 0.05, '%.1f' % (auc_value * 100), fontsize=10, color='k', ha='right', va='bottom')
+            ax_auc.set_xlim(0, 1)
+            ax_auc.set_ylim(0, 1)
+
+        # embed()
+        # quit()
 class Display_agorithm():
     def __init__(self, fund_v, ident_v, idx_v, sign_v, times, a_error_distribution, error_dist_i0s, error_dist_i1s):
         self.fund_v = fund_v
@@ -1246,7 +1414,8 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 
     ident_v = clean_up(fund_v, ident_v)
 
-    va.which_is_best()
+    # va.which_is_best()
+    va.error_dist_and_auc_display()
 
     return fund_v, ident_v, idx_v, sign_v, a_error_distribution, f_error_distribution, idx_of_origin_v, original_sign_v
 
