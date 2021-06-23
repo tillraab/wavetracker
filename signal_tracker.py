@@ -25,7 +25,10 @@ def gauss(t, shift, sigma, size, norm = False):
 
 class Validate():
     def __init__(self):
+        self.a_error_dist = None
+
         self.error_col = {}
+        self.error_col['hit'] = []
         self.error_col['originID'] = []
         self.error_col['targetID'] = []
         self.error_col['alternID'] = []
@@ -77,7 +80,7 @@ class Validate():
         quit()
 
         fig = plt.figure(figsize=(15/2.54, 10/2.54))
-        gs = gridspec.GridSpec(2, 2, left=0.1, bottom=0.15, right=0.95, top=0.95, wspace=0.3, hspace=0.5, width_ratios=[2, 1])
+        gs = gridspec.GridSpec(2, 2, left=0.15, bottom=0.15, right=0.95, top=0.95, wspace=0.6, hspace=0.6, width_ratios=[2, 1])
         ax = []
         ax.append(fig.add_subplot(gs[0, 0]))
         ax.append(fig.add_subplot(gs[1, 0]))
@@ -85,7 +88,22 @@ class Validate():
         ax_auc.append(fig.add_subplot(gs[0, 1]))
         ax_auc.append(fig.add_subplot(gs[1, 1]))
 
+        ax_m = []
+        ax_m.append(ax[0].twinx())
+        ax_m.append(ax[1].twinx())
+        # ax_m = ax[0].twinx()
+        ax_m[0].plot(np.linspace(0, 2.5, 1000), boltzmann(np.linspace(0, 2.5, 1000), alpha=1, beta=0, x0=.35, dx=.08), color='k')
+        ax_m[0].set_ylim(bottom=0)
+        ax_m[0].set_yticks([0, 1])
+        ax_m[0].set_ylabel(r'$\varepsilon_{freq}$', fontsize=10)
+
+        ax_m[1].plot(self.a_error_dist[np.argsort(self.a_error_dist)], np.linspace(0, 1, len(self.a_error_dist)), color='k')
+        ax_m[1].set_ylim(bottom=0)
+        ax_m[1].set_yticks([0, 1])
+        ax_m[1].set_ylabel(r'$\varepsilon_{field}$', fontsize=10)
+
         for enu, key0, key1 in zip(np.arange(2), ['target_dfreq', 'target_dfield'], ['altern_dfreq', 'altern_dfield']):
+        # for enu, key0, key1 in zip(np.arange(2), ['target_freq_e', 'target_field_e'], ['altern_freq_e', 'altern_field_e']):
             sigma_factor = 1 / 2 if enu in [0] else 1 / 10
             error_steps, kde_target, kde_altern, bin_edges, n_tar, n_alt = \
                 self.hist_kde(self.error_col[key0], self.error_col[key1], sigma_factor)
@@ -95,11 +113,12 @@ class Validate():
             target_handle, = ax[enu].plot(error_steps, kde_target / len(self.error_col[key0]), lw=2)
             altern_handle, = ax[enu].plot(error_steps, kde_altern / len(self.error_col[key1]), lw=2)
 
-            ax[enu].bar(bin_edges[:-1] + (bin_edges[1] - bin_edges[0]) / 2, n_tar, width=(bin_edges[1] - bin_edges[0]) * 0.8, alpha=0.4, color=target_handle.get_color())
-            ax[enu].bar(bin_edges[:-1] + (bin_edges[1] - bin_edges[0]) / 2, n_alt, width=(bin_edges[1] - bin_edges[0]) * 0.8, alpha=0.4, color=altern_handle.get_color())
+            ax[enu].bar(bin_edges[:-1] + (bin_edges[1] - bin_edges[0]) / 2, n_tar, width=(bin_edges[1] - bin_edges[0]) * 0.8, alpha=0.4, color=target_handle.get_color(), align='center')
+            ax[enu].bar(bin_edges[:-1] + (bin_edges[1] - bin_edges[0]) / 2, n_alt, width=(bin_edges[1] - bin_edges[0]) * 0.8, alpha=0.4, color=altern_handle.get_color(), align='center')
 
             ax[enu].set_ylabel('KDE')
             ax[enu].set_xlim(error_steps[0], error_steps[-1])
+            ax[enu].set_ylim(0, np.max(np.concatenate((n_tar, n_alt))) * 1.1)
 
             ax_auc[enu].fill_between(false_pos, np.zeros(len(false_pos)), true_pos, color='#999999')
             ax_auc[enu].plot([0, 1], [0, 1], color='k', linestyle='--', linewidth=2)
@@ -117,46 +136,105 @@ class Validate():
         ax_auc[1].set_ylabel('true positive', fontsize=10)
         ax_auc[1].set_xlabel('false positive', fontsize=10)
 
-        for a in np.hstack([ax, ax_auc]):
+        for a in np.hstack([ax, ax_auc, ax_m]):
             a.tick_params(labelsize=9)
-        fig.tag(axes=[ax], labels=['A', 'C'], fontsize=15, yoffs=2, xoffs=-6)
-        fig.tag(axes=[ax_auc], labels=['B', 'D'], fontsize=15, yoffs=2, xoffs=-6)
+        fig.tag(axes=[ax], labels=['A', 'B'], fontsize=15, yoffs=2, xoffs=-6)
+        plt.savefig('freq_field_difference.pdf')
+
+        # fig.tag(axes=[ax_auc], labels=['B', 'D'], fontsize=15, yoffs=2, xoffs=-6)
+
+        ###### ###### ###### ###### ###### ###### ###### ###### ###### ###### ###### ###### ###### ###### ###### ######
+
+        fig = plt.figure(figsize=(15/2.54, 14/2.54))
+        gs = gridspec.GridSpec(3, 2, left=0.15, bottom=0.1, right=0.95, top=0.95, hspace=0.6, wspace=0.4, height_ratios=[4, 4, 4], width_ratios=[2.5, 1])
+        ax = []
+        ax.append(fig.add_subplot(gs[0, 0]))
+        ax.append(fig.add_subplot(gs[1, 0]))
+        ax.append(fig.add_subplot(gs[2, 0]))
+
+        ax_roc = []
+        ax_roc.append(fig.add_subplot(gs[0, 1]))
+        ax_roc.append(fig.add_subplot(gs[1, 1]))
+        ax_roc.append(fig.add_subplot(gs[2, 1]))
+
+        # ax_auc = fig.add_subplot(fig.add_subplot(gs[-1, :]))
 
         for enu, key0, key1 in zip(np.arange(5),
-                                   ['target_dfreq', 'target_dfield', 'target_freq_e', 'target_field_e', 'target_signal_e'],
-                                   ['altern_dfreq', 'altern_dfield', 'altern_freq_e', 'altern_field_e', 'altern_signal_e']):
+                                   ['target_freq_e', 'target_field_e', 'target_signal_e'],
+                                   ['altern_freq_e', 'altern_field_e', 'altern_signal_e']):
 
-            sigma_factor = 1 / 2 if enu in [0, 2] else 1 / 10
+            sigma_factor = 1 / 2 if enu in [0] else 1 / 10
             error_steps, kde_target, kde_altern, bin_edges, n_tar, n_alt = \
                 self.hist_kde(self.error_col[key0], self.error_col[key1], sigma_factor)
 
             true_pos, false_pos, auc_value = self.roc_analysis(error_steps, self.error_col[key0], self.error_col[key1])
 
-            fig = plt.figure(figsize=(17.5/2.54, 7/2.54))
-            gs = gridspec.GridSpec(1, 2, left=0.1, bottom=0.2, top=0.95, right=0.95, width_ratios=[2, 1])
-            ax = fig.add_subplot(gs[0, 0])
-            ax_auc = fig.add_subplot(gs[0, 1])
+            # fig = plt.figure(figsize=(17.5/2.54, 7/2.54))
+            # gs = gridspec.GridSpec(1, 2, left=0.1, bottom=0.2, top=0.95, right=0.95, width_ratios=[2, 1])
+            # ax = fig.add_subplot(gs[0, 0])
+            # ax_auc = fig.add_subplot(gs[0, 1])
 
-            target_handle, = ax.plot(error_steps, kde_target / len(self.error_col[key0]))
-            altern_handle, = ax.plot(error_steps, kde_altern / len(self.error_col[key1]))
+            target_handle, = ax[enu].plot(error_steps, kde_target / len(self.error_col[key0]))
+            altern_handle, = ax[enu].plot(error_steps, kde_altern / len(self.error_col[key1]))
 
-            ax.bar(bin_edges[:-1] + (bin_edges[1] - bin_edges[0]) / 2, n_tar, width=(bin_edges[1] - bin_edges[0]) * 0.8, alpha=0.5, color=target_handle.get_color())
-            ax.bar(bin_edges[:-1] + (bin_edges[1] - bin_edges[0]) / 2, n_alt, width=(bin_edges[1] - bin_edges[0]) * 0.8, alpha=0.5, color=altern_handle.get_color())
+            ax[enu].bar(bin_edges[:-1] + (bin_edges[1] - bin_edges[0]) / 2, n_tar, width=(bin_edges[1] - bin_edges[0]) * 0.8, alpha=0.5, color=target_handle.get_color())
+            ax[enu].bar(bin_edges[:-1] + (bin_edges[1] - bin_edges[0]) / 2, n_alt, width=(bin_edges[1] - bin_edges[0]) * 0.8, alpha=0.5, color=altern_handle.get_color())
 
-            ax.set_ylabel('kde')
-            ax.set_xlabel(key0)
-            ax.set_xlim(left=0)
+            ax[enu].set_ylabel('KDE', fontsize=10)
+            # ax.set_xlabel(key0)
+            help_array = np.concatenate((self.error_col[key0], self.error_col[key1]))
+            ax[enu].set_xlim(0, np.percentile(help_array, 95))
+            ax[enu].set_ylim(0, np.max(np.concatenate((n_tar, n_alt))) * 1.1)
 
-            ax_auc.fill_between(false_pos, np.zeros(len(false_pos)), true_pos, color='grey')
-            ax_auc.plot([0, 1], [0, 1], color='k', linestyle='--', linewidth=2)
-            ax_auc.text(0.95, 0.05, '%.1f' % (auc_value * 100), fontsize=10, color='k', ha='right', va='bottom')
-            ax_auc.set_xlim(0, 1)
-            ax_auc.set_ylim(0, 1)
+            ax_roc[enu].fill_between(false_pos, np.zeros(len(false_pos)), true_pos, color='grey')
+            ax_roc[enu].plot([0, 1], [0, 1], color='k', linestyle='--', linewidth=2)
+            ax_roc[enu].text(0.95, 0.05, '%.1f' % (auc_value * 100), fontsize=10, color='k', ha='right', va='bottom')
+            ax_roc[enu].set_xlim(0, 1)
+            ax_roc[enu].set_ylim(0, 1)
+            ax_roc[enu].set_xticks([0, 1])
+            ax_roc[enu].set_yticks([0, 1])
+            ax_roc[enu].set_ylabel('true positive', fontsize=10)
+            if enu == 2:
+                ax_roc[enu].set_xlabel('false positive', fontsize=10)
+        ax[0].set_xlabel(r'$\varepsilon_{freq}$', fontsize=10)
+        ax[1].set_xlabel(r'$\varepsilon_{field}$', fontsize=10)
+        ax[2].set_xlabel(r'$\varepsilon_{signal}$', fontsize=10)
+
+        for a in np.concatenate((ax, ax_roc)):
+            a.tick_params(labelsize=9)
+        fig.tag(axes=ax, fontsize=15, yoffs=1, xoffs=-6)
+        plt.savefig('freq_field_signal_error.pdf')
+
+
+        # for enu, key0, key1 in zip(np.arange(5),
+        #                            ['target_dfreq', 'target_dfield', 'target_freq_e', 'target_field_e', 'target_signal_e'],
+        #                            ['altern_dfreq', 'altern_dfield', 'altern_freq_e', 'altern_field_e', 'altern_signal_e']):
+        #     mask = np.arange(len(self.error_col[key0]))
+        #     samples = len(mask)
+        #     jk_fac = 1
+        #     auc_jk = []
+        #     for i in tqdm(range(1)):
+        #         np.random.shuffle(mask)
+        #
+        #         sigma_factor = 1 / 2 if enu in [0] else 1 / 10
+        #         error_steps, kde_target, kde_altern, bin_edges, n_tar, n_alt = \
+        #             self.hist_kde(np.array(self.error_col[key0])[mask[:int(samples * jk_fac)]],
+        #                           np.array(self.error_col[key1])[mask[:int(samples * jk_fac)]], sigma_factor)
+        #
+        #         true_pos, false_pos, auc_value = self.roc_analysis(error_steps,
+        #                                                            np.array(self.error_col[key0])[mask[:int(samples * jk_fac)]],
+        #                                                            np.array(self.error_col[key1])[mask[:int(samples * jk_fac)]])
+        #         auc_jk.append(auc_value)
+        #
+        #     ax_auc.bar(enu, np.mean(auc_jk), color='grey', align='center', width=0.8)
+        #     # ax_auc.errorbar(enu, np.mean(auc_jk), yerr=np.std(auc_jk))
+        #
+        # ax_auc.set_ylim(0.9, 1)
+
 
     def which_is_best(self):
         embed()
         quit()
-
 
         for enu, key0, key1 in zip(np.arange(5),
                                    ['target_dfreq', 'target_dfield', 'target_freq_e', 'target_field_e', 'target_signal_e'],
@@ -1059,6 +1137,15 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
             if validate:
                 origin_idx = i0_m[layer][idx0] + min_i0
                 target_idx = i1_m[layer][idx1] + min_i0
+
+                collect = False
+                if i + idx_comp_range < idx_v[origin_idx] < i + idx_comp_range * 2:
+                    if i + idx_comp_range < idx_v[target_idx] < i + idx_comp_range * 2:
+                        collect = True
+
+                if collect == False:
+                    continue
+
                 alt_i = np.arange(len(i1_m[layer]))[~np.isnan(error_cube[layer][idx0, :])]
                 alt_e = error_cube[layer][idx0, :][alt_i]
                 alt_idxs = i1_m[layer][~np.isnan(error_cube[layer][idx0, :])][np.argsort(alt_e)] + min_i0
@@ -1077,29 +1164,49 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
                     a_error_alt = np.sqrt(np.sum([(sign_v[origin_idx][j] - sign_v[alt_idx0][j]) ** 2 for j in range(n_channels)]))
                     f_error_alt = np.abs(fund_v[origin_idx] - fund_v[alt_idx0])
                     [a_e_alt, f_e_alt, t_e] = estimate_error(a_error_alt, f_error_alt, a_error_distribution)
-                    # print('---')
-                    # print('origin: f: %.1f Hz, ID: %.0f' % (fund_v[origin_idx], validated_ident_v[origin_idx]))
-                    # print('target: f: %.1f Hz, ID: %.0f' % (fund_v[target_idx], validated_ident_v[target_idx]))
-                    # print('altern: f: %.1f Hz, ID: %.0f' % (fund_v[alt_idx0], validated_ident_v[alt_idx0]))
 
                     if validate:
-                        va.error_col['originID'].append(validated_ident_v[origin_idx])
-                        va.error_col['targetID'].append(validated_ident_v[target_idx])
+                        if validated_ident_v[origin_idx] == validated_ident_v[target_idx]:
+                            va.error_col['hit'].append(True)
 
-                        va.error_col['target_dfreq'].append(f_error_target)
-                        va.error_col['target_dfield'].append(a_error_target)
-                        va.error_col['target_freq_e'].append(f_e_target)
-                        va.error_col['target_field_e'].append(a_e_target)
-                        va.error_col['target_signal_e'].append(np.sum([a_e_target, f_e_target]))
+                            va.error_col['originID'].append(validated_ident_v[origin_idx])
+                            va.error_col['targetID'].append(validated_ident_v[target_idx])
 
-                        va.error_col['alternID'].append(validated_ident_v[alt_idx0])
+                            va.error_col['target_dfreq'].append(f_error_target)
+                            va.error_col['target_dfield'].append(a_error_target)
+                            va.error_col['target_freq_e'].append(f_e_target)
+                            va.error_col['target_field_e'].append(a_e_target)
+                            va.error_col['target_signal_e'].append(np.sum([a_e_target, f_e_target]))
 
-                        va.error_col['altern_dfreq'].append(f_error_alt)
-                        va.error_col['altern_dfield'].append(a_error_alt)
-                        va.error_col['altern_freq_e'].append(f_e_alt)
-                        va.error_col['altern_field_e'].append(a_e_alt)
-                        va.error_col['altern_signal_e'].append(np.sum([a_e_alt, f_e_alt]))
+                            va.error_col['alternID'].append(validated_ident_v[alt_idx0])
 
+                            va.error_col['altern_dfreq'].append(f_error_alt)
+                            va.error_col['altern_dfield'].append(a_error_alt)
+                            va.error_col['altern_freq_e'].append(f_e_alt)
+                            va.error_col['altern_field_e'].append(a_e_alt)
+                            va.error_col['altern_signal_e'].append(np.sum([a_e_alt, f_e_alt]))
+
+                        elif validated_ident_v[origin_idx] == validated_ident_v[alt_idx0]:
+                            va.error_col['hit'].append(False)
+
+                            va.error_col['originID'].append(validated_ident_v[origin_idx])
+                            va.error_col['targetID'].append(validated_ident_v[alt_idx0])
+
+                            va.error_col['target_dfreq'].append(f_error_alt)
+                            va.error_col['target_dfield'].append(a_error_alt)
+                            va.error_col['target_freq_e'].append(f_e_alt)
+                            va.error_col['target_field_e'].append(a_e_alt)
+                            va.error_col['target_signal_e'].append(np.sum([a_e_alt, f_e_alt]))
+
+                            va.error_col['alternID'].append(validated_ident_v[target_idx])
+
+                            va.error_col['altern_dfreq'].append(f_error_target)
+                            va.error_col['altern_dfield'].append(a_error_target)
+                            va.error_col['altern_freq_e'].append(f_e_target)
+                            va.error_col['altern_field_e'].append(a_e_target)
+                            va.error_col['altern_signal_e'].append(np.sum([a_e_target, f_e_target]))
+                        else:
+                            pass
                     # if show:
                         # da.plot_assign(origin_idx, target_idx, alternatives)
 
@@ -1415,6 +1522,7 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
     ident_v = clean_up(fund_v, ident_v)
 
     # va.which_is_best()
+    va.a_error_dist = a_error_distribution
     va.error_dist_and_auc_display()
 
     return fund_v, ident_v, idx_v, sign_v, a_error_distribution, f_error_distribution, idx_of_origin_v, original_sign_v
