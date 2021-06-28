@@ -6,6 +6,7 @@ from plottools.colors import *
 from plottools.tag import tag
 colors_params(colors_muted, colors_tableau)
 import os
+import sys
 from IPython import embed
 from tqdm import tqdm
 from PyQt5.QtCore import *
@@ -43,6 +44,10 @@ class Validate():
         self.error_col['altern_field_e'] = []
         self.error_col['altern_signal_e'] = []
 
+    def save_dict(self):
+        np.save('./error_col_all.npy', self.error_col)
+        np.save('./a_error_dist_methods_all.npy', self.a_error_dist)
+
     def hist_kde(self, target_param, altern_param, sigma_factor = 1/10):
         help_array = np.concatenate((target_param, altern_param))
         error_steps = np.linspace(0, np.max(help_array) * 501 / 500, 500)
@@ -76,8 +81,6 @@ class Validate():
         return true_pos, false_pos, auc_value
 
     def error_dist_and_auc_display(self):
-        embed()
-        quit()
 
         fig = plt.figure(figsize=(15/2.54, 10/2.54))
         gs = gridspec.GridSpec(2, 2, left=0.15, bottom=0.15, right=0.95, top=0.95, wspace=0.6, hspace=0.6, width_ratios=[2, 1])
@@ -1522,6 +1525,7 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
     ident_v = clean_up(fund_v, ident_v)
 
     # va.which_is_best()
+    va.save_dict()
     va.a_error_dist = a_error_distribution
     va.error_dist_and_auc_display()
 
@@ -1578,11 +1582,12 @@ def boltzmann(t, alpha=0.25, beta=0.0, x0=4, dx=0.85):
     return boltz
 
 
-def load_example_data():
+def load_example_data(folder=None):
 
     # folder = "/home/raab/paper_create/2021_tracking/data/2016-04-10-11_12"
     # folder = "/home/raab/writing/2021_tracking/code/tracking_display/2016-04-10-11_12"
-    folder = "/home/raab/writing/2021_tracking/data/2016-04-10-11_12"
+    if folder == None:
+        folder = "/home/raab/writing/2021_tracking/data/2016-04-10-11_12"
 
     if os.path.exists(os.path.join(folder, 'fund_v.npy')):
         fund_v = np.load(os.path.join(folder, 'fund_v.npy'))
@@ -1618,9 +1623,15 @@ def back_shape_data(fund_v, sign_v, idx_v, times):
         else:
             if idx_v[i] != idx_v[i - 1]:
                 fundamentals.append(np.array(f))
-                f = []
                 signatures.append(np.array(s))
+                f = []
                 s = []
+                counter = 1
+                while idx_v[i] != idx_v[i - 1] + counter :
+                    fundamentals.append(np.array(f))
+                    signatures.append(np.array(s))
+                    counter += 1
+
             f.append(fund_v[i])
             s.append(sign_v[i])
     fundamentals.append(f)
@@ -1643,10 +1654,20 @@ def plot_tracked_traces(ident_v, fund_v, idx_v, times):
 
 
 def main():
+    if len(sys.argv) >=2:
+        folder = sys.argv[1]
+    else:
+        folder = None
+
     fund_v, sign_v, idx_v, times, start_time, end_time, validated_ident_v = \
-        load_example_data()
+        load_example_data(folder=folder)
 
     fundamentals, signatures = back_shape_data(fund_v, sign_v, idx_v, times)
+
+
+    # fundamentals = np.array(fundamentals)[times <= 30 * 60]
+    # signatures = np.array(signatures)[times <= 30 * 60]
+    # times = times[times <= 30 * 60]
 
     fund_v, ident_v, idx_v, sign_v, a_error_distribution, f_error_distribution, idx_of_origin_v, original_sign_v = \
         freq_tracking_v5(fundamentals, signatures, times, visualize=True, validated_ident_v= validated_ident_v)
