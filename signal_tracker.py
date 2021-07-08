@@ -45,19 +45,19 @@ class Validate():
         self.error_col['altern_signal_e'] = []
 
     def save_dict(self):
-        np.save('./error_col_all.npy', self.error_col)
-        np.save('./a_error_dist_methods_all.npy', self.a_error_dist)
+        np.save('./quantification/error_col.npy', self.error_col)
+        np.save('./quantification/a_error_dist.npy', self.a_error_dist)
 
     def hist_kde(self, target_param, altern_param, sigma_factor = 1/10):
         help_array = np.concatenate((target_param, altern_param))
         error_steps = np.linspace(0, np.max(help_array) * 501 / 500, 500)
 
         kde_target = np.zeros(len(error_steps))
-        for e in target_param:
+        for e in tqdm(target_param, desc='target'):
             kde_target += gauss(error_steps, e, np.std(target_param) * sigma_factor, 1, norm=True)
 
         kde_altern = np.zeros(len(error_steps))
-        for e in altern_param:
+        for e in tqdm(altern_param, desc='altern'):
             kde_altern += gauss(error_steps, e, np.std(altern_param) * sigma_factor, 1, norm=True)
 
 
@@ -73,7 +73,7 @@ class Validate():
     def roc_analysis(self, error_steps, target_param, altern_param):
         true_pos = np.ones(len(error_steps))
         false_pos = np.ones(len(error_steps))
-        for i in range(len(error_steps)):
+        for i in tqdm(range(len(error_steps)), desc='ROC'):
             true_pos[i] = len(np.array(target_param)[np.array(target_param) < error_steps[i]]) / len(target_param)
             false_pos[i] = len(np.array(altern_param)[np.array(altern_param) < error_steps[i]]) / len(altern_param)
         auc_value = np.sum(true_pos[:-1] * np.diff(false_pos))
@@ -98,21 +98,33 @@ class Validate():
         ax_m[0].plot(np.linspace(0, 2.5, 1000), boltzmann(np.linspace(0, 2.5, 1000), alpha=1, beta=0, x0=.35, dx=.08), color='k')
         ax_m[0].set_ylim(bottom=0)
         ax_m[0].set_yticks([0, 1])
-        ax_m[0].set_ylabel(r'$\varepsilon_{freq}$', fontsize=10)
+        ax_m[0].set_ylabel(r'$\varepsilon_{f}$', fontsize=10)
 
         ax_m[1].plot(self.a_error_dist[np.argsort(self.a_error_dist)], np.linspace(0, 1, len(self.a_error_dist)), color='k')
         ax_m[1].set_ylim(bottom=0)
         ax_m[1].set_yticks([0, 1])
-        ax_m[1].set_ylabel(r'$\varepsilon_{field}$', fontsize=10)
+        ax_m[1].set_ylabel(r'$\varepsilon_{S}$', fontsize=10)
 
-        for enu, key0, key1 in zip(np.arange(2), ['target_dfreq', 'target_dfield'], ['altern_dfreq', 'altern_dfield']):
-        # for enu, key0, key1 in zip(np.arange(2), ['target_freq_e', 'target_field_e'], ['altern_freq_e', 'altern_field_e']):
+        for enu, key0, key1, name in zip(np.arange(2), ['target_dfreq', 'target_dfield'], ['altern_dfreq', 'altern_dfield'], ['dfreq', 'dfield']):
+            # for enu, key0, key1 in zip(np.arange(2), ['target_freq_e', 'target_field_e'], ['altern_freq_e', 'altern_field_e']):
             sigma_factor = 1 / 2 if enu in [0] else 1 / 10
             error_steps, kde_target, kde_altern, bin_edges, n_tar, n_alt = \
                 self.hist_kde(self.error_col[key0], self.error_col[key1], sigma_factor)
 
             true_pos, false_pos, auc_value = self.roc_analysis(error_steps, self.error_col[key0], self.error_col[key1])
 
+            np.save('./quantification/error_steps_%s.npy' % name, error_steps)
+            np.save('./quantification/kde_target_%s.npy' % name, kde_target)
+            np.save('./quantification/kde_altern_%s.npy' % name, kde_altern)
+            np.save('./quantification/bin_edges_%s.npy' % name, bin_edges)
+            np.save('./quantification/n_tar_%s.npy' % name, n_tar)
+            np.save('./quantification/n_alt_%s.npy' % name, n_alt)
+
+            np.save('./quantification/true_pos_%s.npy' % name, true_pos)
+            np.save('./quantification/false_pos_%s.npy' % name, false_pos)
+            np.save('./quantification/auc_value_%s.npy' % name, auc_value)
+
+            print(len(self.error_col[key0]))
             target_handle, = ax[enu].plot(error_steps, kde_target / len(self.error_col[key0]), lw=2)
             altern_handle, = ax[enu].plot(error_steps, kde_altern / len(self.error_col[key1]), lw=2)
 
@@ -132,8 +144,8 @@ class Validate():
             ax_auc[enu].set_xticks([0, 1])
             ax_auc[enu].set_yticks([0, 1])
 
-        ax[0].set_xlabel(r'$\Delta freq$ [Hz]', fontsize=10)
-        ax[1].set_xlabel(r'field difference ($\Delta p_{f}$)', fontsize=10)
+        ax[0].set_xlabel(r'$\Delta f$ [Hz]', fontsize=10)
+        ax[1].set_xlabel(r'field difference ($\Delta S$)', fontsize=10)
 
         ax_auc[0].set_ylabel('true positive', fontsize=10)
         ax_auc[1].set_ylabel('true positive', fontsize=10)
@@ -162,9 +174,10 @@ class Validate():
 
         # ax_auc = fig.add_subplot(fig.add_subplot(gs[-1, :]))
 
-        for enu, key0, key1 in zip(np.arange(5),
-                                   ['target_freq_e', 'target_field_e', 'target_signal_e'],
-                                   ['altern_freq_e', 'altern_field_e', 'altern_signal_e']):
+        for enu, key0, key1, name in zip(np.arange(5),
+                                         ['target_freq_e', 'target_field_e', 'target_signal_e'],
+                                         ['altern_freq_e', 'altern_field_e', 'altern_signal_e'],
+                                         ['freq_e', 'field_e', 'signal_e']):
 
             sigma_factor = 1 / 2 if enu in [0] else 1 / 10
             error_steps, kde_target, kde_altern, bin_edges, n_tar, n_alt = \
@@ -176,6 +189,17 @@ class Validate():
             # gs = gridspec.GridSpec(1, 2, left=0.1, bottom=0.2, top=0.95, right=0.95, width_ratios=[2, 1])
             # ax = fig.add_subplot(gs[0, 0])
             # ax_auc = fig.add_subplot(gs[0, 1])
+
+            np.save('./quantification/error_steps_%s.npy' % name, error_steps)
+            np.save('./quantification/kde_target_%s.npy' % name, kde_target)
+            np.save('./quantification/kde_altern_%s.npy' % name, kde_altern)
+            np.save('./quantification/bin_edges_%s.npy' % name, bin_edges)
+            np.save('./quantification/n_tar_%s.npy' % name, n_tar)
+            np.save('./quantification/n_alt_%s.npy' % name, n_alt)
+
+            np.save('./quantification/true_pos_%s.npy' % name, true_pos)
+            np.save('./quantification/false_pos_%s.npy' % name, false_pos)
+            np.save('./quantification/auc_value_%s.npy' % name, auc_value)
 
             target_handle, = ax[enu].plot(error_steps, kde_target / len(self.error_col[key0]))
             altern_handle, = ax[enu].plot(error_steps, kde_altern / len(self.error_col[key1]))
@@ -199,9 +223,9 @@ class Validate():
             ax_roc[enu].set_ylabel('true positive', fontsize=10)
             if enu == 2:
                 ax_roc[enu].set_xlabel('false positive', fontsize=10)
-        ax[0].set_xlabel(r'$\varepsilon_{freq}$', fontsize=10)
-        ax[1].set_xlabel(r'$\varepsilon_{field}$', fontsize=10)
-        ax[2].set_xlabel(r'$\varepsilon_{signal}$', fontsize=10)
+        ax[0].set_xlabel(r'$\varepsilon_{f}$', fontsize=10)
+        ax[1].set_xlabel(r'$\varepsilon_{S}$', fontsize=10)
+        ax[2].set_xlabel(r'$\varepsilon$', fontsize=10)
 
         for a in np.concatenate((ax, ax_roc)):
             a.tick_params(labelsize=9)
@@ -236,8 +260,6 @@ class Validate():
 
 
     def which_is_best(self):
-        embed()
-        quit()
 
         for enu, key0, key1 in zip(np.arange(5),
                                    ['target_dfreq', 'target_dfield', 'target_freq_e', 'target_field_e', 'target_signal_e'],
@@ -303,6 +325,7 @@ class Validate():
 
         # embed()
         # quit()
+
 class Display_agorithm():
     def __init__(self, fund_v, ident_v, idx_v, sign_v, times, a_error_distribution, error_dist_i0s, error_dist_i1s):
         self.fund_v = fund_v
@@ -1220,12 +1243,12 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
             plt.close()
             da.tmp_ident_v_state.append(tmp_ident_v_ret)
             da.static_tmp_id_tracking(min_i0, max_i1)
-
+            plt.show()
         #### this is new and in progress ####
         # ToDo: cut those strange ones... NOPE identify potential new partner first!!! s.u.
 
         #print(da.itter_counter)
-        plt.show()
+
 
         return tmp_ident_v_ret, errors_to_v
 
@@ -1525,8 +1548,8 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
     ident_v = clean_up(fund_v, ident_v)
 
     # va.which_is_best()
-    va.save_dict()
     va.a_error_dist = a_error_distribution
+    va.save_dict()
     va.error_dist_and_auc_display()
 
     return fund_v, ident_v, idx_v, sign_v, a_error_distribution, f_error_distribution, idx_of_origin_v, original_sign_v
@@ -1670,7 +1693,7 @@ def main():
     # times = times[times <= 30 * 60]
 
     fund_v, ident_v, idx_v, sign_v, a_error_distribution, f_error_distribution, idx_of_origin_v, original_sign_v = \
-        freq_tracking_v5(fundamentals, signatures, times, visualize=True, validated_ident_v= validated_ident_v)
+        freq_tracking_v5(fundamentals, signatures, times, visualize=False, validated_ident_v= validated_ident_v)
 
     plot_tracked_traces(ident_v, fund_v, idx_v, times)
 
