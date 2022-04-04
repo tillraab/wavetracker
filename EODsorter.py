@@ -182,7 +182,6 @@ class PlotWidget():
         else:
             pass
 
-
     def highlight_group(self, active_idx, ident_v, times, idx_v, fund_v):
         if self.active_group_handle:
             self.active_group_handle.remove()
@@ -480,11 +479,13 @@ class MainWindow(QMainWindow):
 
         ################## ToolBar ###################
 
-        self.Act_interactive_sel = QAction(QIcon('./gui_sym/sel.png'), 'S', self)
+        self.Act_interactive_sel = QAction(QIcon('./gui_sym/sel.png'), 'Create new frequencies', self)
+        self.Act_interactive_sel.setStatusTip('create new freqs from fine spectrogram')
         self.Act_interactive_sel.setCheckable(True)
         self.Act_interactive_sel.setEnabled(False)
 
         self.Act_interactive_con = QAction(QIcon('./gui_sym/con.png'), 'Connect', self)
+        self.Act_interactive_con.setStatusTip(r'connect two selected traces')
         self.Act_interactive_con.setCheckable(True)
         self.Act_interactive_con.setEnabled(False)
 
@@ -709,6 +710,7 @@ class MainWindow(QMainWindow):
             self.Plot.unassigned_funds_handle = None
             self.Plot.figure.canvas.draw()
             print('unchecked')
+
     def channel_change(self, i):
         if self.previousChannel != None:
             self.all_ident_v[self.previousChannel] = self.ident_v
@@ -824,7 +826,7 @@ class MainWindow(QMainWindow):
             self.Plot.fill_spec = np.memmap(os.path.join(self.folder, 'fill_spec.npy'), dtype='float', mode='r',
                                             shape=(self.fill_spec_shape[0], self.fill_spec_shape[1]), order = 'F')
             self.Act_fine_spec.setEnabled(True)
-            self.Act_interactive_sel.setEnabled(True)
+            # self.Act_interactive_sel.setEnabled(True)
 
         else:
             self.fill_freqs = None
@@ -903,6 +905,7 @@ class MainWindow(QMainWindow):
         return super(MainWindow, self).eventFilter(source, event)
 
     def fill_trace(self):
+        # ToDo: this is buggy as hell !!!
         # ToDo: see if real trace has freq at idxs !!!
 
         xlim = np.array(sorted([self.x0, self.x1]))
@@ -939,6 +942,9 @@ class MainWindow(QMainWindow):
 
         if self.Act_interactive_sel.isChecked():
             self.get_active_idx_rect()
+
+            # if hasattr(self.active_idx, '__len__'):
+            #     self.fill_trace()
 
             if hasattr(self.active_idx, '__len__') and not self.Plot.active_id_handle0:
                 if len(self.active_idx) > 0:
@@ -1107,7 +1113,6 @@ class MainWindow(QMainWindow):
             self.reset_variables()
             self.Plot.canvas.draw()
 
-
     def execute(self):
         self.last_ident_v = np.copy(self.ident_v)
         if self.Act_interactive_newassign.isChecked():
@@ -1135,6 +1140,7 @@ class MainWindow(QMainWindow):
             if hasattr(self.active_idx, '__len__'):
                 self.get_active_group_ids()
                 self.group_delete()
+
 def main():
     app = QApplication(sys.argv)  # create application
     w = MainWindow()  # create window

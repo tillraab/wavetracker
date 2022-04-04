@@ -481,6 +481,7 @@ class Display_agorithm():
 
             plt.pause(2)
             plt.close('all')
+
     def static_tmp_id_tracking(self, min_i0, max_i1):
         t0 = self.times[self.idx_v[min_i0]]
 
@@ -631,7 +632,6 @@ class Display_agorithm():
                              markersize=4)
         plt.show()
 
-
     def life_tmp_ident_init(self, min_i0, max_i1):
 
         self.fig, self.ax = plt.subplots()
@@ -642,7 +642,6 @@ class Display_agorithm():
         self.ax.set_ylim(880, 950)
         # self.fig.canvas.draw()
         plt.pause(0.05)
-
 
     def life_tmp_ident_update(self, tmp_indet_v, new=None, update=None, delete=None):
         if new:
@@ -655,8 +654,6 @@ class Display_agorithm():
 
         # self.fig.canvas.draw()
         plt.pause(0.05)
-
-
 
 def aux():
     pass
@@ -1239,6 +1236,8 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
         tmp_ident_v_ret = np.full(len(fund_v), np.nan)
         tmp_ident_v_ret[min_i0:max_i1 + 1] = tmp_ident_v
 
+        # embed()
+        # quit()
         if show:
             plt.close()
             da.tmp_ident_v_state.append(tmp_ident_v_ret)
@@ -1693,12 +1692,12 @@ def main():
     # times = times[times <= 30 * 60]
 
     fund_v, ident_v, idx_v, sign_v, a_error_distribution, f_error_distribution, idx_of_origin_v, original_sign_v = \
-        freq_tracking_v5(fundamentals, signatures, times, visualize=False, validated_ident_v= validated_ident_v)
+        freq_tracking_v5(fundamentals, signatures, times, visualize=True, validated_ident_v= validated_ident_v)
 
     plot_tracked_traces(ident_v, fund_v, idx_v, times)
 
-    embed()
-    quit()
+    # embed()
+    # quit()
 
 if __name__ == '__main__':
     main()
