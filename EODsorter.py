@@ -1142,6 +1142,7 @@ class MainWindow(QMainWindow):
                 self.group_delete()
 
 def main():
+    print('test')
     app = QApplication(sys.argv)  # create application
     w = MainWindow()  # create window
     # p = PlotWidget()
