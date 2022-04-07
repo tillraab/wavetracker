@@ -5,6 +5,9 @@ electric fish. This includes (i) the extraction of individual electric signals f
 corresponding raw data, (ii) the tracking of individual fish signals for whole recordings, 
 and (iii) the post-processing to eliminate and correct tracking errors.
 
+**Purpose of this fork:** Add gui interface to save the currently displayed plot including
+metadata.
+
 ## trackingGUI.py
 GUI interface combining (i) the extraction of electric wave-type signals in  electrode-array 
 recording of electric fish using the 
