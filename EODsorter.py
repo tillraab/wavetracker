@@ -534,7 +534,7 @@ class MainWindow(QMainWindow):
         self.Act_interactive_zoom_home.triggered.connect(self.Mzoom_home)
         self.Act_interactive_zoom_home.setEnabled(False)
 
-        self.Act_save_plt = QAction(QIcon('./gui_sym/zoom_home.png'), 'save current plot', self)
+        self.Act_save_plt = QAction(QIcon('./gui_sym/saveplot.png'), 'save current plot', self)
         self.Act_save_plt.triggered.connect(self.Msave_plt)
         self.Act_save_plt.setEnabled(False)
 
@@ -1098,7 +1098,13 @@ class MainWindow(QMainWindow):
             abs_dir_path = os.path.abspath(dir_path)
             print('Plot directory found in %s' %abs_dir_path) # print existing dir location
 
-        self.Plot.figure.savefig(img_path) # save plot
+        try: # try saving image
+            self.Plot.figure.savefig(img_path) # save plot
+        except (IOError, OSError) as e: # print error message if fails
+            print('Failed saving image')
+        else:
+            abs_img_path=os.path.abspath(img_path)
+            print('Image saved in %s' %abs_img_path) # print path to image
 
     def Mfine_spec(self):
         ylim = self.Plot.ylim
