@@ -309,9 +309,6 @@ class PlotWidget():
 
         # self.figure.canvas.draw()
 
-    def save_plt(self):
-        self.figure.savefig('~/Data/uni/efish/tests/test.pdf')
-
     def move_right(self):
         xlim = self.xlim
 
