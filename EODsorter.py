@@ -62,15 +62,9 @@ def decibel(power, ref_power=1.0, min_power=1e-20):
 
 class color:
 # to make error messages stand out
-   PURPLE = '\033[95m'
-   CYAN = '\033[96m'
-   DARKCYAN = '\033[36m'
-   BLUE = '\033[94m'
    GREEN = '\033[92m'
-   YELLOW = '\033[93m'
    RED = '\033[91m'
    BOLD = '\033[1m'
-   UNDERLINE = '\033[4m'
    END = '\033[0m'
 
 class PlotWidget():
@@ -1198,7 +1192,7 @@ class MainWindow(QMainWindow):
                 self.group_delete()
 
 def main():
-    print('main running')
+    print('test')
     app = QApplication(sys.argv)  # create application
     w = MainWindow()  # create window
     # p = PlotWidget()
