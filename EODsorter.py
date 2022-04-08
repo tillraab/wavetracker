@@ -60,6 +60,19 @@ def decibel(power, ref_power=1.0, min_power=1e-20):
     else:
         return decibel_psd[0]
 
+class color:
+# to make error messages stand out
+   PURPLE = '\033[95m'
+   CYAN = '\033[96m'
+   DARKCYAN = '\033[36m'
+   BLUE = '\033[94m'
+   GREEN = '\033[92m'
+   YELLOW = '\033[93m'
+   RED = '\033[91m'
+   BOLD = '\033[1m'
+   UNDERLINE = '\033[4m'
+   END = '\033[0m'
+
 class PlotWidget():
     def __init__(self):
         self.figure = plt.figure()
@@ -1074,37 +1087,41 @@ class MainWindow(QMainWindow):
         self.Plot.figure.canvas.draw()
 
     def Msave_plt(self):
-        dir_name='wavetracker-plots'                # dir name
-        dir_path=os.path.join('../'+dir_name)       # relative dir path
-        img_name='test.png'
+        dir_name='wavetracker-plots'           # dir name
+        dir_path=os.path.join('../'+dir_name)  # relative dir path
+        img_format='.png'
+        recdate=int(self.rec_datetime.strftime("%Y%m%d%H%M%S"))
+        plottime=str(int(self.Plot.xlim[0]))+'-'+str(int(self.Plot.xlim[1]))
+        plotfreq=str(int(self.Plot.ylim[0]))+'-'+str(int(self.Plot.ylim[1])) 
+        img_name='rec'+str(recdate)+'_secs'+plottime+'_freqs'+plotfreq+img_format
         img_path=os.path.join(dir_path+'/'+img_name)
 
-        try:                                        # test if dir exists
+        try: # test if dir exists
             os.listdir(dir_path)
-        except (IOError, OSError) as e:             # creates if not exists
-            print('Plot directory not found. Creating directory ...')
-            try:
+        except (IOError, OSError) as e: # creates if not exists
+            print('No existing plot directory found. Creating directory ...')
+            try: 
                 os.mkdir(dir_path)
-            except:
-                print('Error: Failed to create plot directory!')
-            else:
+            except (IOError, OSError) as e: # print error when fails 
+                print(color.RED+color.BOLD+'Error: Failed to create new plot directory!'+color.END)
+            else: # check if dir was created
                 start = os.path.realpath('..')
                 for dirpath, dirnames, filenames in os.walk(start):
                     for dirname in dirnames:
                         if dirname == dir_name:
                             path = os.path.join(dirpath+'/'+dirname)
-                print('Plot directory created in %s' %path) # print new dir location
+                print(color.GREEN+'New plot directory created in %s' %path + color.END) # print new dir location
         else:
             abs_dir_path = os.path.abspath(dir_path)
-            print('Plot directory found in %s' %abs_dir_path) # print existing dir location
+            print(color.GREEN+'Existing plot directory found in %s' %abs_dir_path + color.END) # print existing dir location
 
         try: # try saving image
             self.Plot.figure.savefig(img_path) # save plot
         except (IOError, OSError) as e: # print error message if fails
-            print('Failed saving image')
+            print(color.RED+color.BOLD+'Failed saving image!'+color.END)
         else:
             abs_img_path=os.path.abspath(img_path)
-            print('Image saved in %s' %abs_img_path) # print path to image
+            print(color.GREEN+'Image saved in %s' %abs_img_path + color.END) # print path to image
 
     def Mfine_spec(self):
         ylim = self.Plot.ylim
