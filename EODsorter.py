@@ -826,7 +826,7 @@ class MainWindow(QMainWindow):
             self.Plot.fill_spec = np.memmap(os.path.join(self.folder, 'fill_spec.npy'), dtype='float', mode='r',
                                             shape=(self.fill_spec_shape[0], self.fill_spec_shape[1]), order = 'F')
             self.Act_fine_spec.setEnabled(True)
-            # self.Act_interactive_sel.setEnabled(True)
+            self.Act_interactive_sel.setEnabled(True)
 
         else:
             self.fill_freqs = None
@@ -915,17 +915,36 @@ class MainWindow(QMainWindow):
         ioi = np.argmax(self.fill_spec[f_mask[0]:f_mask[-1]+1, t_mask[0]:t_mask[-1]+1], axis=0)
 
         power_freqs = self.fill_freqs[f_mask][ioi]
-        power_idxs = t_mask
+        # power_idxs = t_mask
 
-        mask = [enu for enu, i in enumerate(t_mask) if i not in self.idx_v[self.ident_v == self.active_id]]
-        power_freqs = power_freqs[mask]
-        power_idxs = t_mask[mask]
+        ########################
+        power_idxs = list(map(lambda x: np.argmin(np.abs(self.times - x)), self.fill_times[t_mask]))
+        ########################
 
-        power_ident = np.ones(len(power_freqs)) * np.nanmax(self.ident_v) + 1
+        # mask = [enu for enu, i in enumerate(t_mask) if i not in self.idx_v[self.ident_v == self.active_id]]
+        # power_freqs = power_freqs[mask]
+        # power_idxs = t_mask[mask]
 
-        self.Plot.ax.plot(self.fill_times[power_idxs], power_freqs, marker = '.')
+        next_ident = np.max(self.ident_v[~np.isnan(self.ident_v)]) + 1
+        power_ident = np.ones(len(power_freqs)) * next_ident
+
+        # self.Plot.ax.plot(self.fill_times[power_idxs], power_freqs, marker = '.')
+        self.Plot.ax.plot(self.times[power_idxs], power_freqs, marker = '.')
         # self.Plot.ax.plot(self.fill_times[t_mask], power_freqs, marker = '.')
         self.Plot.figure.canvas.draw()
+
+        self.idx_v = np.append(self.idx_v, power_idxs, 0)
+        self.fund_v = np.append(self.fund_v, power_freqs, 0)
+        self.ident_v = np.append(self.ident_v, power_ident, 0)
+        self.sign_v = np.append(self.sign_v, np.full((len(power_ident), self.sign_v.shape[1]), np.nan), 0)
+        sorter = np.argsort(self.idx_v)
+        self.idx_v = self.idx_v[sorter]
+        self.fund_v = self.fund_v[sorter]
+        self.ident_v = self.ident_v[sorter]
+        self.sign_v = self.sign_v[sorter]
+
+        self.Plot.plot_traces(self.ident_v, self.times, self.idx_v, self.fund_v, task='post_new_assign', active_id=next_ident)
+        self.Plot.canvas.draw()
 
     def buttonpress(self, e):
         self.x0 = e.xdata
@@ -941,18 +960,19 @@ class MainWindow(QMainWindow):
             self.Plot.canvas.draw()
 
         if self.Act_interactive_sel.isChecked():
-            self.get_active_idx_rect()
+            self.fill_trace()
+            # self.get_active_idx_rect()
 
             # if hasattr(self.active_idx, '__len__'):
             #     self.fill_trace()
 
-            if hasattr(self.active_idx, '__len__') and not self.Plot.active_id_handle0:
-                if len(self.active_idx) > 0:
-                    self.get_active_id(self.active_idx)
-                    self.Plot.highlight_id(self.active_id, self.ident_v, self.times, self.idx_v, self.fund_v, 'first')
-                    self.Plot.canvas.draw()
-            else:
-                self.fill_trace()
+            # if hasattr(self.active_idx, '__len__') and not self.Plot.active_id_handle0:
+            #     if len(self.active_idx) > 0:
+            #         self.get_active_id(self.active_idx)
+            #         self.Plot.highlight_id(self.active_id, self.ident_v, self.times, self.idx_v, self.fund_v, 'first')
+            #         self.Plot.canvas.draw()
+            # else:
+            #     self.fill_trace()
 
         if self.Act_interactive_cut.isChecked():
             self.get_active_idx_rect()
