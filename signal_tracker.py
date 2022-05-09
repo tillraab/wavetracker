@@ -1527,7 +1527,7 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
             else:
                 show_plotting = False
             tmp_ident_v, errors_to_v = get_tmp_identities(i0_m, i1_m, error_cube, fund_v, idx_v, i, ioi_fti,
-                                                          idx_comp_range, show=show_plotting, validate=True,
+                                                          idx_comp_range, show=show_plotting, validate=False,
                                                           validated_ident_v= validated_ident_v)
 
             if i == 0:
@@ -1547,9 +1547,9 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
     ident_v = clean_up(fund_v, ident_v)
 
     # va.which_is_best()
-    va.a_error_dist = a_error_distribution
-    va.save_dict()
-    va.error_dist_and_auc_display()
+    # va.a_error_dist = a_error_distribution
+    # va.save_dict()
+    # va.error_dist_and_auc_display()
 
     return fund_v, ident_v, idx_v, sign_v, a_error_distribution, f_error_distribution, idx_of_origin_v, original_sign_v
 
