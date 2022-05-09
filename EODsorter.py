@@ -1,5 +1,6 @@
 import sys
 import os
+from fileinput import filename # for plot dir creation
 import time
 import datetime
 import numpy as np
@@ -9,7 +10,6 @@ import matplotlib.pyplot as plt
 # from .dataloader import open_data, fishgrid_grids, fishgrid_spacings
 # from .harmonics import harmonic_groups, fundamental_freqs
 # from .eventdetection import hist_threshold
-
 import multiprocessing
 from functools import partial
 
@@ -59,6 +59,13 @@ def decibel(power, ref_power=1.0, min_power=1e-20):
         return decibel_psd
     else:
         return decibel_psd[0]
+
+class color:
+# to make error messages stand out
+   GREEN = '\033[92m'
+   RED = '\033[91m'
+   BOLD = '\033[1m'
+   END = '\033[0m'
 
 class PlotWidget():
     def __init__(self):
@@ -434,6 +441,7 @@ class MainWindow(QMainWindow):
         toolbar2.addAction(self.Act_interactive_zoom_in)
         toolbar2.addAction(self.Act_interactive_zoom_out)
         toolbar2.addAction(self.Act_interactive_zoom_home)
+        toolbar2.addAction(self.Act_save_plt)
 
         toolbar3.addAction(self.Act_undo)
         toolbar4.addAction(self.Act_arrowkeys)
@@ -529,6 +537,10 @@ class MainWindow(QMainWindow):
         self.Act_interactive_zoom_home = QAction(QIcon('./gui_sym/zoom_home.png'), 'zoom Home', self)
         self.Act_interactive_zoom_home.triggered.connect(self.Mzoom_home)
         self.Act_interactive_zoom_home.setEnabled(False)
+
+        self.Act_save_plt = QAction(QIcon('./gui_sym/saveplot.png'), 'save current plot', self)
+        self.Act_save_plt.triggered.connect(self.Msave_plt)
+        self.Act_save_plt.setEnabled(False)
 
         self.Act_interactive_zoom = QAction(QIcon('./gui_sym/zoom.png'), 'Zoom select', self)
         self.Act_interactive_zoom.setCheckable(True)
@@ -872,6 +884,7 @@ class MainWindow(QMainWindow):
         self.Act_interactive_zoom_out.setEnabled(True)
         self.Act_interactive_zoom_in.setEnabled(True)
         self.Act_interactive_zoom_home.setEnabled(True)
+        self.Act_save_plt.setEnabled(True)
         self.Act_interactive_zoom.setEnabled(True)
         self.Act_fine_spec.setEnabled(True)
         self.Act_norm_spec.setEnabled(True)
@@ -1083,6 +1096,43 @@ class MainWindow(QMainWindow):
         self.Plot.zoom_home()
         self.Plot.clock_time(self.rec_datetime, self.times)
         self.Plot.figure.canvas.draw()
+
+    def Msave_plt(self):
+        dir_name='wavetracker-plots'           # dir name
+        dir_path=os.path.join('../'+dir_name)  # relative dir path
+        img_format='.png'
+        recdate=int(self.rec_datetime.strftime("%Y%m%d%H%M%S"))
+        plottime=str(int(self.Plot.xlim[0]))+'-'+str(int(self.Plot.xlim[1]))
+        plotfreq=str(int(self.Plot.ylim[0]))+'-'+str(int(self.Plot.ylim[1])) 
+        img_name='rec'+str(recdate)+'_secs'+plottime+'_freqs'+plotfreq+img_format
+        img_path=os.path.join(dir_path+'/'+img_name)
+
+        try: # test if dir exists
+            os.listdir(dir_path)
+        except (IOError, OSError) as e: # creates if not exists
+            print('No existing plot directory found. Creating directory ...')
+            try: 
+                os.mkdir(dir_path)
+            except (IOError, OSError) as e: # print error when fails 
+                print(color.RED+color.BOLD+'Error: Failed to create new plot directory!'+color.END)
+            else: # check if dir was created
+                start = os.path.realpath('..')
+                for dirpath, dirnames, filenames in os.walk(start):
+                    for dirname in dirnames:
+                        if dirname == dir_name:
+                            path = os.path.join(dirpath+'/'+dirname)
+                print(color.GREEN+'New plot directory created in %s' %path + color.END) # print new dir location
+        else:
+            abs_dir_path = os.path.abspath(dir_path)
+            print(color.GREEN+'Existing plot directory found in %s' %abs_dir_path + color.END) # print existing dir location
+
+        try: # try saving image
+            self.Plot.figure.savefig(img_path) # save plot
+        except (IOError, OSError) as e: # print error message if fails
+            print(color.RED+color.BOLD+'Failed saving image!'+color.END)
+        else:
+            abs_img_path=os.path.abspath(img_path)
+            print(color.GREEN+'Image saved in %s' %abs_img_path + color.END) # print path to image
 
     def Mfine_spec(self):
         ylim = self.Plot.ylim
