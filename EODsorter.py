@@ -759,6 +759,9 @@ class MainWindow(QMainWindow):
         elif self.cb_SCH_MCH.currentIndex() == 1:
             print('save multi channel')
             np.save(os.path.join(self.folder, 'ident_v.npy'), self.ident_v)
+            np.save(os.path.join(self.folder, 'idx_v.npy'), self.idx_v)
+            np.save(os.path.join(self.folder, 'fund_v.npy'), self.fund_v)
+            np.save(os.path.join(self.folder, 'sign_v.npy'), self.sign_v)
         else:
             pass
 
