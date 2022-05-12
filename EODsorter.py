@@ -161,6 +161,7 @@ class PlotWidget():
             delete_handle[0].remove()
             self.trace_handles.pop(delete_handle_idx)
 
+
         elif task == 'post_group_connect' or task == 'post_group_delete' or task == 'post_re_assign':
             handle_idents = np.array([x[1] for x in self.trace_handles])
             effected_idents = active_ids
@@ -342,8 +343,9 @@ class PlotWidget():
         self.figure.canvas.draw()
 
 class MainWindow(QMainWindow):
-    def __init__(self, parent=None):
+    def __init__(self, folder=None, parent=None):
         super(MainWindow, self).__init__(parent)
+        self.folder = folder
         self.Plot = PlotWidget()
 
         self.Plot.figure.canvas.mpl_connect('button_press_event', self.buttonpress)
@@ -413,6 +415,10 @@ class MainWindow(QMainWindow):
 
         self.central_widget.setLayout(self.gridLayout)
         self.setCentralWidget(self.central_widget)
+
+        if self.folder != None:
+            self.folder = self.folder[:-1]
+            self.open()
 
         self.Plot.canvas.draw()
 
@@ -783,9 +789,13 @@ class MainWindow(QMainWindow):
 
             return rec_datetime
 
-        fd = QFileDialog()
-        self.folder = fd.getExistingDirectory(self, 'Select Directory')
+        if self.folder == None:
+            fd = QFileDialog()
+            self.folder = fd.getExistingDirectory(self, 'Select Directory')
+        else:
+            pass
 
+        print(self.folder)
         if self.folder != '':
             # self.folder = os.path.split(self.filename)[0]
             self.rec_datetime = get_datetime(self.folder)
@@ -1217,7 +1227,8 @@ class MainWindow(QMainWindow):
 def main():
     print('test')
     app = QApplication(sys.argv)  # create application
-    w = MainWindow()  # create window
+    folder = None if len(sys.argv) < 2 else sys.argv[1]
+    w = MainWindow(folder)  # create window
     # p = PlotWidget()
     w.show()
     sys.exit(app.exec_())  # exit if window is closed
