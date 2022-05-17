@@ -232,33 +232,6 @@ class Validate():
         fig.tag(axes=ax, fontsize=15, yoffs=1, xoffs=-6)
         plt.savefig('freq_field_signal_error.pdf')
 
-
-        # for enu, key0, key1 in zip(np.arange(5),
-        #                            ['target_dfreq', 'target_dfield', 'target_freq_e', 'target_field_e', 'target_signal_e'],
-        #                            ['altern_dfreq', 'altern_dfield', 'altern_freq_e', 'altern_field_e', 'altern_signal_e']):
-        #     mask = np.arange(len(self.error_col[key0]))
-        #     samples = len(mask)
-        #     jk_fac = 1
-        #     auc_jk = []
-        #     for i in tqdm(range(1)):
-        #         np.random.shuffle(mask)
-        #
-        #         sigma_factor = 1 / 2 if enu in [0] else 1 / 10
-        #         error_steps, kde_target, kde_altern, bin_edges, n_tar, n_alt = \
-        #             self.hist_kde(np.array(self.error_col[key0])[mask[:int(samples * jk_fac)]],
-        #                           np.array(self.error_col[key1])[mask[:int(samples * jk_fac)]], sigma_factor)
-        #
-        #         true_pos, false_pos, auc_value = self.roc_analysis(error_steps,
-        #                                                            np.array(self.error_col[key0])[mask[:int(samples * jk_fac)]],
-        #                                                            np.array(self.error_col[key1])[mask[:int(samples * jk_fac)]])
-        #         auc_jk.append(auc_value)
-        #
-        #     ax_auc.bar(enu, np.mean(auc_jk), color='grey', align='center', width=0.8)
-        #     # ax_auc.errorbar(enu, np.mean(auc_jk), yerr=np.std(auc_jk))
-        #
-        # ax_auc.set_ylim(0.9, 1)
-
-
     def which_is_best(self):
 
         for enu, key0, key1 in zip(np.arange(5),
@@ -273,7 +246,6 @@ class Validate():
 
             help_array = np.concatenate((self.error_col[key0], self.error_col[key1]))
             error_steps = np.linspace(0, np.max(help_array)*501/500, 500)
-            # kde_target = np.sum(np.array(list(map(lambda x: gauss(error_steps, x, np.std(help_array), 1, norm=True), self.error_col[key0]))), axis=0)
 
             kde_target = np.zeros(len(error_steps))
             sigma_factor = 1/2 if enu in [0, 2] else 1/10
@@ -284,8 +256,6 @@ class Validate():
             kde_altern = np.zeros(len(error_steps))
             for e in self.error_col[key1]:
                 kde_altern += gauss(error_steps, e, np.std(self.error_col[key1]) * sigma_factor, 1, norm=True)
-            #
-            # print(np.sum(kde_altern) / len(self.error_col[key1]) * error_steps[1])
 
             target_handle, = ax.plot(error_steps, kde_target / len(self.error_col[key0]))
             altern_handle, = ax.plot(error_steps, kde_altern / len(self.error_col[key1]))
@@ -322,9 +292,6 @@ class Validate():
             ax_auc.text(0.95, 0.05, '%.1f' % (auc_value * 100), fontsize=10, color='k', ha='right', va='bottom')
             ax_auc.set_xlim(0, 1)
             ax_auc.set_ylim(0, 1)
-
-        # embed()
-        # quit()
 
 class Display_agorithm():
     def __init__(self, fund_v, ident_v, idx_v, sign_v, times, a_error_distribution, error_dist_i0s, error_dist_i1s):
@@ -619,12 +586,15 @@ class Display_agorithm():
 
             plt.setp(self.ax2[1].get_yticklabels(), visible=False)
             plt.setp(self.ax2[3].get_yticklabels(), visible=False)
+        try:
+            self.fig2.tag(axes=[self.ax2[0], self.ax2[2]], labels=['A', 'C'], fontsize=15, yoffs=2, xoffs=-8)
+            self.fig2.tag(axes=[self.ax2[1], self.ax2[3]], labels=['B', 'D'], fontsize=15, yoffs=2, xoffs=-3)
 
-        self.fig2.tag(axes=[self.ax2[0], self.ax2[2]], labels=['A', 'C'], fontsize=15, yoffs=2, xoffs=-8)
-        self.fig2.tag(axes=[self.ax2[1], self.ax2[3]], labels=['B', 'D'], fontsize=15, yoffs=2, xoffs=-3)
-        plt.savefig('assign_tmp_identities.pdf')
-        plt.savefig('assign_tmp_identities2.png', dpi=300)
-        plt.show()
+            plt.savefig('assign_tmp_identities.pdf')
+            plt.savefig('assign_tmp_identities2.png', dpi=300)
+            plt.show()
+        except:
+            pass
 
     def finalize_tmp_id_assign(self, final_ident_v):
         for id in np.unique(final_ident_v[~np.isnan(final_ident_v)]):
@@ -655,200 +625,8 @@ class Display_agorithm():
         # self.fig.canvas.draw()
         plt.pause(0.05)
 
-def aux():
-    pass
-    # ids = np.unique(tmp_ident_v[~np.isnan(tmp_ident_v)])
-    # id_comb = []
-    # id_comb_freqs = []
-    # id_comb_idx = []
-    # id_comb_df = []
-    # id_comb_part_df = []
-    # id_comb_overlap = []
-    # for id0 in range(len(ids)):
-    #     id0_med_freq = np.median(tmp_fund_v[tmp_ident_v == ids[id0]])
-    #
-    #     for id1 in range(id0 + 1, len(ids)):
-    #         id_comb.append((id0, id1))
-    #         id1_med_freq = np.median(tmp_fund_v[tmp_ident_v == ids[id1]])
-    #         id_comb_df.append(np.abs(id1_med_freq - id0_med_freq))
-    #
-    #         # no overlap + 5 sec ?!
-    #         if np.max(tmp_idx_v[tmp_ident_v == ids[id0]]) < np.min(tmp_idx_v[tmp_ident_v == ids[id1]]):
-    #             idx0_n = int(tmp_idx_v[tmp_ident_v == ids[id0]][-1] + idx_comp_range / 2)
-    #             idx0_0 = int(idx0_n - idx_comp_range / 2)
-    #
-    #             idx1_0 = int(tmp_idx_v[tmp_ident_v == ids[id1]][0] - idx_comp_range / 2)
-    #             idx1_n = int(idx1_0 + idx_comp_range / 2)
-    #
-    #             idx1_0 = idx1_0 if idx1_0 > 0 else 0
-    #             idx1_n = idx1_n if idx1_n > 0 else 0
-    #             idx0_0 = idx0_0 if idx0_0 > 0 else 0
-    #             idx0_n = idx0_n if idx0_n > 0 else 0
-    #
-    #             id0_part_idx = np.arange(len(tmp_ident_v))[(tmp_ident_v == ids[id0]) & (tmp_idx_v >= idx0_0) & (tmp_idx_v <= idx0_n)]
-    #             id0_part_freq = tmp_fund_v[id0_part_idx]
-    #
-    #             id1_part_idx = np.arange(len(tmp_ident_v))[(tmp_ident_v == ids[id1]) & (tmp_idx_v >= idx1_0) & (tmp_idx_v <= idx1_n)]
-    #             id1_part_freq = tmp_fund_v[id1_part_idx]
-    #
-    #             id_comb_part_df.append(np.abs(np.median(id0_part_freq) - np.median(id1_part_freq)))
-    #             id_comb_freqs.append([id0_part_freq, id1_part_freq])
-    #             id_comb_idx.append([id0_part_idx, id1_part_idx])
-    #             # ToDo: maybe id_comb_idx
-    #
-    #             # id0 < id1
-    #             id_comb_overlap.append(-1*(np.min(tmp_idx_v[tmp_ident_v == ids[id1]]) - np.max(tmp_idx_v[tmp_ident_v == ids[id0]])))  # ToDo: neg. values for time distance
-    #
-    #
-    #         elif np.max(tmp_idx_v[tmp_ident_v == ids[id1]]) < np.min(tmp_idx_v[tmp_ident_v == ids[id0]]):
-    #             idx1_n = int(tmp_idx_v[tmp_ident_v == ids[id1]][-1] + idx_comp_range / 2)
-    #             idx1_0 = int(idx1_n - idx_comp_range / 2)
-    #
-    #             idx0_0 = int(tmp_idx_v[tmp_ident_v == ids[id0]][0] - idx_comp_range / 2)
-    #             idx0_n = int(idx0_0 + idx_comp_range / 2)
-    #
-    #             idx1_0 = idx1_0 if idx1_0 > 0 else 0
-    #             idx1_n = idx1_n if idx1_n > 0 else 0
-    #             idx0_0 = idx0_0 if idx0_0 > 0 else 0
-    #             idx0_n = idx0_n if idx0_n > 0 else 0
-    #
-    #             id0_part_idx = np.arange(len(tmp_ident_v))[(tmp_ident_v == ids[id0]) & (tmp_idx_v >= idx0_0) & (tmp_idx_v <= idx0_n)]
-    #             id0_part_freq = tmp_fund_v[id0_part_idx]
-    #
-    #             id1_part_idx = np.arange(len(tmp_ident_v))[(tmp_ident_v == ids[id1]) & (tmp_idx_v >= idx1_0) & (tmp_idx_v <= idx1_n)]
-    #             id1_part_freq = tmp_fund_v[id1_part_idx]
-    #
-    #             id_comb_part_df.append(np.abs(np.median(id0_part_freq) - np.median(id1_part_freq)))
-    #             id_comb_freqs.append([id0_part_freq, id1_part_freq])
-    #             id_comb_idx.append([id0_part_idx, id1_part_idx])
-    #
-    #             # id1 < id0
-    #             id_comb_overlap.append(-1*(np.min(tmp_idx_v[tmp_ident_v == ids[id0]]) - np.max(tmp_idx_v[tmp_ident_v == ids[id1]])))
-    #
-    #         # overlap + 5 sec ?!
-    #         elif (np.min(tmp_idx_v[tmp_ident_v == ids[id0]]) <= np.min(tmp_idx_v[tmp_ident_v == ids[id1]])) and (
-    #                 np.max(tmp_idx_v[tmp_ident_v == ids[id0]]) >= np.min(tmp_idx_v[tmp_ident_v == ids[id1]])):
-    #
-    #             ioi = [np.min(tmp_idx_v[tmp_ident_v == ids[id0]]), np.max(tmp_idx_v[tmp_ident_v == ids[id0]]),
-    #                    np.min(tmp_idx_v[tmp_ident_v == ids[id1]]), np.max(tmp_idx_v[tmp_ident_v == ids[id1]])]
-    #             ioi = np.array(ioi)[np.argsort(ioi)]
-    #             id_comb_overlap.append(ioi[2] - ioi[1] + 1)
-    #
-    #             idx0_n = int(ioi[2] + idx_comp_range / 2) if int(ioi[2] + idx_comp_range / 2) > 0 else 0
-    #             idx0_0 = int(ioi[1] - idx_comp_range / 2) if int(ioi[1] - idx_comp_range / 2) > 0 else 0
-    #
-    #             idx1_0 = int(ioi[1] - idx_comp_range / 2) if int(ioi[1] - idx_comp_range / 2) > 0 else 0
-    #             idx1_n = int(ioi[2] + idx_comp_range / 2) if int(ioi[2] + idx_comp_range / 2) > 0 else 0
-    #
-    #             id0_part_idx = np.arange(len(tmp_ident_v))[(tmp_ident_v == ids[id0]) & (tmp_idx_v >= idx0_0) & (tmp_idx_v <= idx0_n)]
-    #             id0_part_freq = tmp_fund_v[id0_part_idx]
-    #
-    #             id1_part_idx = np.arange(len(tmp_ident_v))[(tmp_ident_v == ids[id1]) & (tmp_idx_v >= idx1_0) & (tmp_idx_v <= idx1_n)]
-    #             id1_part_freq = tmp_fund_v[id1_part_idx]
-    #
-    #             id_comb_part_df.append(np.abs(np.median(id0_part_freq) - np.median(id1_part_freq)))
-    #             id_comb_freqs.append([id0_part_freq, id1_part_freq])
-    #             id_comb_idx.append([id0_part_idx, id1_part_idx])
-    #
-    #             # id0 < id1
-    #
-    #
-    #         elif (np.min(tmp_idx_v[tmp_ident_v == ids[id1]]) <= np.min(tmp_idx_v[tmp_ident_v == ids[id0]])) and (
-    #                 np.max(tmp_idx_v[tmp_ident_v == ids[id1]]) >= np.min(tmp_idx_v[tmp_ident_v == ids[id0]])):
-    #
-    #             ioi = [np.min(tmp_idx_v[tmp_ident_v == ids[id0]]), np.max(tmp_idx_v[tmp_ident_v == ids[id0]]),
-    #                    np.min(tmp_idx_v[tmp_ident_v == ids[id1]]), np.max(tmp_idx_v[tmp_ident_v == ids[id1]])]
-    #             ioi = np.array(ioi)[np.argsort(ioi)]
-    #             id_comb_overlap.append(ioi[2] - ioi[1] + 1)
-    #
-    #             idx1_n = int(ioi[2] + idx_comp_range / 2) if int(ioi[2] + idx_comp_range / 2) > 0 else 0
-    #             idx1_0 = int(ioi[1] - idx_comp_range / 2) if int(ioi[1] - idx_comp_range / 2) > 0 else 0
-    #
-    #             idx0_0 = int(ioi[1] - idx_comp_range / 2) if int(ioi[1] - idx_comp_range / 2) > 0 else 0
-    #             idx0_n = int(ioi[2] + idx_comp_range / 2) if int(ioi[2] + idx_comp_range / 2) > 0 else 0
-    #
-    #
-    #             id0_part_idx = np.arange(len(tmp_ident_v))[(tmp_ident_v == ids[id0]) & (tmp_idx_v >= idx0_0) & (tmp_idx_v <= idx0_n)]
-    #             id0_part_freq = tmp_fund_v[id0_part_idx]
-    #
-    #             id1_part_idx = np.arange(len(tmp_ident_v))[(tmp_ident_v == ids[id1]) & (tmp_idx_v >= idx1_0) & (tmp_idx_v <= idx1_n)]
-    #             id1_part_freq = tmp_fund_v[id1_part_idx]
-    #
-    #             id_comb_part_df.append(np.abs(np.median(id0_part_freq) - np.median(id1_part_freq)))
-    #             id_comb_freqs.append([id0_part_freq, id1_part_freq])
-    #             id_comb_idx.append([id0_part_idx, id1_part_idx])
-    #
-    #             # id1 < id0
-    #
-    #         else:
-    #             print('found a non existing cases')
-    #             embed()
-    #             quit()
-
-    # embed()
-    # quit()
-    # id_comb_part_df = np.array(id_comb_part_df)
-    # sorting_mask = np.argsort(id_comb_part_df)[:len(id_comb_part_df[id_comb_part_df <= 25])]
-    #
-    # for i, (id0, id1) in enumerate(np.array(id_comb)[sorting_mask]):
-    #     comb_f = np.concatenate(id_comb_freqs[sorting_mask[i]])
-    #
-    #     bins = np.arange((np.min(comb_f) // .1) * .1, (np.max(comb_f) // .1) * .1 + .1, .1)
-    #     bc = bins[:-1] + (bins[1:] - bins[:-1]) / 2
-    #
-    #     n0, bins = np.histogram(id_comb_freqs[sorting_mask[i]][0], bins=bins)
-    #
-    #     n1, bins = np.histogram(id_comb_freqs[sorting_mask[i]][1], bins=bins)
-    #
-    #     greater_mask = n0 >= n1
-    #
-    #     overlapping_counts = np.sum(np.concatenate((n1[greater_mask], n0[~greater_mask])))
-    #
-    #     pct_overlap = np.max([overlapping_counts / np.sum(n1), overlapping_counts / np.sum(n0)])
-    #
-    #     if pct_overlap >= 0:
-    #
-    #         fig, ax = plt.subplots(1, 2, facecolor='white', figsize=(20 / 2.54, 12 / 2.54))
-    #         # embed()
-    #         # quit()
-    #         for j in range(len(ids)):
-    #             if ids[j] == ids[id0]:
-    #                 ax[0].plot(tmp_idx_v[tmp_ident_v == ids[j]], tmp_fund_v[tmp_ident_v == ids[j]], marker='.', markersize=4,
-    #                            color='red', alpha = 0.5)
-    #                 ax[0].plot(tmp_idx_v[id_comb_idx[sorting_mask[i]][0]], id_comb_freqs[sorting_mask[i]][0], marker='o', markersize=4,
-    #                            color='red')
-    #
-    #             elif ids[j] == ids[id1]:
-    #                 ax[0].plot(tmp_idx_v[tmp_ident_v == ids[j]], tmp_fund_v[tmp_ident_v == ids[j]], marker='.', markersize=4,
-    #                            color='blue', alpha = 0.5)
-    #                 ax[0].plot(tmp_idx_v[id_comb_idx[sorting_mask[i]][1]], id_comb_freqs[sorting_mask[i]][1], marker='o',
-    #                            markersize=4,
-    #                            color='blue')
-    #             else:
-    #                 ax[0].plot(tmp_idx_v[tmp_ident_v == ids[j]], tmp_fund_v[tmp_ident_v == ids[j]], marker='.', markersize=4,
-    #                            color='grey')
-    #
-    #         ax[1].set_title('%.2f' % pct_overlap)
-    #         ax[1].bar(bc, n0, color='red', alpha=.5, width=.08)
-    #         ax[1].bar(bc, n1, color='blue', alpha=.5, width=.08)
-    #         ax[0].set_ylim(np.mean(ax[1].get_xlim()) - 5, np.mean(ax[1].get_xlim()) + 5)
-    #         plt.show()
-    # plt.show(block=False)
-    # plt.waitforbuttonpress()
-    # plt.close(fig)
-
-    # if id_comb_overlap[sorting_mask[i]] > 0:
-    #     embed()
-    #     quit()
-    # len_id0 = len(tmp_ident_v[tmp_ident_v == ids[id0]])
-    # len_id1 = len(tmp_ident_v[tmp_ident_v == ids[id1]])
-    #
-    # overlapping_idx = list(set(tmp_idx_v[tmp_ident_v == ids[id0]]) & set(tmp_idx_v[tmp_ident_v == ids[id1]]))
-
-    #### this is new and in progress --- end ####
-
 def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_channels=64, max_dt=10., ioi_fti=False,
-                     freq_lims=(400, 1200), emit = False, visualize=False, validated_ident_v= None):
+                     freq_lims=(400, 1200), emit = False, visualize=False, validate=False, validated_ident_v= None):
     """
     Sorting algorithm which sorts fundamental EOD frequnecies detected in consecutive powespectra of single or
     multielectrode recordings using frequency difference and frequnency-power amplitude difference on the electodes.
@@ -914,6 +692,30 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
     idx_of_origin_v: array
         for each assigned identity the index of the datapoint on which basis the assignement was made.
     """
+
+    def reshape_data():
+        detection_time_diff = times[1] - times[0]
+        dps = 1. / detection_time_diff
+        fund_v = np.hstack(fundamentals)
+        ident_v = np.full(len(fund_v), np.nan)  # fish identities of frequencies
+        idx_of_origin_v = np.full(len(fund_v), np.nan)  # ToDo: necessary ? lets see
+
+        idx_v = []  # temportal indices
+        sign_v = []  # power of fundamentals on all electrodes
+        for enu, funds in enumerate(fundamentals):
+            idx_v.extend(np.ones(len(funds)) * enu)
+            sign_v.extend(signatures[enu])
+        idx_v = np.array(idx_v, dtype=int)
+        sign_v = np.array(sign_v)
+
+        original_sign_v = sign_v
+        if np.shape(sign_v)[1] > 2:
+            sign_v = (sign_v - np.min(sign_v, axis=1).reshape(len(sign_v), 1)) / (
+                    np.max(sign_v, axis=1).reshape(len(sign_v), 1) - np.min(sign_v, axis=1).reshape(len(sign_v), 1))
+
+        idx_comp_range = int(np.floor(dps * max_dt))  # maximum compare range backwards for amplitude signature comparison
+
+        return fund_v, ident_v, idx_v, sign_v, original_sign_v, idx_of_origin_v, idx_comp_range, dps
 
     def clean_up(fund_v, ident_v):
         """
@@ -986,6 +788,86 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
             for each assigned temporal identity contains the error value based on which this connection was made.
 
         """
+        def collect_validation_data():
+            origin_idx = i0_m[layer][idx0] + min_i0
+            target_idx = i1_m[layer][idx1] + min_i0
+
+            collect = False
+            if i + idx_comp_range < idx_v[origin_idx] < i + idx_comp_range * 2:
+                if i + idx_comp_range < idx_v[target_idx] < i + idx_comp_range * 2:
+                    collect = True
+
+            if collect == False:
+                return
+
+            alt_i = np.arange(len(i1_m[layer]))[~np.isnan(error_cube[layer][idx0, :])]
+            alt_e = error_cube[layer][idx0, :][alt_i]
+            alt_idxs = i1_m[layer][~np.isnan(error_cube[layer][idx0, :])][np.argsort(alt_e)] + min_i0
+            alt_idxs = alt_idxs[(alt_e > error_cube[layer][idx0, idx1])]  # alternatives with larger error
+            # embed()
+            # quit()
+            if len(np.unique(validated_ident_v[alt_idxs])) > 1:
+                alternatives = alt_idxs[
+                    validated_ident_v[alt_idxs] != validated_ident_v[target_idx]]  # alternative with other id (all)
+                alt_idx0 = alt_idxs[validated_ident_v[alt_idxs] != validated_ident_v[target_idx]][
+                    0]  # alternative with other id (best)
+                # alternatives = alt_idxs[np.arange(len(alt_idxs))[validated_ident_v[alt_idxs] != validated_ident_v[target_idx]]] # alternatives with othe id (all)
+
+                a_error_target = np.sqrt(
+                    np.sum([(sign_v[origin_idx][j] - sign_v[target_idx][j]) ** 2 for j in range(n_channels)]))
+                f_error_target = np.abs(fund_v[origin_idx] - fund_v[target_idx])
+                [a_e_target, f_e_target, t_e] = estimate_error(a_error_target, f_error_target, a_error_distribution)
+
+                a_error_alt = np.sqrt(
+                    np.sum([(sign_v[origin_idx][j] - sign_v[alt_idx0][j]) ** 2 for j in range(n_channels)]))
+                f_error_alt = np.abs(fund_v[origin_idx] - fund_v[alt_idx0])
+                [a_e_alt, f_e_alt, t_e] = estimate_error(a_error_alt, f_error_alt, a_error_distribution)
+
+                if validate:
+                    if validated_ident_v[origin_idx] == validated_ident_v[target_idx]:
+                        va.error_col['hit'].append(True)
+
+                        va.error_col['originID'].append(validated_ident_v[origin_idx])
+                        va.error_col['targetID'].append(validated_ident_v[target_idx])
+
+                        va.error_col['target_dfreq'].append(f_error_target)
+                        va.error_col['target_dfield'].append(a_error_target)
+                        va.error_col['target_freq_e'].append(f_e_target)
+                        va.error_col['target_field_e'].append(a_e_target)
+                        va.error_col['target_signal_e'].append(np.sum([a_e_target, f_e_target]))
+
+                        va.error_col['alternID'].append(validated_ident_v[alt_idx0])
+
+                        va.error_col['altern_dfreq'].append(f_error_alt)
+                        va.error_col['altern_dfield'].append(a_error_alt)
+                        va.error_col['altern_freq_e'].append(f_e_alt)
+                        va.error_col['altern_field_e'].append(a_e_alt)
+                        va.error_col['altern_signal_e'].append(np.sum([a_e_alt, f_e_alt]))
+
+                    elif validated_ident_v[origin_idx] == validated_ident_v[alt_idx0]:
+                        va.error_col['hit'].append(False)
+
+                        va.error_col['originID'].append(validated_ident_v[origin_idx])
+                        va.error_col['targetID'].append(validated_ident_v[alt_idx0])
+
+                        va.error_col['target_dfreq'].append(f_error_alt)
+                        va.error_col['target_dfield'].append(a_error_alt)
+                        va.error_col['target_freq_e'].append(f_e_alt)
+                        va.error_col['target_field_e'].append(a_e_alt)
+                        va.error_col['target_signal_e'].append(np.sum([a_e_alt, f_e_alt]))
+
+                        va.error_col['alternID'].append(validated_ident_v[target_idx])
+
+                        va.error_col['altern_dfreq'].append(f_error_target)
+                        va.error_col['altern_dfield'].append(a_error_target)
+                        va.error_col['altern_freq_e'].append(f_e_target)
+                        va.error_col['altern_field_e'].append(a_e_target)
+                        va.error_col['altern_signal_e'].append(np.sum([a_e_target, f_e_target]))
+
+                    else:
+                        return
+            return
+
         next_tmp_identity = 0
 
         max_shape = np.max([np.shape(layer) for layer in error_cube[1:]], axis=0)
@@ -1002,14 +884,12 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 
         i0_m = np.array(i0_m, dtype=object) - min_i0
         i1_m = np.array(i1_m, dtype=object) - min_i0
-        # tmp_idx_v -= min_i0
 
         layers, idx0s, idx1s = np.unravel_index(np.argsort(cp_error_cube, axis=None), np.shape(cp_error_cube))
 
         made_connections = np.zeros(np.shape(cp_error_cube))
         not_made_connections = np.zeros(np.shape(cp_error_cube))
         not_made_connections[~np.isnan(cp_error_cube)] = 1
-        # made_connections[~np.isnan(cp_error_cube)] = 0
 
         layers = layers + 1
 
@@ -1019,16 +899,16 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
             da.life_tmp_ident_init(min_i0, max_i1)
 
         for enu, layer, idx0, idx1 in zip(np.arange(i_non_nan), layers[:i_non_nan], idx0s[:i_non_nan], idx1s[:i_non_nan]):
-            if enu in np.array(np.floor(np.linspace(0, i_non_nan, 5)), dtype=int)[1:3]:
-                if show:
+            if show:
+                if enu in np.array(np.floor(np.linspace(0, i_non_nan, 5)), dtype=int)[1:3]:
                     tmp_ident_v_ret = np.full(len(fund_v), np.nan)
                     tmp_ident_v_ret[min_i0:max_i1 + 1] = tmp_ident_v
                     da.tmp_ident_v_state.append(tmp_ident_v_ret)
 
             if np.isnan(cp_error_cube[layer - 1, idx0, idx1]):
                 break
-            # _____ some control functions _____ ###
 
+            # _____ some control functions _____ ###
             if not ioi_fti:
                 if tmp_idx_v[i1_m[layer][idx1]] - i > idx_comp_range * 3:
                     continue
@@ -1038,9 +918,6 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 
             if np.isnan(tmp_ident_v[i0_m[layer][idx0]]):
                 if np.isnan(tmp_ident_v[i1_m[layer][idx1]]):
-                    # if np.abs(tmp_fund_v[i0_m[layer][idx0]] - tmp_fund_v[i1_m[layer][idx1]]) > 0.5: # ToDo: why it thin not freq_th?
-                    #     continue
-
                     tmp_ident_v[i0_m[layer][idx0]] = next_tmp_identity
                     tmp_ident_v[i1_m[layer][idx1]] = next_tmp_identity
                     errors_to_v[i1_m[layer][idx1]] = cp_error_cube[layer - 1][idx0, idx1]
@@ -1051,13 +928,11 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
                     tmp_ident_v_ret = np.full(len(fund_v), np.nan)
                     tmp_ident_v_ret[min_i0:max_i1 + 1] = tmp_ident_v
 
-                    if 850 < tmp_fund_v[i0_m[layer][idx0]] < 950:
-                        if show:
+                    if show:
+                        if 850 < tmp_fund_v[i0_m[layer][idx0]] < 950:
                             da.itter_counter += 1
                             da.life_tmp_ident_update(tmp_ident_v_ret, new = tmp_ident_v[i0_m[layer][idx0]])
-                    # TODO: ALL NEW
                 else:
-
                     mask = np.arange(len(tmp_ident_v))[tmp_ident_v == tmp_ident_v[i1_m[layer][idx1]]]  # idxs of target
                     if tmp_idx_v[i0_m[layer][idx0]] in tmp_idx_v[mask]:  # if goal already in target continue
                         continue
@@ -1085,11 +960,11 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 
                     tmp_ident_v_ret = np.full(len(fund_v), np.nan)
                     tmp_ident_v_ret[min_i0:max_i1 + 1] = tmp_ident_v
-                    if 850 < tmp_fund_v[i0_m[layer][idx0]] < 950:
-                        if show:
+
+                    if show:
+                        if 850 < tmp_fund_v[i0_m[layer][idx0]] < 950:
                             da.itter_counter += 1
                             da.life_tmp_ident_update(tmp_ident_v_ret, update = tmp_ident_v[i1_m[layer][idx1]])
-                    # TODO: UPDATE I1
 
             else:
                 if np.isnan(tmp_ident_v[i1_m[layer][idx1]]):
@@ -1118,11 +993,11 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 
                     tmp_ident_v_ret = np.full(len(fund_v), np.nan)
                     tmp_ident_v_ret[min_i0:max_i1 + 1] = tmp_ident_v
-                    if 850 < tmp_fund_v[i0_m[layer][idx0]] < 950:
-                        if show:
+
+                    if show:
+                        if 850 < tmp_fund_v[i0_m[layer][idx0]] < 950:
                             da.itter_counter += 1
                             da.life_tmp_ident_update(tmp_ident_v_ret, update = tmp_ident_v[i0_m[layer][idx0]])
-                    # TODO: UPDATE I0
                 else:
                     if tmp_ident_v[i0_m[layer][idx0]] == tmp_ident_v[i1_m[layer][idx1]]:
                         if np.isnan(errors_to_v[i1_m[layer][idx1]]):
@@ -1147,107 +1022,23 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 
                     tmp_ident_v_ret = np.full(len(fund_v), np.nan)
                     tmp_ident_v_ret[min_i0:max_i1 + 1] = tmp_ident_v
-                    if 850 < tmp_fund_v[i0_m[layer][idx0]] < 950:
-                        if show:
-                            da.life_tmp_ident_update(tmp_ident_v_ret, update = tmp_ident_v[i1_m[layer][idx1]], delete = del_idx)
-                    # TODO: UPDATE I1; delete i0
 
-            # origin_idx = i0_m[layer][idx0]
-            # targets_mask = np.arange(len(cp_error_cube[layer - 1, idx0, :]))[~np.isnan(cp_error_cube[layer - 1, idx0, :])]
-            # target_idxs = i1_m[layer][targets_mask]
-            # target_idx = i1_m[layer][idx1]
+                    if show:
+                        if 850 < tmp_fund_v[i0_m[layer][idx0]] < 950:
+                            da.itter_counter += 1
+                            da.life_tmp_ident_update(tmp_ident_v_ret, update = tmp_ident_v[i1_m[layer][idx1]], delete = del_idx)
 
             if validate:
-                origin_idx = i0_m[layer][idx0] + min_i0
-                target_idx = i1_m[layer][idx1] + min_i0
-
-                collect = False
-                if i + idx_comp_range < idx_v[origin_idx] < i + idx_comp_range * 2:
-                    if i + idx_comp_range < idx_v[target_idx] < i + idx_comp_range * 2:
-                        collect = True
-
-                if collect == False:
-                    continue
-
-                alt_i = np.arange(len(i1_m[layer]))[~np.isnan(error_cube[layer][idx0, :])]
-                alt_e = error_cube[layer][idx0, :][alt_i]
-                alt_idxs = i1_m[layer][~np.isnan(error_cube[layer][idx0, :])][np.argsort(alt_e)] + min_i0
-                alt_idxs = alt_idxs[(alt_e > error_cube[layer][idx0, idx1])] # alternatives with larger error
-                # embed()
-                # quit()
-                if len(np.unique(validated_ident_v[alt_idxs])) > 1:
-                    alternatives = alt_idxs[validated_ident_v[alt_idxs] != validated_ident_v[target_idx]] # alternative with other id (all)
-                    alt_idx0 = alt_idxs[validated_ident_v[alt_idxs] != validated_ident_v[target_idx]][0] # alternative with other id (best)
-                    # alternatives = alt_idxs[np.arange(len(alt_idxs))[validated_ident_v[alt_idxs] != validated_ident_v[target_idx]]] # alternatives with othe id (all)
-
-                    a_error_target = np.sqrt(np.sum([(sign_v[origin_idx][j] - sign_v[target_idx][j]) ** 2 for j in range(n_channels)]))
-                    f_error_target = np.abs(fund_v[origin_idx] - fund_v[target_idx])
-                    [a_e_target, f_e_target, t_e] = estimate_error(a_error_target, f_error_target, a_error_distribution)
-
-                    a_error_alt = np.sqrt(np.sum([(sign_v[origin_idx][j] - sign_v[alt_idx0][j]) ** 2 for j in range(n_channels)]))
-                    f_error_alt = np.abs(fund_v[origin_idx] - fund_v[alt_idx0])
-                    [a_e_alt, f_e_alt, t_e] = estimate_error(a_error_alt, f_error_alt, a_error_distribution)
-
-                    if validate:
-                        if validated_ident_v[origin_idx] == validated_ident_v[target_idx]:
-                            va.error_col['hit'].append(True)
-
-                            va.error_col['originID'].append(validated_ident_v[origin_idx])
-                            va.error_col['targetID'].append(validated_ident_v[target_idx])
-
-                            va.error_col['target_dfreq'].append(f_error_target)
-                            va.error_col['target_dfield'].append(a_error_target)
-                            va.error_col['target_freq_e'].append(f_e_target)
-                            va.error_col['target_field_e'].append(a_e_target)
-                            va.error_col['target_signal_e'].append(np.sum([a_e_target, f_e_target]))
-
-                            va.error_col['alternID'].append(validated_ident_v[alt_idx0])
-
-                            va.error_col['altern_dfreq'].append(f_error_alt)
-                            va.error_col['altern_dfield'].append(a_error_alt)
-                            va.error_col['altern_freq_e'].append(f_e_alt)
-                            va.error_col['altern_field_e'].append(a_e_alt)
-                            va.error_col['altern_signal_e'].append(np.sum([a_e_alt, f_e_alt]))
-
-                        elif validated_ident_v[origin_idx] == validated_ident_v[alt_idx0]:
-                            va.error_col['hit'].append(False)
-
-                            va.error_col['originID'].append(validated_ident_v[origin_idx])
-                            va.error_col['targetID'].append(validated_ident_v[alt_idx0])
-
-                            va.error_col['target_dfreq'].append(f_error_alt)
-                            va.error_col['target_dfield'].append(a_error_alt)
-                            va.error_col['target_freq_e'].append(f_e_alt)
-                            va.error_col['target_field_e'].append(a_e_alt)
-                            va.error_col['target_signal_e'].append(np.sum([a_e_alt, f_e_alt]))
-
-                            va.error_col['alternID'].append(validated_ident_v[target_idx])
-
-                            va.error_col['altern_dfreq'].append(f_error_target)
-                            va.error_col['altern_dfield'].append(a_error_target)
-                            va.error_col['altern_freq_e'].append(f_e_target)
-                            va.error_col['altern_field_e'].append(a_e_target)
-                            va.error_col['altern_signal_e'].append(np.sum([a_e_target, f_e_target]))
-                        else:
-                            pass
-                    # if show:
-                        # da.plot_assign(origin_idx, target_idx, alternatives)
+                collect_validation_data()
 
         tmp_ident_v_ret = np.full(len(fund_v), np.nan)
         tmp_ident_v_ret[min_i0:max_i1 + 1] = tmp_ident_v
 
-        # embed()
-        # quit()
         if show:
             plt.close()
             da.tmp_ident_v_state.append(tmp_ident_v_ret)
             da.static_tmp_id_tracking(min_i0, max_i1)
             plt.show()
-        #### this is new and in progress ####
-        # ToDo: cut those strange ones... NOPE identify potential new partner first!!! s.u.
-
-        #print(da.itter_counter)
-
 
         return tmp_ident_v_ret, errors_to_v
 
@@ -1274,8 +1065,6 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
                 for enu1 in range(len(fund_v[i1_v])):
                     if fund_v[i1_v[enu1]] < freq_lims[0] or fund_v[i1_v[enu1]] > freq_lims[1]:
                         continue
-                    # if np.abs(fund_v[i0_v[enu0]] - fund_v[i1_v[enu1]]) >= freq_tolerance:  # freq difference to high
-                    #     continue
                     a_error_distribution.append(np.sqrt(np.sum(
                         [(sign_v[i0_v[enu0]][k] - sign_v[i1_v[enu1]][k]) ** 2 for k in
                          range(len(sign_v[i0_v[enu0]]))])))
@@ -1285,45 +1074,20 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 
         return np.array(a_error_distribution), np.array(f_error_distribution), np.array(i0s), np.array(i1s)
 
-    def reshape_data():
-        detection_time_diff = times[1] - times[0]
-        dps = 1. / detection_time_diff
-        fund_v = np.hstack(fundamentals)
-        ident_v = np.full(len(fund_v), np.nan)  # fish identities of frequencies
-        idx_of_origin_v = np.full(len(fund_v), np.nan)  # ToDo: necessary ? lets see
-
-        idx_v = []  # temportal indices
-        sign_v = []  # power of fundamentals on all electrodes
-        for enu, funds in enumerate(fundamentals):
-            idx_v.extend(np.ones(len(funds)) * enu)
-            sign_v.extend(signatures[enu])
-        idx_v = np.array(idx_v, dtype=int)
-        sign_v = np.array(sign_v)
-
-        original_sign_v = sign_v
-        if np.shape(sign_v)[1] > 2:
-            sign_v = (sign_v - np.min(sign_v, axis=1).reshape(len(sign_v), 1)) / (
-                    np.max(sign_v, axis=1).reshape(len(sign_v), 1) - np.min(sign_v, axis=1).reshape(len(sign_v), 1))
-
-        idx_comp_range = int(np.floor(dps * max_dt))  # maximum compare range backwards for amplitude signature comparison
-
-        return fund_v, ident_v, idx_v, sign_v, original_sign_v, idx_of_origin_v, idx_comp_range, dps
-
     def create_error_cube(i0_m, i1_m, error_cube, cube_app_idx, freq_lims, update=False):
         if update:
             i0_m.pop(0)
             i1_m.pop(0)
             error_cube.pop(0)
+            Citt = [cube_app_idx]
+            cube_app_idx += 1
+
         else:
             error_cube = []  # [fundamental_list_idx, freqs_to_assign, target_freqs]
             i0_m = []
             i1_m = []
-
-        if update:
-            Citt = [cube_app_idx]
-        else:
-            # Citt = np.arange(start_idx, int(start_idx + idx_comp_range * 3))
             Citt = np.arange(start_idx, int(start_idx + idx_comp_range * 2))
+            cube_app_idx = len(error_cube)
 
         for i in Citt:
             i0_v = np.arange(len(idx_v))[
@@ -1360,11 +1124,6 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
                     error = estimate_error(a_error, f_error, a_error_distribution)
                     error_matrix[enu0, enu1] = np.sum(error)
             error_cube.append(error_matrix)
-
-        if update:
-            cube_app_idx += 1
-        else:
-            cube_app_idx = len(error_cube)
 
         return error_cube, i0_m, i1_m, cube_app_idx
 
@@ -1440,7 +1199,13 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
             if p_i1_m[layer][idx1] in already_assigned:
                 continue
 
-            #########################################################
+            already_assigned.append(p_i1_m[layer][idx1])
+
+            p_ident_v[(p_tmp_ident_v == p_tmp_ident_v[p_i1_m[layer][idx1]]) &
+                      (np.isnan(p_ident_v)) & (p_idx_v > i + idx_comp_range) &
+                      (p_idx_v <= i + idx_comp_range * 2)] = p_ident_v[p_i0_m[layer][idx0]]
+
+            # print(fund_v[i0_m[layer][idx0]])
             if show:
                 origin_idx = i0_m[layer][idx0]
                 target_idx = i1_m[layer][idx1]
@@ -1451,17 +1216,10 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
                                     (alt_e > error_cube[layer][idx0, idx1])]
                 if len(np.unique(tmp_ident_v[alt_idxs])) > 1:
                     if fund_v[origin_idx] >= 900:
+                        print('yay')
                         da.origin_idx.append(origin_idx)
                         da.target_idx.append(target_idx)
                         da.alt_idx.append(alt_idxs[tmp_ident_v[alt_idxs] != tmp_ident_v[target_idx]][0])
-
-            #########################################################
-
-            already_assigned.append(p_i1_m[layer][idx1])
-
-            p_ident_v[(p_tmp_ident_v == p_tmp_ident_v[p_i1_m[layer][idx1]]) &
-                      (np.isnan(p_ident_v)) & (p_idx_v > i + idx_comp_range) &
-                      (p_idx_v <= i + idx_comp_range * 2)] = p_ident_v[p_i0_m[layer][idx0]]
 
         for ident in np.unique(p_tmp_ident_v[~np.isnan(p_tmp_ident_v)]):
             if len(p_ident_v[p_tmp_ident_v == ident][~np.isnan(p_ident_v[p_tmp_ident_v == ident])]) == 0:
@@ -1476,6 +1234,9 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 
         return ident_v, next_identity
 
+    def display_and_valudation(validate, visualize):
+        pass
+
     if emit:
         Emit = Emit_progress()
 
@@ -1483,16 +1244,17 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 
     start_idx = 0 if not ioi_fti else idx_v[ioi_fti]  # Index Of Interest for temporal identities
 
+    # ToDo: clear !
     a_error_distribution, f_error_distribution, error_dist_i0s, error_dist_i1s = \
-        get_a_and_f_error_dist(fund_v, idx_v, sign_v, start_idx, idx_comp_range, freq_lims,
-                               freq_tolerance=freq_tolerance)
+        get_a_and_f_error_dist(fund_v, idx_v, sign_v, start_idx, idx_comp_range, freq_lims, freq_tolerance)
 
+    # ToDo: clear !
     error_cube, i0_m, i1_m, cube_app_idx = create_error_cube(i0_m=None, i1_m=None, error_cube=None, freq_lims=freq_lims,
                                                              cube_app_idx=None)
 
 
+    # ToDo: This needs to leave with **kwargs
     da = Display_agorithm(fund_v, ident_v, idx_v, sign_v, times, a_error_distribution, error_dist_i0s, error_dist_i1s)
-
     va = Validate()
     # amplitude error with 4 examples
     # da.plot_a_error_dist()
@@ -1502,7 +1264,7 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 
     for i in tqdm(np.arange(len(fundamentals)), desc='tracking'):
         if emit == True:
-            Emit_progress.progress.emit(i / len(fundamentals) * 100)
+            Emit.progress.emit(i / len(fundamentals) * 100)
 
         if len(np.hstack(i0_m)) == 0 or len(np.hstack(i1_m)) == 0:
             error_cube, i0_m, i1_m, cube_app_idx = create_error_cube(i0_m, i1_m, error_cube, cube_app_idx, freq_lims,
@@ -1511,10 +1273,12 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
             continue
 
         if i >= next_cleanup:  # clean up every 10 minutes
+            # ToDo: increase inter cleanup interval !!! mayby only cleanup in the end ?! should work with this version
             ident_v = clean_up(fund_v, ident_v)
             next_cleanup += int(idx_comp_range * 120)
 
         if i % idx_comp_range == 0:  # next total sorting step
+            # ToDo: I think this is obsolete !
             # a_error_distribution, f_error_distribution, error_dist_i0s, error_dist_i1s = \
             #     get_a_and_f_error_dist(fund_v, idx_v, sign_v, start_idx, idx_comp_range, freq_lims, freq_tolerance)
             # da.a_error_dist = a_error_distribution
@@ -1523,11 +1287,13 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 
             #show_plotting = True if 17150 <= times[i] < 17160 else False
             if visualize:
-                show_plotting = True if 17160 <= times[i] < 17170 else False
+                show_plotting = True if 17160 <= times[i] < 17190 else False
             else:
                 show_plotting = False
+
+            # ToDo: clear !
             tmp_ident_v, errors_to_v = get_tmp_identities(i0_m, i1_m, error_cube, fund_v, idx_v, i, ioi_fti,
-                                                          idx_comp_range, show=show_plotting, validate=False,
+                                                          idx_comp_range, show=show_plotting, validate=validate,
                                                           validated_ident_v= validated_ident_v)
 
             if i == 0:
@@ -1536,7 +1302,7 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
                     next_identity += 1
 
             # assing tmp identities ##################################
-
+            # ToDo: clear !
             ident_v, next_identity = assign_tmp_ids(ident_v, tmp_ident_v, idx_v, fund_v, error_cube, idx_comp_range,
                                                     next_identity, i0_m, i1_m, freq_lims, show=show_plotting)
 
@@ -1546,10 +1312,11 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 
     ident_v = clean_up(fund_v, ident_v)
 
-    # va.which_is_best()
-    # va.a_error_dist = a_error_distribution
-    # va.save_dict()
-    # va.error_dist_and_auc_display()
+    if validate:
+        va.which_is_best()
+        va.a_error_dist = a_error_distribution
+        va.save_dict()
+        va.error_dist_and_auc_display()
 
     return fund_v, ident_v, idx_v, sign_v, a_error_distribution, f_error_distribution, idx_of_origin_v, original_sign_v
 
@@ -1557,22 +1324,11 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 def estimate_error(a_error, f_error, a_error_distribution):
     a_weight = 2. / 3
     f_weight = 1. / 3
-    # a_weight = 3. / 4
-    # f_weight = 1. / 4
     if len(a_error_distribution) > 0:
         a_e = a_weight * len(a_error_distribution[a_error_distribution < a_error]) / len(a_error_distribution)
     else:
         a_e = 1
     f_e = f_weight * boltzmann(f_error, alpha=1, beta=0, x0=.35, dx=.08)
-    # f_e = f_weight * boltzmann(f_error, alpha=1, beta=0, x0=.25, dx=.15)
-
-    #f_e = f_weight * boltzmann(f_error, alpha=1, beta=0, x0=.50, dx=.10)
-
-    # newset:
-    #f_e = f_weight * boltzmann(f_error, alpha=1, beta=0, x0=.25, dx=.10)
-    # plt.plot(f_error, boltzmann(f_error, alpha=1, beta=0, x0=.35, dx=.08))
-    # plt.ylim(0, 1)
-    # plt.show()
 
     return [a_e, f_e, 0]
 
@@ -1606,8 +1362,6 @@ def boltzmann(t, alpha=0.25, beta=0.0, x0=4, dx=0.85):
 
 def load_example_data(folder=None):
 
-    # folder = "/home/raab/paper_create/2021_tracking/data/2016-04-10-11_12"
-    # folder = "/home/raab/writing/2021_tracking/code/tracking_display/2016-04-10-11_12"
     if folder == None:
         folder = "/home/raab/writing/2021_tracking/data/2016-04-10-11_12"
 
@@ -1625,13 +1379,7 @@ def load_example_data(folder=None):
     return fund_v, sign_v, idx_v, times, start_time, end_time, validate_ident_v
 
 
-def back_shape_data(fund_v, sign_v, idx_v, times):
-    # t0 = 17160
-    # # t0 = 1000
-    # t1 = 17250
-    # # t1 = 1200
-    # mask = np.arange(len(idx_v))[(times[idx_v] >= t0) & (times[idx_v] <= t1)]
-
+def back_shape_data(fund_v, sign_v, idx_v):
     mask = np.arange(len(idx_v))
     fundamentals = []
     signatures = []
@@ -1664,14 +1412,12 @@ def back_shape_data(fund_v, sign_v, idx_v, times):
 
 def plot_tracked_traces(ident_v, fund_v, idx_v, times):
     fig = plt.figure(figsize=(20/2.54, 12/2.54), facecolor='white')
-    gs = gridspec.GridSpec(1, 1)
-    gs.update(left=0.1, bottom=0.1, right=.95, top=.95)
-    ax = plt.subplot(gs[0, 0])
+    gs = gridspec.GridSpec(1, 1, left=0.1, bottom=0.1, right=.95, top=.95)
+    ax = fig.add_subplot(gs[0, 0])
 
     for id in np.unique(ident_v[~np.isnan(ident_v)]):
         c = np.random.rand(3)
         ax.plot(times[idx_v[ident_v == id]], fund_v[ident_v == id], color = c, marker='.')
-
     plt.show()
 
 
@@ -1681,23 +1427,15 @@ def main():
     else:
         folder = None
 
-    fund_v, sign_v, idx_v, times, start_time, end_time, validated_ident_v = \
-        load_example_data(folder=folder)
-
-    fundamentals, signatures = back_shape_data(fund_v, sign_v, idx_v, times)
-
-
-    # fundamentals = np.array(fundamentals)[times <= 30 * 60]
-    # signatures = np.array(signatures)[times <= 30 * 60]
-    # times = times[times <= 30 * 60]
+    # ---------------- Example data for tracking paper ---------------- #
+    fund_v, sign_v, idx_v, times, start_time, end_time, validated_ident_v = load_example_data(folder=folder)
+    fundamentals, signatures = back_shape_data(fund_v, sign_v, idx_v)
+    # ----------------------------------------------------------------- #
 
     fund_v, ident_v, idx_v, sign_v, a_error_distribution, f_error_distribution, idx_of_origin_v, original_sign_v = \
-        freq_tracking_v5(fundamentals, signatures, times, visualize=True, validated_ident_v= validated_ident_v)
+        freq_tracking_v5(fundamentals, signatures, times, visualize=True, validate=True, validated_ident_v= validated_ident_v)
 
     plot_tracked_traces(ident_v, fund_v, idx_v, times)
-
-    # embed()
-    # quit()
 
 if __name__ == '__main__':
     main()
