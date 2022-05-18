@@ -625,7 +625,7 @@ class Display_agorithm():
         plt.pause(0.05)
 
 def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_channels=64, max_dt=10., ioi_fti=False,
-                     freq_lims=(400, 1200), emit = False, visualize=False, validate=False, validated_ident_v= None):
+                     freq_lims=(200, 1200), emit = False, **kwargs):
     """
     Sorting algorithm which sorts fundamental EOD frequnecies detected in consecutive powespectra of single or
     multielectrode recordings using frequency difference and frequnency-power amplitude difference on the electodes.
@@ -751,7 +751,7 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 
         return ident_v
 
-    def get_tmp_identities(i0_m, i1_m, error_cube, fund_v, idx_v, i, ioi_fti, idx_comp_range, show=False, validate=False, validated_ident_v= None):
+    def get_tmp_identities(i0_m, i1_m, error_cube, fund_v, idx_v, i, ioi_fti, idx_comp_range, visualize=False, validate=False, validated_ident_v= None, **kwargs):
         """
         extract temporal identities for a datasnippted of 2*index compare range of the original tracking algorithm.
         for each data point in the data window finds the best connection within index compare range and, thus connects
@@ -867,6 +867,9 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
                         return
             return
 
+        show = True if (17160 <= times[i] < 17170) and visualize else False
+
+
         next_tmp_identity = 0
 
         max_shape = np.max([np.shape(layer) for layer in error_cube[1:]], axis=0)
@@ -971,19 +974,19 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
                     if tmp_idx_v[i1_m[layer][idx1]] in tmp_idx_v[mask]:
                         continue
 
-                    same_id_idx = np.arange(len(tmp_ident_v))[tmp_ident_v == tmp_ident_v[i0_m[layer][idx0]]]
-                    f_after = tmp_fund_v[same_id_idx[same_id_idx > i1_m[layer][idx1]]]
-                    f_before = tmp_fund_v[same_id_idx[same_id_idx < i1_m[layer][idx1]]]
-                    compare_freqs = []
-                    if len(f_after) > 0:
-                        compare_freqs.append(f_after[0])
-                    if len(f_before) > 0:
-                        compare_freqs.append(f_before[-1])
-                    if len(compare_freqs) == 0:
-                        continue
-                    else:
-                        if np.all(np.abs(np.array(compare_freqs) - tmp_fund_v[i1_m[layer][idx1]]) > 0.5):
-                            continue
+                    # same_id_idx = np.arange(len(tmp_ident_v))[tmp_ident_v == tmp_ident_v[i0_m[layer][idx0]]]
+                    # f_after = tmp_fund_v[same_id_idx[same_id_idx > i1_m[layer][idx1]]]
+                    # f_before = tmp_fund_v[same_id_idx[same_id_idx < i1_m[layer][idx1]]]
+                    # compare_freqs = []
+                    # if len(f_after) > 0:
+                    #     compare_freqs.append(f_after[0])
+                    # if len(f_before) > 0:
+                    #     compare_freqs.append(f_before[-1])
+                    # if len(compare_freqs) == 0:
+                    #     continue
+                    # else:
+                    #     if np.all(np.abs(np.array(compare_freqs) - tmp_fund_v[i1_m[layer][idx1]]) > 0.5):
+                    #         continue
 
                     tmp_ident_v[i1_m[layer][idx1]] = tmp_ident_v[i0_m[layer][idx0]]
                     errors_to_v[i1_m[layer][idx1]] = cp_error_cube[layer - 1][idx0, idx1]
@@ -1040,7 +1043,7 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 
         return tmp_ident_v_ret, errors_to_v
 
-    def get_a_and_f_error_dist(fund_v, idx_v, sign_v, start_idx, idx_comp_range, freq_lims, freq_tolerance):
+    def get_a_and_f_error_dist(fund_v, idx_v, sign_v, start_idx, idx_comp_range, freq_lims):
         f_error_distribution = []
         a_error_distribution = []
 
@@ -1129,7 +1132,10 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
         return error_cube, i0_m, i1_m, cube_app_idx
 
     def assign_tmp_ids(ident_v, tmp_ident_v, idx_v, fund_v, error_cube, idx_comp_range, next_identity, i0_m, i1_m,
-                       freq_lims, show=False):
+                       freq_lims, visualize=False, **kwargs):
+
+        show = True if (17160 <= times[i] < 17170) and visualize else False
+
         if show:
             da.tmp_ident_v = np.copy(tmp_ident_v)
             da.ident_v = np.copy(ident_v)
@@ -1235,7 +1241,7 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 
         return ident_v, next_identity
 
-    def display_and_validation(validate, visualize):
+    def display_and_validation(validate=False, visualize=False, **kwargs):
         va = Validate() if validate else type('', (object,),{})()
         if visualize:
             da = Display_agorithm(fund_v, ident_v, idx_v, sign_v, times, a_error_distribution, error_dist_i0s, error_dist_i1s)
@@ -1245,60 +1251,48 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
         show_plotting=False
         return va, da, show_plotting
 
-    def validation(validate):
+    def validation(validate=False, **kwargs):
         if validate:
             va.which_is_best()
             va.a_error_dist = a_error_distribution
             va.save_dict()
             va.error_dist_and_auc_display()
 
-    if emit:
-        Emit = Emit_progress()
+    # if emit:
+    #     Emit = Emit_progress()
 
     fund_v, ident_v, idx_v, sign_v, original_sign_v, idx_of_origin_v, idx_comp_range, dps = reshape_data()
 
     start_idx = 0 if not ioi_fti else idx_v[ioi_fti]  # Index Of Interest for temporal identities
 
-    # ToDo: clear !
     a_error_distribution, f_error_distribution, error_dist_i0s, error_dist_i1s = \
-        get_a_and_f_error_dist(fund_v, idx_v, sign_v, start_idx, idx_comp_range, freq_lims, freq_tolerance)
+        get_a_and_f_error_dist(fund_v, idx_v, sign_v, start_idx, idx_comp_range, freq_lims)
 
-    # ToDo: clear !
     error_cube, i0_m, i1_m, cube_app_idx = create_error_cube(i0_m=None, i1_m=None, error_cube=None, freq_lims=freq_lims,
                                                              cube_app_idx=None)
 
-
-    # ToDo: This needs to leave with **kwargs
-    va, da, show_plotting = display_and_validation(validate, visualize)
-    # da = Display_agorithm(fund_v, ident_v, idx_v, sign_v, times, a_error_distribution, error_dist_i0s, error_dist_i1s)
-    # va = Validate()
-    # amplitude error with 4 examples
-    # da.plot_a_error_dist()
+    va, da, show_plotting = display_and_validation(**kwargs)
 
     next_identity = 0
     next_cleanup = int(idx_comp_range * 120)
 
     for i in tqdm(np.arange(len(fundamentals)), desc='tracking'):
-        if emit == True:
-            Emit.progress.emit(i / len(fundamentals) * 100)
+        # if emit == True:
+        #     Emit.progress.emit(i / len(fundamentals) * 100)
 
         if len(np.hstack(i0_m)) == 0 or len(np.hstack(i1_m)) == 0:
             error_cube, i0_m, i1_m, cube_app_idx = create_error_cube(i0_m, i1_m, error_cube, cube_app_idx, freq_lims, update=True)
             start_idx += 1
             continue
 
-        if i >= next_cleanup:  # clean up every 10 minutes
-            # ToDo: increase inter cleanup interval !!! mayby only cleanup in the end ?! should work with this version
-            ident_v = clean_up(fund_v, ident_v)
-            next_cleanup += int(idx_comp_range * 120)
+        # if i >= next_cleanup:  # clean up every 10 minutes
+        #     ident_v = clean_up(fund_v, ident_v)
+        #     next_cleanup += int(idx_comp_range * 120)
 
         if i % idx_comp_range == 0:  # next total sorting step
-            if visualize:
-                show_plotting = True if 17160 <= times[i] < 17170 else False
 
             tmp_ident_v, errors_to_v = get_tmp_identities(i0_m, i1_m, error_cube, fund_v, idx_v, i, ioi_fti,
-                                                          idx_comp_range, show=show_plotting, validate=validate,
-                                                          validated_ident_v= validated_ident_v)
+                                                          idx_comp_range, **kwargs)
 
             if i == 0: # initial assignment of tmp_identities
                 for ident in np.unique(tmp_ident_v[~np.isnan(tmp_ident_v)]):
@@ -1307,7 +1301,7 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 
             # assing tmp identities ##################################
             ident_v, next_identity = assign_tmp_ids(ident_v, tmp_ident_v, idx_v, fund_v, error_cube, idx_comp_range,
-                                                    next_identity, i0_m, i1_m, freq_lims, show=show_plotting)
+                                                    next_identity, i0_m, i1_m, freq_lims, **kwargs)
 
         error_cube, i0_m, i1_m, cube_app_idx = create_error_cube(i0_m, i1_m, error_cube, cube_app_idx, freq_lims,
                                                                  update=True)
@@ -1315,7 +1309,7 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 
     ident_v = clean_up(fund_v, ident_v)
 
-    validation(validate)
+    validation(**kwargs)
     # if validate:
     #     va.which_is_best()
     #     va.a_error_dist = a_error_distribution
@@ -1372,7 +1366,7 @@ def load_example_data(folder=None):
     if os.path.exists(os.path.join(folder, 'fund_v.npy')):
         fund_v = np.load(os.path.join(folder, 'fund_v.npy'))
         sign_v = np.load(os.path.join(folder, 'sign_v.npy'))
-        validate_ident_v = np.load(os.path.join(folder, 'ident_v.npy'))
+        validated_ident_v = np.load(os.path.join(folder, 'ident_v.npy'))
         idx_v = np.load(os.path.join(folder, 'idx_v.npy'))
         times = np.load(os.path.join(folder, 'times.npy'))
         start_time, end_time = np.load(os.path.join(folder, 'meta.npy'))
@@ -1380,7 +1374,7 @@ def load_example_data(folder=None):
         fund_v, sign_v, idx_v, times, start_time, end_time  = [], [], [], [], [], []
         print('WARNING !!! files not found !')
 
-    return fund_v, sign_v, idx_v, times, start_time, end_time, validate_ident_v
+    return fund_v, sign_v, idx_v, times, start_time, end_time, validated_ident_v
 
 
 def back_shape_data(fund_v, sign_v, idx_v):
@@ -1425,6 +1419,14 @@ def plot_tracked_traces(ident_v, fund_v, idx_v, times):
     plt.show()
 
 
+def get_kwargs(emit = True, visualize=True, validate=True, validated_ident_v = None):
+    kwargs = {'emit': emit,
+              'visualize': visualize,
+              'validate':validate,
+              'validated_ident_v': validated_ident_v}
+    return kwargs
+
+
 def main():
     if len(sys.argv) >=2:
         folder = sys.argv[1]
@@ -1435,9 +1437,11 @@ def main():
     fund_v, sign_v, idx_v, times, start_time, end_time, validated_ident_v = load_example_data(folder=folder)
     fundamentals, signatures = back_shape_data(fund_v, sign_v, idx_v)
     # ----------------------------------------------------------------- #
+    kwargs = get_kwargs(emit = True, visualize=True, validate=True, validated_ident_v = validated_ident_v)
 
     fund_v, ident_v, idx_v, sign_v, a_error_distribution, f_error_distribution, idx_of_origin_v, original_sign_v = \
-        freq_tracking_v5(fundamentals, signatures, times, visualize=True, validate=True, validated_ident_v= validated_ident_v)
+        freq_tracking_v5(fundamentals, signatures, times, **kwargs)
+
 
     plot_tracked_traces(ident_v, fund_v, idx_v, times)
 
