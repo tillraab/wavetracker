@@ -23,7 +23,6 @@ def gauss(t, shift, sigma, size, norm = False):
         # print(np.sum(g) * (t[1] - t[0]))
     return g
 
-
 class Validate():
     def __init__(self):
         self.a_error_dist = None
@@ -1025,7 +1024,6 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 
                     if show:
                         if 850 < tmp_fund_v[i0_m[layer][idx0]] < 950:
-                            da.itter_counter += 1
                             da.life_tmp_ident_update(tmp_ident_v_ret, update = tmp_ident_v[i1_m[layer][idx1]], delete = del_idx)
 
             if validate:
@@ -1080,14 +1078,12 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
             i1_m.pop(0)
             error_cube.pop(0)
             Citt = [cube_app_idx]
-            cube_app_idx += 1
 
         else:
             error_cube = []  # [fundamental_list_idx, freqs_to_assign, target_freqs]
             i0_m = []
             i1_m = []
             Citt = np.arange(start_idx, int(start_idx + idx_comp_range * 2))
-            cube_app_idx = len(error_cube)
 
         for i in Citt:
             i0_v = np.arange(len(idx_v))[
@@ -1124,6 +1120,11 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
                     error = estimate_error(a_error, f_error, a_error_distribution)
                     error_matrix[enu0, enu1] = np.sum(error)
             error_cube.append(error_matrix)
+
+        if update:
+            cube_app_idx += 1
+        else:
+            cube_app_idx = len(error_cube)
 
         return error_cube, i0_m, i1_m, cube_app_idx
 
@@ -1234,8 +1235,22 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 
         return ident_v, next_identity
 
-    def display_and_valudation(validate, visualize):
-        pass
+    def display_and_validation(validate, visualize):
+        va = Validate() if validate else type('', (object,),{})()
+        if visualize:
+            da = Display_agorithm(fund_v, ident_v, idx_v, sign_v, times, a_error_distribution, error_dist_i0s, error_dist_i1s)
+        else:
+            da = type('', (object,),{})()
+
+        show_plotting=False
+        return va, da, show_plotting
+
+    def validation(validate):
+        if validate:
+            va.which_is_best()
+            va.a_error_dist = a_error_distribution
+            va.save_dict()
+            va.error_dist_and_auc_display()
 
     if emit:
         Emit = Emit_progress()
@@ -1254,8 +1269,9 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 
 
     # ToDo: This needs to leave with **kwargs
-    da = Display_agorithm(fund_v, ident_v, idx_v, sign_v, times, a_error_distribution, error_dist_i0s, error_dist_i1s)
-    va = Validate()
+    va, da, show_plotting = display_and_validation(validate, visualize)
+    # da = Display_agorithm(fund_v, ident_v, idx_v, sign_v, times, a_error_distribution, error_dist_i0s, error_dist_i1s)
+    # va = Validate()
     # amplitude error with 4 examples
     # da.plot_a_error_dist()
 
@@ -1267,8 +1283,7 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
             Emit.progress.emit(i / len(fundamentals) * 100)
 
         if len(np.hstack(i0_m)) == 0 or len(np.hstack(i1_m)) == 0:
-            error_cube, i0_m, i1_m, cube_app_idx = create_error_cube(i0_m, i1_m, error_cube, cube_app_idx, freq_lims,
-                                                                     update=True)
+            error_cube, i0_m, i1_m, cube_app_idx = create_error_cube(i0_m, i1_m, error_cube, cube_app_idx, freq_lims, update=True)
             start_idx += 1
             continue
 
@@ -1278,31 +1293,19 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
             next_cleanup += int(idx_comp_range * 120)
 
         if i % idx_comp_range == 0:  # next total sorting step
-            # ToDo: I think this is obsolete !
-            # a_error_distribution, f_error_distribution, error_dist_i0s, error_dist_i1s = \
-            #     get_a_and_f_error_dist(fund_v, idx_v, sign_v, start_idx, idx_comp_range, freq_lims, freq_tolerance)
-            # da.a_error_dist = a_error_distribution
-            # da.error_dist_i0s = error_dist_i0s
-            # da.error_dist_i1s = error_dist_i1s
-
-            #show_plotting = True if 17150 <= times[i] < 17160 else False
             if visualize:
-                show_plotting = True if 17160 <= times[i] < 17190 else False
-            else:
-                show_plotting = False
+                show_plotting = True if 17160 <= times[i] < 17170 else False
 
-            # ToDo: clear !
             tmp_ident_v, errors_to_v = get_tmp_identities(i0_m, i1_m, error_cube, fund_v, idx_v, i, ioi_fti,
                                                           idx_comp_range, show=show_plotting, validate=validate,
                                                           validated_ident_v= validated_ident_v)
 
-            if i == 0:
+            if i == 0: # initial assignment of tmp_identities
                 for ident in np.unique(tmp_ident_v[~np.isnan(tmp_ident_v)]):
                     ident_v[(tmp_ident_v == ident) & (idx_v <= i + idx_comp_range)] = next_identity
                     next_identity += 1
 
             # assing tmp identities ##################################
-            # ToDo: clear !
             ident_v, next_identity = assign_tmp_ids(ident_v, tmp_ident_v, idx_v, fund_v, error_cube, idx_comp_range,
                                                     next_identity, i0_m, i1_m, freq_lims, show=show_plotting)
 
@@ -1312,11 +1315,12 @@ def freq_tracking_v5(fundamentals, signatures, times, freq_tolerance= 2.5, n_cha
 
     ident_v = clean_up(fund_v, ident_v)
 
-    if validate:
-        va.which_is_best()
-        va.a_error_dist = a_error_distribution
-        va.save_dict()
-        va.error_dist_and_auc_display()
+    validation(validate)
+    # if validate:
+    #     va.which_is_best()
+    #     va.a_error_dist = a_error_distribution
+    #     va.save_dict()
+    #     va.error_dist_and_auc_display()
 
     return fund_v, ident_v, idx_v, sign_v, a_error_distribution, f_error_distribution, idx_of_origin_v, original_sign_v
 
