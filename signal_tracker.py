@@ -495,8 +495,9 @@ class Display_agorithm():
         self.combo_ax[0].set_xlim(0, 30)
         for a in self.combo_ax:
             a.tick_params(labelsize=9)
+        self.combo_fig.tag(axes=self.combo_ax, labels=['A', 'B', 'C'], fontsize=15, yoffs=1.5, xoffs=-7)
 
-        plt.savefig('./tmp_ident_tracking.png', dpi=300)
+        plt.savefig('./fig5_tmp_ident_tracking.jpg', dpi=300)
         plt.show()
         self.tmp_ident_v_state = []
 
@@ -589,8 +590,8 @@ class Display_agorithm():
             self.fig2.tag(axes=[self.ax2[0], self.ax2[2]], labels=['A', 'C'], fontsize=15, yoffs=2, xoffs=-8)
             self.fig2.tag(axes=[self.ax2[1], self.ax2[3]], labels=['B', 'D'], fontsize=15, yoffs=2, xoffs=-3)
 
-            plt.savefig('assign_tmp_identities.pdf')
-            plt.savefig('assign_tmp_identities2.png', dpi=300)
+            plt.savefig('fig_6assign_tmp_identities.jpg', dpi=300)
+            plt.savefig('assign_tmp_identities2.jpg', dpi=300)
             plt.show()
         except:
             pass
