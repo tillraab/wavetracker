@@ -9,8 +9,10 @@ import matplotlib.gridspec as gridspec
 
 from functools import partial
 from IPython import embed
+from tqdm import tqdm
 from thunderfish.dataloader import open_data
 from thunderfish.powerspectrum import spectrogram, next_power_of_two, decibel
+
 
 def load_data(folder):
     filename = os.path.join(folder, 'traces-grid1.raw')
@@ -19,6 +21,7 @@ def load_data(folder):
     channels = data.channels
 
     return filename, data, samplerate, channels
+
 
 def compute_spectrogram(data, samplerate, freq_res, overlap_frac, channels, start_idx, end_idx):
     core_count = multiprocessing.cpu_count()
@@ -32,13 +35,52 @@ def compute_spectrogram(data, samplerate, freq_res, overlap_frac, channels, star
     spec_times = a[0][2]
     pool.terminate()
 
+    # ToDo: return full spectrum
     comb_spectra = np.sum(spectra, axis=0)
     db_comb_spectra = decibel(comb_spectra)
     tmp_times = spec_times + (start_idx / samplerate)
 
     return comb_spectra, db_comb_spectra, tmp_times, spec_freqs
 
-def EOD_detection(db_spectra, spec_freq, spec_time, db_th0, db_th1, min_freq = 250, max_freq = 1200):
+
+def clean_peaks(peaks, trough, spec_freq, power, peak_trough_max_df = 10, peak_power_th=5):
+
+    peaks = peaks[np.argsort(power[peaks])]
+    power_diff = np.repeat(power[peaks][:, np.newaxis], len(trough), axis=1) - np.repeat(power[trough][np.newaxis, :], len(peaks), axis=0)
+    freq_diff = np.abs(np.repeat(spec_freq[peaks][:, np.newaxis], len(trough), axis=1) - np.repeat(spec_freq[trough][np.newaxis, :], len(peaks), axis=0))
+
+    mask = (freq_diff < peak_trough_max_df) & (power_diff < peak_power_th)
+    embed()
+
+    i0s, i1s = mask.nonzero()
+    del_peaks = []
+    for i0, i1 in zip(i0s, i1s):
+        if mask[i0, i1] == True:
+            del_peaks.append(i0)
+            mask[:, i1] = False
+            mask[i0, :] = False
+
+    real_peaks_idx = np.array(list(set(np.arange(len(peaks))) - set(del_peaks)), dtype=int)
+    return peaks[real_peaks_idx], trough
+
+
+def harmonic_groups(peaks, spec_freq, power, min_freq, max_freq, plot=True):
+    peak_freq = spec_freq[peaks]
+    peak_power = power[peaks]
+
+    mask = np.ones(len(peaks), dtype=bool)
+
+    if plot:
+        fig, ax = plt.subplots(figsize=(30 / 2.54, 20 / 2.54))
+        ax.plot(spec_freq, power)
+        ax.plot(spec_freq[peaks], power[peaks], 'o', color='forestgreen')
+
+        plt.show()
+
+    pass
+
+
+def eod_detection(db_spectra, spec_freq, spec_time, db_th0, db_th1, min_freq = 250, max_freq = 1200, min_group_size=2, plot=False):
     groups = []
     fundamentals = []
     f_mask = np.arange(len(spec_freq))[(spec_freq <= 3000)]
@@ -46,12 +88,8 @@ def EOD_detection(db_spectra, spec_freq, spec_time, db_th0, db_th1, min_freq = 2
     db_spectra = db_spectra[f_mask[0]:f_mask[-1]+1, np.arange(np.shape(db_spectra)[1])]
     spec_freq = spec_freq[f_mask]
 
-    #for i in np.arange(np.shape(db_spectra)[1]):
-    for i in np.array(np.linspace(0, np.shape(db_spectra)[1]-1, 100), dtype=int):
-
-        embed()
-        quit()
-        # get all entries above th (bool-mask)
+    for i in tqdm(np.arange(np.shape(db_spectra)[1]), desc='EOD extract'):
+        #  threshold mask for power
         psd_mask = np.array(db_spectra[:, i] >= db_th0, dtype=bool)
 
         # include 1 entry before and after valid (to valid bool-mask)
@@ -59,64 +97,51 @@ def EOD_detection(db_spectra, spec_freq, spec_time, db_th0, db_th1, min_freq = 2
         psd_mask[np.arange(len(help_array))[help_array == 1]] = 1
         psd_mask[np.arange(len(help_array))[help_array == -1] + 1] = 1
 
-        # index of valid bool-mask
-        psd_mask_idx = np.arange(len(db_spectra))[psd_mask]
+        # 1st-derivation of valid psd (zeros crossings are peaks in PSDs)
+        psd_derivation = np.diff(db_spectra[:, i])
+        psd_derivation[~psd_mask[1:]] = np.nan
 
-        # 1st-derivation of valid psd snippets (zeros crossings are peaks in PSDs)
-        # psd_derivation = np.diff(db_spectra[psd_mask, i])
-        psd_derivation = np.full(len(spec_freq), np.nan)
-        # psd_derivation[psd_mask_idx] = np.diff(np.arange(len(db_spectra)))[psd_mask_idx]
-        psd_derivation[psd_mask_idx[1:]] = np.diff(db_spectra[psd_mask, i])
+        peaks = np.arange(len(psd_derivation)-1)[(psd_derivation[:-1] > 0) & (psd_derivation[1:] < 0)] + 1
+        trough = np.arange(len(psd_derivation)-1)[(psd_derivation[:-1] <= 0) & (psd_derivation[1:] > 0)] + 1
 
-        peaks = np.arange(len(psd_derivation)-1)[(psd_derivation[:-1] > 0) & (psd_derivation[1:] < 0)]
-        trough = np.arange(len(psd_derivation)-1)[(psd_derivation[:-1] <= 0) & (psd_derivation[1:] > 0)]
-        # peaks = psd_mask_idx[help_peaks]
-        # trough = psd_mask_idx[help_trough]
+        all_peaks = peaks
+        peaks, trough = clean_peaks(peaks, trough, spec_freq, db_spectra[:, i])
 
+        # ToDo: Harmonic groups
+        harmonic_groups(peaks, spec_freq, db_spectra[:, i], min_freq, max_freq)
+
+        #############################
         f_peaks = peaks[(spec_freq[peaks] >= min_freq) & (spec_freq[peaks] <= max_freq)]
         f_trough = trough[(spec_freq[trough] >= min_freq) & (spec_freq[trough] <= max_freq)]
-        # ToDo: For each fundamental peak detect 1 & 2 harmonic !!!
         h1_peaks = np.array(list(set(peaks) - set(f_peaks)), dtype=int)
         h1_trough = np.array(list(set(trough) - set(f_trough)), dtype=int)
 
+        if plot:
+            fig, ax = plt.subplots(2, 1, sharex=True, figsize=(30/2.54, 20/2.54))
+            ax[0].plot(spec_freq, db_spectra[:, i])
+            ax[0].plot([spec_freq[0], spec_freq[-1]], [db_th0, db_th1], 'k-')
 
-        fig, ax = plt.subplots(2, 1, sharex=True, figsize=(30/2.54, 20/2.54))
-        ax[0].plot(spec_freq, db_spectra[:, i])
-        ax[0].plot([spec_freq[0], spec_freq[-1]], [db_th0, db_th1], 'k-')
+            # ax[1].plot(spec_freq[psd_mask][1:], psd_derivation)
+            ax[1].plot(spec_freq[1:], np.diff(db_spectra[:, i]), color='grey')
+            ax[1].plot(spec_freq[1:], psd_derivation)
+            ax[1].plot([spec_freq[0], spec_freq[-1]], [0, 0], 'k--', lw=1, alpha=0.8)
 
-        # dada = np.full(len(spec_freq), np.nan)
-        # dada[psd_mask_idx[1:]] = psd_derivation
 
-        # ax[1].plot(spec_freq[psd_mask][1:], psd_derivation)
-        ax[1].plot(spec_freq[1:], np.diff(db_spectra[:, i]), color='grey')
-        ax[1].plot(spec_freq, psd_derivation)
-        ax[1].plot([spec_freq[0], spec_freq[-1]], [0, 0], 'k--', lw=1, alpha=0.8)
-
-        ax[0].plot(spec_freq[f_peaks], db_spectra[f_peaks, i], 'o', color='forestgreen')
-        ax[0].plot(spec_freq[f_trough], db_spectra[f_trough, i], 'o', markeredgecolor='forestgreen', color='none')
-        ax[0].plot(spec_freq[h1_peaks], db_spectra[h1_peaks, i], 'o', color='orange')
-        try:
+            ax[0].plot(spec_freq[all_peaks], db_spectra[all_peaks, i], 'o', color='grey', alpha=0.5)
+            ax[0].plot(spec_freq[f_peaks], db_spectra[f_peaks, i], 'o', color='forestgreen')
+            ax[0].plot(spec_freq[f_trough], db_spectra[f_trough, i], 'o', markeredgecolor='forestgreen', color='none')
+            ax[0].plot(spec_freq[h1_peaks], db_spectra[h1_peaks, i], 'o', color='orange')
             ax[0].plot(spec_freq[h1_trough], db_spectra[h1_trough, i], 'o', markeredgecolor='orange', color='none')
-        except:
-            embed()
-            quit()
-        ax[1].plot(spec_freq[peaks], np.zeros(len(peaks)), 'ko')
-        ax[1].plot(spec_freq[trough], np.zeros(len(trough)), 'o', markeredgecolor='k', color='none')
+            ax[1].plot(spec_freq[peaks], np.zeros(len(peaks)), 'ko')
+            ax[1].plot(spec_freq[trough], np.zeros(len(trough)), 'o', markeredgecolor='k', color='none')
 
-        plt.show()
+            plt.show()
 
 
         fundamentals.append(spec_freq[f_peaks])
 
-        # th_cross_up = np.arange(len(db_spectra[:, i])-1)[(db_spectra[:-1, i] <= db_th0) & (db_spectra[1:, i] > db_th0)]
-        # th_cross_down = np.arange(1, len(db_spectra[:, i]))[(db_spectra[:-1, i] >= db_th0) & (db_spectra[1:, i] < db_th0)]
-        #
-        # fig, ax = plt.subplots()
-        # ax.plot(spec_freq, db_spectra[:, i])
-        # ax.plot(spec_freq[th_cross_up], db_spectra[th_cross_up, i], 'o', color='green')
-        # ax.plot(spec_freq[th_cross_down], db_spectra[th_cross_down, i], 'o', color='orange')
-        # plt.plot([spec_freq[0], spec_freq[-1]], [db_th0, db_th1], 'k-')
-        # plt.show()
+    return fundamentals
+
 
 def main(folder):
     freq_res = 1
@@ -134,7 +159,7 @@ def main(folder):
                                                                                channels, start_idx, end_idx)
 
     # detection
-    f0, f1 = 400, 1200
+    min_freq, max_freq = 250, 1200
     db_th0 = -90
 
     detection_mask = np.full(db_comb_spectra.shape, np.nan)
@@ -144,10 +169,15 @@ def main(folder):
     detection_mask2 = np.full(db_comb_spectra.shape, np.nan)
     detection_mask2[db_comb_spectra >= db_th2] = 1
 
+    fundamentals = eod_detection(db_comb_spectra, spec_freqs, tmp_times, db_th0, db_th2, min_freq = min_freq, max_freq = max_freq)
+
+    embed()
+    quit()
+
     ###############################
 
-    f_mask = np.arange(len(spec_freqs))[(spec_freqs >= f0) & (spec_freqs <= f1)]
-    f_mask2 = np.arange(len(spec_freqs))[(spec_freqs >= f0*2) & (spec_freqs <= f1*2)]
+    f_mask = np.arange(len(spec_freqs))[(spec_freqs >= min_freq) & (spec_freqs <= max_freq)]
+    f_mask2 = np.arange(len(spec_freqs))[(spec_freqs >= min_freq*2) & (spec_freqs <= max_freq*2)]
     t_mask = np.arange(len(tmp_times))
 
     fig = plt.figure(figsize=(20/2.54, 14/2.54))
@@ -171,13 +201,12 @@ def main(folder):
                   extent=[tmp_times[0], tmp_times[-1], spec_freqs[f_mask2[0]], spec_freqs[f_mask2[-1]+1]],
                   aspect='auto', vmin=0, vmax=1, alpha=1, cmap='binary')
 
+    for i in range(len(fundamentals)):
+        ax.plot(np.ones(len(fundamentals[i]))*tmp_times[i], fundamentals[i], '.', color='firebrick', markersize=8)
+
     ax.set_xlabel('time', fontsize=12)
     plt.show()
 
-    EOD_detection(db_comb_spectra, spec_freqs, tmp_times, db_th0, db_th2, min_freq = 250, max_freq = 1200)
-
-    embed()
-    quit()
     pass
 
 if __name__ == '__main__':
