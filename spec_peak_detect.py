@@ -50,7 +50,10 @@ def clean_peaks(peaks, trough, spec_freq, power, peak_trough_max_df = 10, peak_p
     freq_diff = np.abs(np.repeat(spec_freq[peaks][:, np.newaxis], len(trough), axis=1) - np.repeat(spec_freq[trough][np.newaxis, :], len(peaks), axis=0))
 
     mask = (freq_diff < peak_trough_max_df) & (power_diff < peak_power_th)
-    embed()
+
+    sorter = np.argsort(np.sum(mask, axis = 0))
+    trough = trough[sorter]
+    mask = mask[:, sorter]
 
     i0s, i1s = mask.nonzero()
     del_peaks = []
@@ -64,12 +67,49 @@ def clean_peaks(peaks, trough, spec_freq, power, peak_trough_max_df = 10, peak_p
     return peaks[real_peaks_idx], trough
 
 
-def harmonic_groups(peaks, spec_freq, power, min_freq, max_freq, plot=True):
+def harmonic_groups(peaks, spec_freq, power, min_freq, max_freq, plot=False):
+    freq_res = spec_freq[1]
     peak_freq = spec_freq[peaks]
     peak_power = power[peaks]
 
     mask = np.ones(len(peaks), dtype=bool)
 
+    groups = []
+    for i in np.argsort(peak_power)[::-1]:
+        if not min_freq < peak_freq[i] < max_freq:
+            continue
+        if not mask[i]:
+            continue
+
+        df_harmonics = np.abs(np.repeat(peak_freq[np.newaxis, :], 3, axis=0) -
+                              np.array([peak_freq[i] * 0.5, peak_freq[i] * 2, peak_freq[i] * 3])[:, None])
+
+        matches = (df_harmonics < np.array([freq_res, freq_res*3, freq_res * 6])[:, None]) * mask
+        # ToDo: if match in first row --> recalculate matrix
+
+        harmonic_indices = np.array(matches.nonzero())
+        if np.sum(matches) == 0:
+            continue
+
+        if len(harmonic_indices[0]) != len(np.unique(harmonic_indices[0])):
+            del_indices = []
+            for j in np.unique(harmonic_indices[0]):
+                if len(harmonic_indices[0][harmonic_indices[0] == j]) >= 2:
+                    ioi = np.arange(len(harmonic_indices[0]))[harmonic_indices[0] == j]
+                    del_idx = np.argsort(df_harmonics[harmonic_indices[0][ioi], harmonic_indices[1][ioi]])[1:]
+                    del_indices.extend(ioi[del_idx])
+            non_del_idx = np.array(list(set(np.arange(np.shape(harmonic_indices)[1])) - set(del_indices)), dtype=int)
+            harmonic_indices = np.array(harmonic_indices)[:, non_del_idx]
+
+
+        # ToDo: clean this up for already occupied peaks & double matches
+        g = np.full((np.max(harmonic_indices[0]+1), 2), np.nan)
+        g[0] = peak_freq[i], peak_power[i]
+        g[harmonic_indices[0]] = np.array([ peak_freq[harmonic_indices[1]], peak_power[harmonic_indices[1]]  ]).T
+        mask[i] = False
+        mask[harmonic_indices[1]] = False
+
+        groups.append(g)
     if plot:
         fig, ax = plt.subplots(figsize=(30 / 2.54, 20 / 2.54))
         ax.plot(spec_freq, power)
@@ -77,19 +117,17 @@ def harmonic_groups(peaks, spec_freq, power, min_freq, max_freq, plot=True):
 
         plt.show()
 
-    pass
-
+    return groups
 
 def eod_detection(db_spectra, spec_freq, spec_time, db_th0, db_th1, min_freq = 250, max_freq = 1200, min_group_size=2, plot=False):
-    groups = []
-    fundamentals = []
+    all_groups = []
+    all_fundamentals = []
     f_mask = np.arange(len(spec_freq))[(spec_freq <= 3000)]
 
     db_spectra = db_spectra[f_mask[0]:f_mask[-1]+1, np.arange(np.shape(db_spectra)[1])]
     spec_freq = spec_freq[f_mask]
 
     for i in tqdm(np.arange(np.shape(db_spectra)[1]), desc='EOD extract'):
-        #  threshold mask for power
         psd_mask = np.array(db_spectra[:, i] >= db_th0, dtype=bool)
 
         # include 1 entry before and after valid (to valid bool-mask)
@@ -105,21 +143,24 @@ def eod_detection(db_spectra, spec_freq, spec_time, db_th0, db_th1, min_freq = 2
         trough = np.arange(len(psd_derivation)-1)[(psd_derivation[:-1] <= 0) & (psd_derivation[1:] > 0)] + 1
 
         all_peaks = peaks
-        peaks, trough = clean_peaks(peaks, trough, spec_freq, db_spectra[:, i])
+        peaks, trough = clean_peaks(peaks, trough, spec_freq, db_spectra[:, i], peak_trough_max_df = 10, peak_power_th=5)
 
-        # ToDo: Harmonic groups
-        harmonic_groups(peaks, spec_freq, db_spectra[:, i], min_freq, max_freq)
+        groups = harmonic_groups(peaks, spec_freq, db_spectra[:, i], min_freq, max_freq)
+        fundamentals = list(map(lambda x: x[0, 0], groups))
+
+        all_groups.append(groups)
+        all_fundamentals.append(fundamentals)
 
         #############################
-        f_peaks = peaks[(spec_freq[peaks] >= min_freq) & (spec_freq[peaks] <= max_freq)]
-        f_trough = trough[(spec_freq[trough] >= min_freq) & (spec_freq[trough] <= max_freq)]
-        h1_peaks = np.array(list(set(peaks) - set(f_peaks)), dtype=int)
-        h1_trough = np.array(list(set(trough) - set(f_trough)), dtype=int)
-
         if plot:
+            f_peaks = peaks[(spec_freq[peaks] >= min_freq) & (spec_freq[peaks] <= max_freq)]
+            f_trough = trough[(spec_freq[trough] >= min_freq) & (spec_freq[trough] <= max_freq)]
+            h1_peaks = np.array(list(set(peaks) - set(f_peaks)), dtype=int)
+            h1_trough = np.array(list(set(trough) - set(f_trough)), dtype=int)
+
             fig, ax = plt.subplots(2, 1, sharex=True, figsize=(30/2.54, 20/2.54))
             ax[0].plot(spec_freq, db_spectra[:, i])
-            ax[0].plot([spec_freq[0], spec_freq[-1]], [db_th0, db_th1], 'k-')
+            ax[0].plot([spec_freq[0], spec_freq[-1]], [db_th0, db_th0], 'k-')
 
             # ax[1].plot(spec_freq[psd_mask][1:], psd_derivation)
             ax[1].plot(spec_freq[1:], np.diff(db_spectra[:, i]), color='grey')
@@ -137,10 +178,9 @@ def eod_detection(db_spectra, spec_freq, spec_time, db_th0, db_th1, min_freq = 2
 
             plt.show()
 
+        #############################
 
-        fundamentals.append(spec_freq[f_peaks])
-
-    return fundamentals
+    return all_fundamentals
 
 
 def main(folder):
@@ -170,9 +210,6 @@ def main(folder):
     detection_mask2[db_comb_spectra >= db_th2] = 1
 
     fundamentals = eod_detection(db_comb_spectra, spec_freqs, tmp_times, db_th0, db_th2, min_freq = min_freq, max_freq = max_freq)
-
-    embed()
-    quit()
 
     ###############################
 
