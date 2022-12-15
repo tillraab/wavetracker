@@ -26,7 +26,7 @@ def load_data(folder):
 def compute_spectrogram(data, samplerate, freq_res, overlap_frac, channels, start_idx, end_idx):
     core_count = multiprocessing.cpu_count()
     pool = multiprocessing.Pool(core_count - 1)
-    func = partial(spectrogram, ratetime=samplerate, freq_resolution=freq_res, overlap_frac=overlap_frac)
+    func = partial(spectrogram, samplerate=samplerate, fresolution=freq_res, overlap_frac=overlap_frac)
 
     a = pool.map(func, [data[start_idx: end_idx+1, channel] for channel in np.arange(channels)])
 

@@ -21,6 +21,7 @@ from PyQt5.QtGui import *
 from PyQt5 import QtCore
 from PyQt5.QtCore import *
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 
 def decibel(power, ref_power=1.0, min_power=1e-20):
     """
@@ -376,7 +377,12 @@ class MainWindow(QMainWindow):
         self.previousChannel = None
 
         # ToDo: set to auto ?!
-        self.setGeometry(200, 50, 1200, 800)  # set window proportion
+        rec = QApplication.desktop().screenGeometry()
+        height = rec.height()
+        width = rec.width()
+        self.resize(int(1 * width), int(1 * height))
+
+        # self.setGeometry(200, 50, 1200, 800)  # set window proportion
         self.setWindowTitle('EOD sorter')  # set window title
 
         # ToDo: create icon !!!
@@ -551,6 +557,7 @@ class MainWindow(QMainWindow):
         self.Act_interactive_zoom = QAction(QIcon('./gui_sym/zoom.png'), 'Zoom select', self)
         self.Act_interactive_zoom.setCheckable(True)
         self.Act_interactive_zoom.setEnabled(False)
+        self.Act_interactive_zoom.setShortcut('O')
         # self.Act_interactive_zoom.toggled.connect(self.Mzoom)
 
         self.Act_fine_spec = QAction(QIcon('./gui_sym/spec_fine.png'), 'Show fine Spectrogram', self)
@@ -794,6 +801,9 @@ class MainWindow(QMainWindow):
             self.folder = fd.getExistingDirectory(self, 'Select Directory')
         else:
             pass
+        # embed()
+        # quit()
+        self.setWindowTitle(f'EOD sorter with {os.path.basename(self.folder)}')
 
         print(self.folder)
         if self.folder != '':
