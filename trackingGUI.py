@@ -6,7 +6,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from thunderfish.version import __version__
 from thunderfish.powerspectrum import decibel, next_power_of_two, spectrogram
-from thunderfish.dataloader import open_data, fishgrid_grids, fishgrid_spacings
+from thunderfish.dataloader import fishgrid_grids, fishgrid_spacings
+from thunderfish.dataloader import DataLoader as open_data
 from thunderfish.harmonics import harmonic_groups, fundamental_freqs
 from signal_tracker import freq_tracking_v5, plot_tracked_traces, Emit_progress
 from thunderfish.eventdetection import hist_threshold
@@ -900,7 +901,7 @@ class MainWindow(QMainWindow):
             self.EodEctractThread.folder = self.folder
             self.rec_datetime = get_datetime(self.folder)
 
-            self.data = open_data(self.filename, -1, 60.0, 10.0)
+            self.data = open_data(self.filename, 60.0, 10.0, channel=-1)
             self.EodEctractThread.data = self.data
 
             self.samplerate= self.data.samplerate
