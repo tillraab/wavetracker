@@ -10,7 +10,7 @@ import matplotlib.gridspec as gridspec
 from functools import partial
 from IPython import embed
 from tqdm import tqdm
-from thunderfish.dataloader import open_data
+from thunderfish.dataloader import DataLoader as open_data
 from thunderfish.powerspectrum import spectrogram, next_power_of_two, decibel
 
 
@@ -26,7 +26,7 @@ def load_data(folder):
 def compute_spectrogram(data, samplerate, freq_res, overlap_frac, channels, start_idx, end_idx):
     core_count = multiprocessing.cpu_count()
     pool = multiprocessing.Pool(core_count - 1)
-    func = partial(spectrogram, samplerate=samplerate, fresolution=freq_res, overlap_frac=overlap_frac)
+    func = partial(spectrogram, ratetime=samplerate, freq_resolution=freq_res, overlap_frac=overlap_frac)
 
     a = pool.map(func, [data[start_idx: end_idx+1, channel] for channel in np.arange(channels)])
 
@@ -209,7 +209,7 @@ def main(folder):
     detection_mask2 = np.full(db_comb_spectra.shape, np.nan)
     detection_mask2[db_comb_spectra >= db_th2] = 1
 
-    fundamentals = eod_detection(db_comb_spectra, spec_freqs, tmp_times, db_th0, db_th2, min_freq = min_freq, max_freq = max_freq)
+    fundamentals = eod_detection(db_comb_spectra, spec_freqs, tmp_times, db_th0, db_th2, min_freq = min_freq, max_freq = max_freq, plot=True)
 
     ###############################
 

@@ -1,0 +1,16 @@
+{
+  "NAME": "wavetracker",
+  "VERSION": "0.1",
+  "DESCRIPTION": "Analyze and evaluate electric recordings of wave-type electric fish",
+  "AUTHOR": "Till Raab",
+  "COPYRIGHT": "(c) 2023, Neuroethology lab, Uni Tuebingen",
+  "CONTACT": "till.raab@uni-tuebingen.de",
+  "HOMEPAGE": "https://github.com/tillraab/wavetracker",
+  "CLASSIFIERS": [
+    "Programming Language :: Python :: 3.8",
+    "Topic :: Scientific/Engineering",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: BSD License"
+  ]
+}

@@ -1,0 +1,5 @@
+wavetracker.egg-info/*
+*.npy
+*.pdf
+*.txt
+__pycache__
