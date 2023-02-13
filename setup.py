@@ -4,7 +4,7 @@ import os
 
 from setuptools import setup
 
-with open(os.path.join("wavetracker", "info.json")) as infofile:
+with open(os.path.join("info.json")) as infofile:
     infodict = json.load(infofile)
 
 NAME = infodict["NAME"]
@@ -48,6 +48,7 @@ setup(
         # "gui_scripts": ["EODsorter = wavetracker.EODsorter:main",
         #                 "trackingGUI = wavetracker.trackingGUI:main"],
         "console_scripts": ["EODsorter = wavetracker.EODsorter:main",
-                        "trackingGUI = wavetracker.trackingGUI:main"]
+                            "trackingGUI = wavetracker.trackingGUI:main",
+                            'wavetracker = wavetracker.wavetracker:main']
         }
 )
