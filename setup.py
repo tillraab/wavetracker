@@ -23,7 +23,9 @@ packages = [
     "wavetracker",
 ]
 
-install_req = ["PyQt5"]
+install_req = ["PyQt5",
+               'ruamel.yaml',
+               'tqdm']
 
 data_files = [("icons", glob.glob(os.path.join("gui_sym", "*.png"))),
               (".", ["LICENSE"])
