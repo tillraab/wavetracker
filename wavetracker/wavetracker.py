@@ -58,18 +58,13 @@ def main():
     parser.add_argument('-c', "--config", type=str, help="<config>.yaml file for analysis", default=None)
     parser.add_argument('-v', action='count', dest='verbose', default=0,
                         help='verbosity level. Increase by specifying -v multiple times, or like -vvv')
-    # parser.add_argument('-x', type=int, nargs=2, default=[1272, 1282], help='x-borders of LED detect area (in pixels)')
-    # parser.add_argument('-y', type=int, nargs=2, default=[1500, 1516], help='y-borders of LED area (in pixels)')
     args = parser.parse_args()
 
     # load wavetracker configuration
     cfg = Configuration()
 
     # load data
-    if use_GPU:
-        data, samplerate, channels, dataset = open_raw_data(folder=args.folder, **cfg.data_processing)
-    else:
-        data, samplerate, channels, _ = open_raw_data(folder=args.folder, **cfg.data_processing)
+    data, samplerate, channels, dataset = open_raw_data(folder=args.folder, **cfg.data_processing)
 
     # compute spectrograms
 
