@@ -3,13 +3,12 @@ basic:
   project: wavetracker
   version: 0.1
 
-# Data processing configuration
-data_processing:
-  snippet_size: 2**21
+raw:
   channels: -1
 
 # add another comment
 spectrogram:
-  snippet: 2**21
-  nfft: 2**15
+  snippet_size: 2097152 # 2**21
+  nfft: 32768 # 2**15
   overlap_frac: 0.9
+

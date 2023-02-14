@@ -5,30 +5,6 @@ import glob
 import os
 from IPython import embed
 
-def create_standard_cfg_file(folder= '.'):
-    yaml_str = """\
-    # Basic configureation
-    basic:
-      project: wavetracker
-      version: 0.1
-    
-    # Data processing configuration
-    data_processing:
-      snippet_size: 2**21
-      channels: -1
-    
-    # add another comment
-    spectrogram:
-      snippet: 2**21
-      nfft: 2**15
-      overlap_frac: 0.9
-    """
-    yaml = ruamel.yaml.YAML()  # defaults to round-trip if no parameters given
-    code = yaml.load(yaml_str)
-
-    file = os.path.join(folder, 'cfg.yaml')
-    yaml.dump(code, file)
-    return
 
 class Configuration(object):
 
@@ -36,16 +12,16 @@ class Configuration(object):
                  file: str = None,
                  verbose: int = 0
                  ) -> None:
-
-        self.data_processing = {}
-        self.basic = {}
-        self.spectrogram = {}
-
         self.file = file
+        self.verbose = verbose
         if not file:
             self.find_config(folder)
         else:
             self.file = file
+
+        self.basic = {}
+        self.spectrogram = {}
+        self.raw = {}
 
         self.yaml = ruamel.yaml.YAML()
         with open(self.file) as f:
@@ -55,7 +31,7 @@ class Configuration(object):
                 setattr(self, dict, self.cfg[dict])
             f.close()
 
-    def __repr__(self) -> str: 
+    def __repr__(self) -> str:
         rep_list = []
         for dict in self.dicts:
             rep_list.append(f"{dict}:")
@@ -89,13 +65,39 @@ class Configuration(object):
             self.yaml.dump(self.cfg, f)
             f.close()
 
+
+def create_standard_cfg_file(folder= '.'):
+    yaml_str = """\
+    # Basic configureation
+    basic:
+      project: wavetracker
+      version: 0.1
+    
+    # Data processing configuration
+    data_processing:
+      snippet_size: 2**21
+      channels: -1
+    
+    # add another comment
+    spectrogram:
+      snippet: 2**21
+      nfft: 2**15
+      overlap_frac: 0.9
+    """
+    yaml = ruamel.yaml.YAML()  # defaults to round-trip if no parameters given
+    code = yaml.load(yaml_str)
+
+    file = os.path.join(folder, 'cfg.yaml')
+    yaml.dump(code, file)
+    return
+
+
 def main():
     if len(sys.argv) > 1:
         folder = sys.argv[1]
     else:
         folder = '.'
     c = Configuration(folder)
-    embed()
     exit(c.save())
 
 
