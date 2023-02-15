@@ -155,11 +155,19 @@ def create_fine_spec(sum_spec,
 
 
 
-def pipeline_spectrogram_gpu(dataset, samplerate, data_shape, snippet_size, verbose=0, **kwargs):
+def pipeline_spectrogram_gpu(dataset, samplerate, data_shape, folder, snippet_size, verbose=0, **kwargs):
     # create a spectorgram of the whole recording
     get_sparse_spec = True
     sparse_spectra = None
     x_borders, y_borders = None, None
+
+    get_fine_spec = True
+    buffer_spectra = None
+    fine_spec = None
+    fine_spec_shape = None
+    terminate = False
+
+    times = np.array([])
 
     step, noverlap = get_step_and_overlap(**kwargs)
     for enu, data in enumerate(dataset):
@@ -168,18 +176,27 @@ def pipeline_spectrogram_gpu(dataset, samplerate, data_shape, snippet_size, verb
         tmp_times = spec_times + enu * snippet_size / samplerate
         sum_spec = np.swapaxes(np.sum(result, axis=0), 0, 1)
 
+        times = np.concatenate((times, tmp_times))
+
         if get_sparse_spec:
             sparse_spectra, x_borders, y_borders = \
                 create_plotable_spec(sum_spec, spec_freqs, tmp_times, 0, data_shape[0]/samplerate,
                                      sparse_spectra, x_borders, y_borders, min_freq=0, max_freq=2000)
 
+        if get_fine_spec:
+            if data.shape[0] // snippet_size * snippet_size == enu * snippet_size: terminate = True
 
-    # fig, ax = plt.subplots(1, 1, figsize=(40 / 2.54, 24 / 2.54))
-    # ax.pcolormesh(x_borders[:-1], y_borders[:-1], decibel(sparse_spectra), cmap='jet')
-    # ax.set_title(f'Spectrogram (all channels)')
-    # ax.set_xlabel('Time (s)')
-    # ax.set_ylabel('Frequency (Hz)')
-    # plt.show()
+            fine_spec, buffer_spectra, fine_spec_shape = create_fine_spec(
+                sum_spec, tmp_times, folder, buffer_spectra=buffer_spectra, fine_spec=fine_spec,
+                fine_spec_shape=fine_spec_shape, terminate=terminate)
+
+            if terminate:
+                np.save(os.path.join('/home/raab/analysis/fine_specs', os.path.split(folder)[-1],
+                                     'fine_spec_shape.npy'), fine_spec_shape)
+                np.save(os.path.join('/home/raab/analysis/fine_specs', os.path.split(folder)[-1],
+                                     'fine_times.npy'), times)
+                np.save(os.path.join('/home/raab/analysis/fine_specs', os.path.split(folder)[-1],
+                                     'fine_freqs.npy'), spec_freqs)
 
 
 def pipeline_spectrogram_cpu(data, samplerate, data_shape, folder, nfft, snippet_size, channels, verbose=0, **kwargs):
@@ -240,15 +257,24 @@ def pipeline_spectrogram_cpu(data, samplerate, data_shape, folder, nfft, snippet
                 np.save(os.path.join('/home/raab/analysis/fine_specs', os.path.split(folder)[-1],
                                      'fine_freqs.npy'), spec_freqs)
 
-                f1 = np.argmax(spec_freqs > 2000)
-                plot_freqs = spec_freqs[:f1]
+    # Plot fine spec !!! MEMORY ISSUES
+    # f1 = np.argmax(spec_freqs > 2000)
+    # plot_freqs = spec_freqs[:f1]
+    #
+    # fig, ax = plt.subplots(1, 1, figsize=(40 / 2.54, 24 / 2.54))
+    # ax.pcolormesh(times, plot_freqs, decibel(fine_spec[:f1, :]), cmap='jet')
+    # ax.set_title(f'Spectrogram (all channels)')
+    # ax.set_xlabel('Time (s)')
+    # ax.set_ylabel('Frequency (Hz)')
+    # plt.show()
 
-                # fig, ax = plt.subplots(1, 1, figsize=(40 / 2.54, 24 / 2.54))
-                # ax.pcolormesh(times, plot_freqs, decibel(fine_spec[:f1, :]), cmap='jet')
-                # ax.set_title(f'Spectrogram (all channels)')
-                # ax.set_xlabel('Time (s)')
-                # ax.set_ylabel('Frequency (Hz)')
-                # plt.show()
+    # Sparse spec plot
+    # fig, ax = plt.subplots(1, 1, figsize=(40 / 2.54, 24 / 2.54))
+    # ax.pcolormesh(x_borders[:-1], y_borders[:-1], decibel(sparse_spectra), cmap='jet')
+    # ax.set_title(f'Spectrogram (all channels)')
+    # ax.set_xlabel('Time (s)')
+    # ax.set_ylabel('Frequency (Hz)')
+    # plt.show()
 
 def main():
     # ToDo: add example dataset to git
@@ -260,6 +286,7 @@ def main():
                         help='verbosity level. Increase by specifying -v multiple times, or like -vvv')
     parser.add_argument('--cpu', action='store_true', help='analysis using only CPU.')
     args = parser.parse_args()
+    args.folder = os.path.normpath(args.folder)
 
     if args.verbose >= 1: print(f'\n--- Running wavetracker.spectrogram ---')
 
@@ -275,7 +302,7 @@ def main():
     if available_GPU and not args.cpu:
         # example how to use gpu pipeline
         # ToDo: implement and test memmap stuff for GPU
-        pipeline_spectrogram_gpu(dataset, samplerate=samplerate, data_shape=data_shape, verbose=args.verbose,
+        pipeline_spectrogram_gpu(dataset, samplerate=samplerate, data_shape=data_shape, verbose=args.verbose, folder=args.folder,
                                  **cfg.raw, **cfg.spectrogram)
     else:
         # example how to use cpu pipeline

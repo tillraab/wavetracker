@@ -40,8 +40,10 @@ def main():
 
     # compute spectrograms
     if available_GPU:
+
         pass
     else:
+
         pass
 
     # harmonic group extraction

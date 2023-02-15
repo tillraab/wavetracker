@@ -48,7 +48,7 @@ def open_raw_data(folder: str,
     shape = data.shape
 
     GPU_str = "(gpu found: TensorGenerator created)" if available_GPU else "(NO gpu: NO TensorGenerator created)"
-    if verbose >= 1: print(f'{"Loading folder":^25}: {folder}\n{" "*27 + GPU_str}')
+    if verbose >= 1: print(f'{"Loading data from":^25}: {folder}\n{" "*27 + GPU_str}')
     dataset = None
     if available_GPU:
         dataset = tf.data.Dataset.from_generator(
