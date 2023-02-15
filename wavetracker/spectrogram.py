@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from IPython import embed
-from functools import partial
+from functools import partial, partialmethod
 from matplotlib.mlab import specgram as mspecgram
 from tqdm import tqdm
 
@@ -67,65 +67,6 @@ def mlab_spec(data, samplerate, nfft, noverlap, detrend='constant', window='hann
     return spec, freqs, times
 
 
-def pipeline_spectrogram_GPU(dataset, samplerate, data_shape, snippet_size, verbose=0, **kwargs):
-    # create a spectorgram of the whole recording
-    get_sparse_spec = True
-    sparse_spectra = None
-    x_borders, y_borders = None, None
-
-    step, noverlap = get_step_and_overlap(**kwargs)
-    for enu, data in enumerate(dataset):
-        result, spec_freqs, spec_times = tensorflow_spec(tf.transpose(data), samplerate=samplerate, verbose=verbose,
-                                                         step=step, **kwargs)
-        tmp_times = spec_times + enu * snippet_size / samplerate
-        sum_spec = np.swapaxes(np.sum(result, axis=0), 0, 1)
-
-        if get_sparse_spec:
-            sparse_spectra, x_borders, y_borders = \
-                create_plotable_spec(sum_spec, spec_freqs, tmp_times, 0, data_shape[0]/samplerate,
-                                     sparse_spectra, x_borders, y_borders, min_freq=0, max_freq=2000)
-
-
-    fig, ax = plt.subplots(1, 1, figsize=(40 / 2.54, 24 / 2.54))
-    ax.pcolormesh(x_borders[:-1], y_borders[:-1], decibel(sparse_spectra), cmap='jet')
-    ax.set_title(f'Spectrogram (all channels)')
-    ax.set_xlabel('Time (s)')
-    ax.set_ylabel('Frequency (Hz)')
-    plt.show()
-
-
-def pipeline_spectrogram_CPU(data, samplerate, data_shape, nfft, snippet_size, channels, verbose=0, **kwargs):
-    get_sparse_spec = True
-    sparse_spectra = None
-    x_borders, y_borders = None, None
-
-    step, noverlap = get_step_and_overlap(nfft=nfft, **kwargs)
-
-    core_count = multiprocessing.cpu_count()
-    channel_list = np.arange(data.channels) if channels == -1 else np.arange(channels)
-
-    func = partial(mlab_spec, samplerate=samplerate, nfft=nfft, noverlap=noverlap)
-
-    for i0 in np.arange(0, data.shape[0], snippet_size):
-        pool = multiprocessing.Pool(core_count - 1)
-
-        a = pool.map(func, [data[i0: i0 + snippet_size, channel] for channel in
-                            channel_list])  # ret: spec, freq, time
-
-        spectra = [a[channel][0] for channel in range(len(a))]
-        spec_freqs = a[0][1]
-        spec_times = a[0][2]
-        pool.terminate()
-
-        tmp_times = spec_times + (i0 / samplerate)
-        sum_spec = np.sum(spectra, axis=0)
-
-        if get_sparse_spec:
-            sparse_spectra, x_borders, y_borders = \
-                create_plotable_spec(sum_spec, spec_freqs, tmp_times, 0, data_shape[0]/samplerate,
-                                     sparse_spectra, x_borders, y_borders, min_freq=0, max_freq=2000)
-
-
 def create_plotable_spec(sum_spec,
                          freqs,
                          tmp_times,
@@ -177,10 +118,140 @@ def create_plotable_spec(sum_spec,
                 continue
             sparse_spectra[i, j] = np.max(plot_spectra[f_mask[:, None], t_mask])
 
-
     return sparse_spectra, x_borders, y_borders
 
+
+def create_fine_spec(sum_spec,
+                     tmp_times,
+                     folder,
+                     buffer_spectra=None,
+                     fine_spec=None,
+                     fine_spec_shape=None,
+                     terminate=False
+                     ):
+    fill_spec_str = os.path.join('/home/raab/analysis/fine_specs', os.path.split(folder)[-1], 'fill_spec.npy')
+    if not hasattr(fine_spec, '__len__'):
+        if not os.path.exists(os.path.join('/home/raab/analysis/fine_specs', os.path.split(folder)[-1])):
+            os.makedirs(os.path.join('/home/raab/analysis/fine_specs', os.path.split(folder)[-1]))
+        fine_spec = np.memmap(fill_spec_str, dtype='float', mode='w+',
+                              shape=(len(sum_spec), len(tmp_times)), order='F')
+
+        fine_spec[:, :] = sum_spec
+        fine_spec_shape = np.shape(fine_spec)
+    else:
+        if not hasattr(buffer_spectra, '__len__'):
+            buffer_spectra = sum_spec
+        else:
+            buffer_spectra = np.append(buffer_spectra, sum_spec, axis=1)
+
+        if np.shape(buffer_spectra)[1] >= 500 or terminate:
+            fine_spec = np.memmap(fill_spec_str, dtype='float', mode='r+', shape=(
+                np.shape(buffer_spectra)[0], np.shape(buffer_spectra)[1] + fine_spec_shape[1]), order='F')
+            fine_spec[:, -np.shape(buffer_spectra)[1]:] = buffer_spectra
+            fine_spec_shape = np.shape(fine_spec)
+            buffer_spectra = np.empty((fine_spec_shape[0], 0))
+
+    return fine_spec, buffer_spectra, fine_spec_shape
+
+
+
+def pipeline_spectrogram_gpu(dataset, samplerate, data_shape, snippet_size, verbose=0, **kwargs):
+    # create a spectorgram of the whole recording
+    get_sparse_spec = True
+    sparse_spectra = None
+    x_borders, y_borders = None, None
+
+    step, noverlap = get_step_and_overlap(**kwargs)
+    for enu, data in enumerate(dataset):
+        result, spec_freqs, spec_times = tensorflow_spec(tf.transpose(data), samplerate=samplerate, verbose=verbose,
+                                                         step=step, **kwargs)
+        tmp_times = spec_times + enu * snippet_size / samplerate
+        sum_spec = np.swapaxes(np.sum(result, axis=0), 0, 1)
+
+        if get_sparse_spec:
+            sparse_spectra, x_borders, y_borders = \
+                create_plotable_spec(sum_spec, spec_freqs, tmp_times, 0, data_shape[0]/samplerate,
+                                     sparse_spectra, x_borders, y_borders, min_freq=0, max_freq=2000)
+
+
+    # fig, ax = plt.subplots(1, 1, figsize=(40 / 2.54, 24 / 2.54))
+    # ax.pcolormesh(x_borders[:-1], y_borders[:-1], decibel(sparse_spectra), cmap='jet')
+    # ax.set_title(f'Spectrogram (all channels)')
+    # ax.set_xlabel('Time (s)')
+    # ax.set_ylabel('Frequency (Hz)')
+    # plt.show()
+
+
+def pipeline_spectrogram_cpu(data, samplerate, data_shape, folder, nfft, snippet_size, channels, verbose=0, **kwargs):
+    get_sparse_spec = False
+    sparse_spectra = None
+    x_borders, y_borders = None, None
+
+    get_fine_spec = True
+    buffer_spectra = None
+    fine_spec = None
+    fine_spec_shape = None
+    terminate = False
+
+    times = np.array([])
+
+    if verbose >=1:  print(f'{"Spectrogram (CPU)":^25}: fine spec: {get_fine_spec}; plotable spec: {get_sparse_spec}')
+
+    step, noverlap = get_step_and_overlap(nfft=nfft, **kwargs)
+
+    core_count = multiprocessing.cpu_count()
+    channel_list = np.arange(data.channels) if channels == -1 else np.arange(channels)
+    func = partial(mlab_spec, samplerate=samplerate, nfft=nfft, noverlap=noverlap)
+
+    for i0 in tqdm(np.arange(0, data.shape[0], snippet_size - (noverlap)), desc="File analysis."):
+        pool = multiprocessing.Pool(core_count - 1)
+
+        a = pool.map(func, [data[i0: i0 + snippet_size, channel] for channel in
+                            channel_list])  # ret: spec, freq, time
+
+        spectra = [a[channel][0] for channel in range(len(a))]
+        spec_freqs = a[0][1]
+        spec_times = a[0][2]
+        pool.terminate()
+
+        tmp_times = spec_times + (i0 / samplerate)
+        sum_spec = np.sum(spectra, axis=0)
+
+        times = np.concatenate((times, tmp_times))
+
+        # when you want to have a rough spectrogram to plot
+        if get_sparse_spec:
+            sparse_spectra, x_borders, y_borders = \
+                create_plotable_spec(sum_spec, spec_freqs, tmp_times, 0, data_shape[0]/samplerate,
+                                     sparse_spectra, x_borders, y_borders, min_freq=0, max_freq=2000)
+
+        if get_fine_spec:
+            if data.shape[0] // (snippet_size - noverlap) * (snippet_size - noverlap) == i0: terminate = True
+
+            fine_spec, buffer_spectra, fine_spec_shape = create_fine_spec(
+                sum_spec, tmp_times, folder, buffer_spectra=buffer_spectra, fine_spec=fine_spec,
+                fine_spec_shape=fine_spec_shape, terminate=terminate)
+
+            if terminate:
+                np.save(os.path.join('/home/raab/analysis/fine_specs', os.path.split(folder)[-1],
+                                     'fine_spec_shape.npy'), fine_spec_shape)
+                np.save(os.path.join('/home/raab/analysis/fine_specs', os.path.split(folder)[-1],
+                                     'fine_times.npy'), times)
+                np.save(os.path.join('/home/raab/analysis/fine_specs', os.path.split(folder)[-1],
+                                     'fine_freqs.npy'), spec_freqs)
+
+                f1 = np.argmax(spec_freqs > 2000)
+                plot_freqs = spec_freqs[:f1]
+
+                fig, ax = plt.subplots(1, 1, figsize=(40 / 2.54, 24 / 2.54))
+                ax.pcolormesh(times, plot_freqs, decibel(fine_spec[:f1, :]), cmap='jet')
+                ax.set_title(f'Spectrogram (all channels)')
+                ax.set_xlabel('Time (s)')
+                ax.set_ylabel('Frequency (Hz)')
+                plt.show()
+
 def main():
+    # ToDo: add example dataset to git
     example_data = "/home/raab/data/2023-02-09-08_16"
     parser = argparse.ArgumentParser(description='Evaluated electrode array recordings with multiple fish.')
     parser.add_argument('-f', '--folder', type=str, help='file to be analyzed', default=example_data)
@@ -192,6 +263,8 @@ def main():
 
     if args.verbose >= 1: print(f'\n--- Running wavetracker.spectrogram ---')
 
+    if args.verbose < 1: tqdm.__init__ = partialmethod(tqdm.__init__, disable=True)
+
     # load wavetracker configuration
     cfg = Configuration(args.config, verbose=args.verbose)
 
@@ -201,11 +274,13 @@ def main():
 
     if available_GPU and not args.cpu:
         # example how to use gpu pipeline
-        pipeline_spectrogram_GPU(dataset, samplerate=samplerate, data_shape=data_shape, verbose=args.verbose,
+        # ToDo: implement and test memmap stuff for GPU
+        pipeline_spectrogram_gpu(dataset, samplerate=samplerate, data_shape=data_shape, verbose=args.verbose,
                                  **cfg.raw, **cfg.spectrogram)
     else:
         # example how to use cpu pipeline
-        pipeline_spectrogram_CPU(data, samplerate=samplerate, data_shape=data_shape, verbose=args.verbose,
+        # ToDo: implement start and stop time
+        pipeline_spectrogram_cpu(data, samplerate=samplerate, data_shape=data_shape, verbose=args.verbose, folder=args.folder,
                                  **cfg.raw, **cfg.spectrogram)
 
 
