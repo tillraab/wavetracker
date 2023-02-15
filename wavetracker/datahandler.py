@@ -1,6 +1,7 @@
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import sys
+import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 from thunderfish.dataloader import DataLoader as open_data
@@ -13,9 +14,9 @@ try:
     from tensorflow.python.ops.numpy_ops import np_config
     np_config.enable_numpy_behavior()
     if len(tf.config.list_physical_devices('GPU')):
-        use_GPU = True
+        available_GPU = True
 except ImportError:
-    use_GPU = False
+    available_GPU = False
 
 
 def multi_channel_audio_file_generator(filename: str,
@@ -37,6 +38,7 @@ def open_raw_data(folder: str,
                   backsize: float = 0.,
                   channel: int = -1,
                   snippet_size: int = 2**21,
+                  verbose: int = 0,
                   **kwargs: dict):
 
     filename = os.path.join(folder, 'traces-grid1.raw')
@@ -45,8 +47,10 @@ def open_raw_data(folder: str,
     channels = data.channels
     shape = data.shape
 
+    GPU_str = "(gpu found: TensorGenerator created)" if available_GPU else "(NO gpu: NO TensorGenerator created)"
+    if verbose >= 1: print(f'{"Loading folder":^25}: {folder}\n{" "*27 + GPU_str}')
     dataset = None
-    if use_GPU:
+    if available_GPU:
         dataset = tf.data.Dataset.from_generator(
             multi_channel_audio_file_generator,
             args=(filename, channels, snippet_size),
@@ -56,12 +60,20 @@ def open_raw_data(folder: str,
     return data, samplerate, channels, dataset, shape
 
 def main():
-    # run as: run as "python3 -m wavetracker.dataloader"
-    file = "/home/raab/data/2023-02-09-08_16"
+    example_data = "/home/raab/data/2023-02-09-08_16"
+    parser = argparse.ArgumentParser(description='Evaluated electrode array recordings with multiple fish.')
+    parser.add_argument('-f', '--folder', type=str, help='file to be analyzed', default=example_data)
+    parser.add_argument('-c', "--config", type=str, help="<config>.yaml file for analysis", default=None)
+    parser.add_argument('-v', '--verbose', action='count', dest='verbose', default=0,
+                        help='verbosity level. Increase by specifying -v multiple times, or like -vvv')
+    parser.add_argument('--cpu', action='store_true', help='analysis using only CPU.')
+    args = parser.parse_args()
 
-    cfg = Configuration()
+    if args.verbose >= 1: print(f'\n--- Running wavetracker.datahandler ---')
 
-    data, samplerate, channels, dataset, data_shape = open_raw_data(folder=file, **cfg.spectrogram)
+    cfg = Configuration(args.config, verbose=args.verbose)
+
+    data, samplerate, channels, dataset, data_shape = open_raw_data(folder=args.folder, verbose=args.verbose, **cfg.spectrogram)
 
     fig, ax = plt.subplots(int(np.ceil(data_shape[1] / 2)), 2, figsize=(20 / 2.54, 20 / 2.54), sharex='all', sharey='all')
     ax = np.hstack(ax)
@@ -72,7 +84,7 @@ def main():
         ax[i].text(0.9, 0.9, f'{i}', transform=ax[i].transAxes, ha='center', va='center')
     plt.show()
 
-    if use_GPU:
+    if available_GPU:
         for enu, data in enumerate(dataset.take(2)):
             fig, ax = plt.subplots(int(np.ceil(data_shape[1]/2)), 2, figsize=(20/2.54, 20/2.54), sharex='all', sharey='all')
             ax = np.hstack(ax)
@@ -84,4 +96,5 @@ def main():
             plt.show()
 
 if __name__ == '__main__':
+    # run as: run as "python3 -m wavetracker.dataloader"
     main()

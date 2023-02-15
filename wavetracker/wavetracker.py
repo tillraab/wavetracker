@@ -14,27 +14,32 @@ try:
     from tensorflow.python.ops.numpy_ops import np_config
     np_config.enable_numpy_behavior()
     if len(tf.config.list_physical_devices('GPU')):
-        use_GPU = True
+        available_GPU = True
 except:
-    use_GPU = False
+    available_GPU = False
 
 
 def main():
+    example_data = "/home/raab/data/2023-02-09-08_16"
     parser = argparse.ArgumentParser(description='Evaluated electrode array recordings with multiple fish.')
-    parser.add_argument('folder', type=str, help='file to be analyzed', default='')
+    parser.add_argument('-f', '--folder', type=str, help='file to be analyzed', default=example_data)
     parser.add_argument('-c', "--config", type=str, help="<config>.yaml file for analysis", default=None)
-    parser.add_argument('-v', action='count', dest='verbose', default=0,
+    parser.add_argument('-v', '--verbose', action='count', dest='verbose', default=0,
                         help='verbosity level. Increase by specifying -v multiple times, or like -vvv')
+    parser.add_argument('--cpu', action='store_true', help='analysis using only CPU.')
     args = parser.parse_args()
 
+    if args.verbose >= 1: print(f'\n--- Running wavetracker.wavetracker ---')
+
     # load wavetracker configuration
-    cfg = Configuration()
+    cfg = Configuration(args.config, verbose=args.verbose)
 
     # load data
-    data, samplerate, channels, dataset, data_shape = open_raw_data(folder=args.folder, **cfg.spectrogram)
+    data, samplerate, channels, dataset, data_shape = open_raw_data(folder=args.folder, verbose=args.verbose,
+                                                                    **cfg.spectrogram)
 
     # compute spectrograms
-    if use_GPU:
+    if available_GPU:
         pass
     else:
         pass

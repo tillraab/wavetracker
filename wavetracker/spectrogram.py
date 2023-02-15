@@ -21,9 +21,9 @@ try:
     from tensorflow.python.ops.numpy_ops import np_config
     np_config.enable_numpy_behavior()
     if len(tf.config.list_physical_devices('GPU')):
-        use_GPU = True
+        available_GPU = True
 except:
-    use_GPU = False
+    available_GPU = False
 
 
 def get_step_and_overlap(overlap_frac: float,
@@ -97,6 +97,7 @@ def pipeline_spectrogram_GPU(dataset, samplerate, data_shape, snippet_size, verb
 def pipeline_spectrogram_CPU(data, samplerate, data_shape, nfft, snippet_size, channels, verbose=0, **kwargs):
     get_sparse_spec = True
     sparse_spectra = None
+    x_borders, y_borders = None, None
 
     step, noverlap = get_step_and_overlap(nfft=nfft, **kwargs)
 
@@ -120,9 +121,9 @@ def pipeline_spectrogram_CPU(data, samplerate, data_shape, nfft, snippet_size, c
         sum_spec = np.sum(spectra, axis=0)
 
         if get_sparse_spec:
-            sparse_spectra, sparse_freq, sparse_times = \
+            sparse_spectra, x_borders, y_borders = \
                 create_plotable_spec(sum_spec, spec_freqs, tmp_times, 0, data_shape[0]/samplerate,
-                                     sparse_spectra, min_freq=0, max_freq=2000)
+                                     sparse_spectra, x_borders, y_borders, min_freq=0, max_freq=2000)
 
 
 def create_plotable_spec(sum_spec,
@@ -180,26 +181,32 @@ def create_plotable_spec(sum_spec,
     return sparse_spectra, x_borders, y_borders
 
 def main():
+    example_data = "/home/raab/data/2023-02-09-08_16"
     parser = argparse.ArgumentParser(description='Evaluated electrode array recordings with multiple fish.')
-    parser.add_argument('folder', type=str, help='file to be analyzed', default='')
+    parser.add_argument('-f', '--folder', type=str, help='file to be analyzed', default=example_data)
     parser.add_argument('-c', "--config", type=str, help="<config>.yaml file for analysis", default=None)
     parser.add_argument('-v', '--verbose', action='count', dest='verbose', default=0,
                         help='verbosity level. Increase by specifying -v multiple times, or like -vvv')
     parser.add_argument('--cpu', action='store_true', help='analysis using only CPU.')
     args = parser.parse_args()
 
+    if args.verbose >= 1: print(f'\n--- Running wavetracker.spectrogram ---')
+
     # load wavetracker configuration
-    cfg = Configuration()
+    cfg = Configuration(args.config, verbose=args.verbose)
 
     # load data
-    data, samplerate, channels, dataset, data_shape = open_raw_data(folder=args.folder, **cfg.spectrogram)
+    data, samplerate, channels, dataset, data_shape = open_raw_data(folder=args.folder, verbose=args.verbose,
+                                                                    **cfg.spectrogram)
 
-    if use_GPU and not args.cpu:
+    if available_GPU and not args.cpu:
         # example how to use gpu pipeline
-        pipeline_spectrogram_GPU(dataset, samplerate=samplerate, data_shape=data_shape, **cfg.raw, **cfg.spectrogram)
+        pipeline_spectrogram_GPU(dataset, samplerate=samplerate, data_shape=data_shape, verbose=args.verbose,
+                                 **cfg.raw, **cfg.spectrogram)
     else:
         # example how to use cpu pipeline
-        pipeline_spectrogram_CPU(data, samplerate=samplerate, data_shape=data_shape, **cfg.raw, **cfg.spectrogram)
+        pipeline_spectrogram_CPU(data, samplerate=samplerate, data_shape=data_shape, verbose=args.verbose,
+                                 **cfg.raw, **cfg.spectrogram)
 
 
 if __name__ == "__main__":

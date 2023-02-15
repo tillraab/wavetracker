@@ -8,10 +8,12 @@ from IPython import embed
 
 class Configuration(object):
 
-    def __init__(self, folder: str = '.',
+    def __init__(self, folder: str = None,
                  file: str = None,
                  verbose: int = 0
                  ) -> None:
+        if folder == None:
+            folder = '.'
         self.file = file
         self.verbose = verbose
         if not file:
@@ -22,6 +24,8 @@ class Configuration(object):
         self.basic = {}
         self.spectrogram = {}
         self.raw = {}
+
+        if self.verbose >= 1: print(f'{"Config file":^25}: {os.path.realpath(self.file)}.')
 
         self.yaml = ruamel.yaml.YAML()
         with open(self.file) as f:
