@@ -68,6 +68,7 @@ def main():
                         help='verbosity level. Increase by specifying -v multiple times, or like -vvv')
     parser.add_argument('--cpu', action='store_true', help='analysis using only CPU.')
     args = parser.parse_args()
+    args.folder = os.path.normpath(args.folder)
 
     if args.verbose >= 1: print(f'\n--- Running wavetracker.datahandler ---')
 

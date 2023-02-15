@@ -127,12 +127,14 @@ def create_fine_spec(sum_spec,
                      buffer_spectra=None,
                      fine_spec=None,
                      fine_spec_shape=None,
+                     save_path='.',
                      terminate=False
                      ):
-    fill_spec_str = os.path.join('/home/raab/analysis/fine_specs', os.path.split(folder)[-1], 'fill_spec.npy')
+    #fill_spec_str = os.path.join('/home/raab/analysis/fine_specs', os.path.split(folder)[-1], 'fill_spec.npy')
+    fill_spec_str = os.path.join(save_path, 'fill_spec.npy')
     if not hasattr(fine_spec, '__len__'):
-        if not os.path.exists(os.path.join('/home/raab/analysis/fine_specs', os.path.split(folder)[-1])):
-            os.makedirs(os.path.join('/home/raab/analysis/fine_specs', os.path.split(folder)[-1]))
+        # if not os.path.exists(os.path.join('/home/raab/analysis/fine_specs', os.path.split(folder)[-1])):
+        #     os.makedirs(os.path.join('/home/raab/analysis/fine_specs', os.path.split(folder)[-1]))
         fine_spec = np.memmap(fill_spec_str, dtype='float', mode='w+',
                               shape=(len(sum_spec), len(tmp_times)), order='F')
 
@@ -156,50 +158,13 @@ def create_fine_spec(sum_spec,
 
 
 def pipeline_spectrogram_gpu(dataset, samplerate, data_shape, folder, snippet_size, verbose=0, **kwargs):
-    # create a spectorgram of the whole recording
-    get_sparse_spec = True
-    sparse_spectra = None
-    x_borders, y_borders = None, None
+    ### Class __init__ ###
+    save_path = list(folder.split(os.sep))
+    save_path.insert(-1, 'derived_data')
+    save_path = os.sep.join(save_path)
+    if not os.path.exists(os.path.join(save_path, os.path.split(folder)[-1])):
+        os.makedirs(os.path.join(save_path, os.path.split(folder)[-1]))
 
-    get_fine_spec = True
-    buffer_spectra = None
-    fine_spec = None
-    fine_spec_shape = None
-    terminate = False
-
-    times = np.array([])
-
-    step, noverlap = get_step_and_overlap(**kwargs)
-    for enu, data in enumerate(dataset):
-        result, spec_freqs, spec_times = tensorflow_spec(tf.transpose(data), samplerate=samplerate, verbose=verbose,
-                                                         step=step, **kwargs)
-        tmp_times = spec_times + enu * snippet_size / samplerate
-        sum_spec = np.swapaxes(np.sum(result, axis=0), 0, 1)
-
-        times = np.concatenate((times, tmp_times))
-
-        if get_sparse_spec:
-            sparse_spectra, x_borders, y_borders = \
-                create_plotable_spec(sum_spec, spec_freqs, tmp_times, 0, data_shape[0]/samplerate,
-                                     sparse_spectra, x_borders, y_borders, min_freq=0, max_freq=2000)
-
-        if get_fine_spec:
-            if data.shape[0] // snippet_size * snippet_size == enu * snippet_size: terminate = True
-
-            fine_spec, buffer_spectra, fine_spec_shape = create_fine_spec(
-                sum_spec, tmp_times, folder, buffer_spectra=buffer_spectra, fine_spec=fine_spec,
-                fine_spec_shape=fine_spec_shape, terminate=terminate)
-
-            if terminate:
-                np.save(os.path.join('/home/raab/analysis/fine_specs', os.path.split(folder)[-1],
-                                     'fine_spec_shape.npy'), fine_spec_shape)
-                np.save(os.path.join('/home/raab/analysis/fine_specs', os.path.split(folder)[-1],
-                                     'fine_times.npy'), times)
-                np.save(os.path.join('/home/raab/analysis/fine_specs', os.path.split(folder)[-1],
-                                     'fine_freqs.npy'), spec_freqs)
-
-
-def pipeline_spectrogram_cpu(data, samplerate, data_shape, folder, nfft, snippet_size, channels, verbose=0, **kwargs):
     get_sparse_spec = False
     sparse_spectra = None
     x_borders, y_borders = None, None
@@ -212,9 +177,63 @@ def pipeline_spectrogram_cpu(data, samplerate, data_shape, folder, nfft, snippet
 
     times = np.array([])
 
-    if verbose >=1:  print(f'{"Spectrogram (CPU)":^25}: fine spec: {get_fine_spec}; plotable spec: {get_sparse_spec}')
+    step, noverlap = get_step_and_overlap(**kwargs)
+    ########################
+    if verbose >=1:  print(f'{"Spectrogram (GPU)":^25}: fine spec: {get_fine_spec}; plotable spec: {get_sparse_spec}')
+
+    itter_count = 0
+    # for enu, data in enumerate(dataset):
+    for data in tqdm(dataset, desc="File analysis."):
+        result, spec_freqs, spec_times = tensorflow_spec(tf.transpose(data), samplerate=samplerate, verbose=verbose,
+                                                         step=step, **kwargs)
+        tmp_times = spec_times + itter_count * snippet_size / samplerate
+        sum_spec = np.swapaxes(np.sum(result, axis=0), 0, 1)
+
+        times = np.concatenate((times, tmp_times))
+
+        if get_sparse_spec:
+            sparse_spectra, x_borders, y_borders = \
+                create_plotable_spec(sum_spec, spec_freqs, tmp_times, 0, data_shape[0]/samplerate,
+                                     sparse_spectra, x_borders, y_borders, min_freq=0, max_freq=2000)
+
+        if get_fine_spec:
+            if data.shape[0] // snippet_size * snippet_size == itter_count * snippet_size: terminate = True
+
+            fine_spec, buffer_spectra, fine_spec_shape = create_fine_spec(
+                sum_spec, tmp_times, folder, buffer_spectra=buffer_spectra, fine_spec=fine_spec,
+                fine_spec_shape=fine_spec_shape, save_path=save_path, terminate=terminate)
+
+            if terminate:
+                np.save(os.path.join(save_path, 'fine_spec_shape.npy'), fine_spec_shape)
+                np.save(os.path.join(save_path, 'fine_times.npy'), times)
+                np.save(os.path.join(save_path, 'fine_freqs.npy'), spec_freqs)
+
+        itter_count += 1
+
+def pipeline_spectrogram_cpu(data, samplerate, data_shape, folder, nfft, snippet_size, channels, verbose=0, **kwargs):
+    ### Class __ini__ ###
+    save_path = list(folder.split(os.sep))
+    save_path.insert(-1, 'derived_data')
+    save_path = os.sep.join(save_path)
+    if not os.path.exists(os.path.join(save_path, os.path.split(folder)[-1])):
+        os.makedirs(os.path.join(save_path, os.path.split(folder)[-1]))
+
+    get_sparse_spec = False
+    sparse_spectra = None
+    x_borders, y_borders = None, None
+
+    get_fine_spec = True
+    buffer_spectra = None
+    fine_spec = None
+    fine_spec_shape = None
+    terminate = False
+
+    times = np.array([])
 
     step, noverlap = get_step_and_overlap(nfft=nfft, **kwargs)
+    ###########################################
+
+    if verbose >=1:  print(f'{"Spectrogram (CPU)":^25}: fine spec: {get_fine_spec}; plotable spec: {get_sparse_spec}')
 
     core_count = multiprocessing.cpu_count()
     channel_list = np.arange(data.channels) if channels == -1 else np.arange(channels)
@@ -247,15 +266,12 @@ def pipeline_spectrogram_cpu(data, samplerate, data_shape, folder, nfft, snippet
 
             fine_spec, buffer_spectra, fine_spec_shape = create_fine_spec(
                 sum_spec, tmp_times, folder, buffer_spectra=buffer_spectra, fine_spec=fine_spec,
-                fine_spec_shape=fine_spec_shape, terminate=terminate)
+                fine_spec_shape=fine_spec_shape, save_path=save_path, terminate=terminate)
 
             if terminate:
-                np.save(os.path.join('/home/raab/analysis/fine_specs', os.path.split(folder)[-1],
-                                     'fine_spec_shape.npy'), fine_spec_shape)
-                np.save(os.path.join('/home/raab/analysis/fine_specs', os.path.split(folder)[-1],
-                                     'fine_times.npy'), times)
-                np.save(os.path.join('/home/raab/analysis/fine_specs', os.path.split(folder)[-1],
-                                     'fine_freqs.npy'), spec_freqs)
+                np.save(os.path.join(save_path, 'fine_spec_shape.npy'), fine_spec_shape)
+                np.save(os.path.join(save_path, 'fine_times.npy'), times)
+                np.save(os.path.join(save_path, 'fine_freqs.npy'), spec_freqs)
 
     # Plot fine spec !!! MEMORY ISSUES
     # f1 = np.argmax(spec_freqs > 2000)
