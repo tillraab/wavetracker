@@ -243,12 +243,12 @@ def pipeline_spectrogram_cpu(data, samplerate, data_shape, folder, nfft, snippet
                 f1 = np.argmax(spec_freqs > 2000)
                 plot_freqs = spec_freqs[:f1]
 
-                fig, ax = plt.subplots(1, 1, figsize=(40 / 2.54, 24 / 2.54))
-                ax.pcolormesh(times, plot_freqs, decibel(fine_spec[:f1, :]), cmap='jet')
-                ax.set_title(f'Spectrogram (all channels)')
-                ax.set_xlabel('Time (s)')
-                ax.set_ylabel('Frequency (Hz)')
-                plt.show()
+                # fig, ax = plt.subplots(1, 1, figsize=(40 / 2.54, 24 / 2.54))
+                # ax.pcolormesh(times, plot_freqs, decibel(fine_spec[:f1, :]), cmap='jet')
+                # ax.set_title(f'Spectrogram (all channels)')
+                # ax.set_xlabel('Time (s)')
+                # ax.set_ylabel('Frequency (Hz)')
+                # plt.show()
 
 def main():
     # ToDo: add example dataset to git
