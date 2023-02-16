@@ -165,11 +165,11 @@ def pipeline_spectrogram_gpu(dataset, samplerate, data_shape, folder, snippet_si
     if not os.path.exists(os.path.join(save_path, os.path.split(folder)[-1])):
         os.makedirs(os.path.join(save_path, os.path.split(folder)[-1]))
 
-    get_sparse_spec = True
+    get_sparse_spec = False
     sparse_spectra = None
     x_borders, y_borders = None, None
 
-    get_fine_spec = True
+    get_fine_spec = False
     buffer_spectra = None
     fine_spec = None
     fine_spec_shape = None
@@ -228,7 +228,7 @@ def pipeline_spectrogram_cpu(data, samplerate, data_shape, folder, nfft, snippet
     sparse_spectra = None
     x_borders, y_borders = None, None
 
-    get_fine_spec = True
+    get_fine_spec = False
     buffer_spectra = None
     fine_spec = None
     fine_spec_shape = None
@@ -239,7 +239,7 @@ def pipeline_spectrogram_cpu(data, samplerate, data_shape, folder, nfft, snippet
     step, noverlap = get_step_and_overlap(nfft=nfft, **kwargs)
     ###########################################
 
-    if verbose >=1:  print(f'{"Spectrogram (CPU)":^25}: fine spec: {get_fine_spec}; plotable spec: {get_sparse_spec}')
+    if verbose >=1:  print(f'{"Spectrogram (CPU)":^25}: -- fine spec: {get_fine_spec} -- plotable spec: {get_sparse_spec}')
 
     core_count = multiprocessing.cpu_count()
     channel_list = np.arange(data.channels) if channels == -1 else np.arange(channels)
@@ -297,6 +297,11 @@ def pipeline_spectrogram_cpu(data, samplerate, data_shape, folder, nfft, snippet
     # ax.set_xlabel('Time (s)')
     # ax.set_ylabel('Frequency (Hz)')
     # plt.show()
+
+
+class Spectrogram(object):
+    def __init__(self, **kwargs):
+        pass
 
 
 def main():

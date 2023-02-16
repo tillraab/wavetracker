@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 from IPython import embed
 from .config import Configuration
 from .datahandler import open_raw_data
+from .spectrogram import Spectrogram
 from .signal_tracker import freq_tracking_v5
 
 try:
@@ -18,6 +19,30 @@ try:
 except:
     available_GPU = False
 
+
+class Analysis(object):
+    def __init__(self, cfg, data, samplerate, channels, dataset, data_shape):
+        self.cfg = cfg
+        self.data = data
+        self.samplerate = samplerate
+        self.channels = channels
+        self.dataset = dataset
+        self.data_shape = data_shape
+
+        self.Spectrogram = Spectrogram()
+        pass
+
+    def run(self):
+        if available_GPU:
+            self.pipeline_GPU()
+        else:
+            self.pipeline_CPU()
+
+    def pipeline_GPU(self):
+        pass
+
+    def pipeline_CPU(self):
+        pass
 
 def main():
     example_data = "/home/raab/data/2023-02-09-08_16"
