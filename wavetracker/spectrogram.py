@@ -41,16 +41,16 @@ def tensorflow_spec(data, samplerate, nfft, step, verbose = 1, **kwargs):
     # Run the computation on the GPU
     t0 = time.time()
     with tf.device('GPU:0'):
-        if verbose == 1: print(f'tensor transpose: {time.time() - t0}'); t0 = time.time()
+        # if verbose >= 3: print(f'tensor transpose: {time.time() - t0}'); t0 = time.time()
 
         # Compute the spectrogram using a short-time Fourier transform
         stft = tf.signal.stft(data, frame_length=nfft, frame_step=step, window_fn=tf.signal.hann_window)
-        if verbose == 1: print(f'stft: {time.time() - t0}'); t0 = time.time()
+        # if verbose >= 3: print(f'stft: {time.time() - t0}'); t0 = time.time()
         spec = tf.abs(stft)
-        if verbose == 1: print(f'abs: {time.time() - t0}'); t0 = time.time()
+        # if verbose >= 3: print(f'abs: {time.time() - t0}'); t0 = time.time()
 
         spectra = spec.numpy()
-        if verbose == 1: print(f'result: {time.time() - t0} \n')
+        # if verbose == 1: print(f'result: {time.time() - t0} \n')
 
     freqs = np.fft.fftfreq(nfft, 1 / samplerate)[:int(nfft / 2) + 1]
     freqs[-1] = samplerate / 2
@@ -165,7 +165,7 @@ def pipeline_spectrogram_gpu(dataset, samplerate, data_shape, folder, snippet_si
     if not os.path.exists(os.path.join(save_path, os.path.split(folder)[-1])):
         os.makedirs(os.path.join(save_path, os.path.split(folder)[-1]))
 
-    get_sparse_spec = False
+    get_sparse_spec = True
     sparse_spectra = None
     x_borders, y_borders = None, None
 
@@ -179,11 +179,14 @@ def pipeline_spectrogram_gpu(dataset, samplerate, data_shape, folder, snippet_si
 
     step, noverlap = get_step_and_overlap(**kwargs)
     ########################
-    if verbose >=1:  print(f'{"Spectrogram (GPU)":^25}: fine spec: {get_fine_spec}; plotable spec: {get_sparse_spec}')
+    if verbose >=1:  print(f'{"Spectrogram (GPU)":^25}: -- fine spec: {get_fine_spec} -- plotable spec: {get_sparse_spec}')
 
     itter_count = 0
+    iterations = int(np.ceil(data_shape[0] / snippet_size))
+
+    pbar = tqdm(total=iterations)
     # for enu, data in enumerate(dataset):
-    for data in tqdm(dataset, desc="File analysis."):
+    for data in dataset:
         result, spec_freqs, spec_times = tensorflow_spec(tf.transpose(data), samplerate=samplerate, verbose=verbose,
                                                          step=step, **kwargs)
         tmp_times = spec_times + itter_count * snippet_size / samplerate
@@ -209,6 +212,9 @@ def pipeline_spectrogram_gpu(dataset, samplerate, data_shape, folder, snippet_si
                 np.save(os.path.join(save_path, 'fine_freqs.npy'), spec_freqs)
 
         itter_count += 1
+        pbar.update(1)
+
+    pbar.close()
 
 def pipeline_spectrogram_cpu(data, samplerate, data_shape, folder, nfft, snippet_size, channels, verbose=0, **kwargs):
     ### Class __ini__ ###
@@ -291,6 +297,7 @@ def pipeline_spectrogram_cpu(data, samplerate, data_shape, folder, nfft, snippet
     # ax.set_xlabel('Time (s)')
     # ax.set_ylabel('Frequency (Hz)')
     # plt.show()
+
 
 def main():
     # ToDo: add example dataset to git
