@@ -156,7 +156,6 @@ def create_fine_spec(sum_spec,
     return fine_spec, buffer_spectra, fine_spec_shape
 
 
-
 def pipeline_spectrogram_gpu(dataset, samplerate, data_shape, folder, snippet_size, verbose=0, **kwargs):
     ### Class __init__ ###
     save_path = list(folder.split(os.sep))
@@ -215,6 +214,7 @@ def pipeline_spectrogram_gpu(dataset, samplerate, data_shape, folder, snippet_si
         pbar.update(1)
 
     pbar.close()
+
 
 def pipeline_spectrogram_cpu(data, samplerate, data_shape, folder, nfft, snippet_size, channels, verbose=0, **kwargs):
     ### Class __ini__ ###
@@ -305,8 +305,9 @@ class Spectrogram(object):
         save_path = list(folder.split(os.sep))
         save_path.insert(-1, 'derived_data')
         self.save_path = os.sep.join(save_path)
-        if not os.path.exists(os.path.join(self.save_path, os.path.split(folder)[-1])):
-            os.makedirs(os.path.join(self.save_path, os.path.split(folder)[-1]))
+        if not os.path.exists(self.save_path):
+            os.makedirs(self.save_path)
+
         self.verbose = verbose
         self.kwargs = kwargs
 
@@ -314,8 +315,8 @@ class Spectrogram(object):
         self.snippet_size = snippet_size
         self.nfft = nfft
         self.overlap_frac = overlap_frac
-        self.channels = channels
-        self.channel_list = np.arange(channels)
+        self.channels = data_shape[1] if channels == -1 else channels
+        self.channel_list = np.arange(self.channels)
         self.samplerate = samplerate
         self.data_shape = data_shape
         self.step, self.noverlap = get_step_and_overlap(self.overlap_frac, self.nfft)
@@ -332,12 +333,19 @@ class Spectrogram(object):
 
         # additional tasks
         ### sparse spec
-        self.get_sparse_spec = False
+        self.get_sparse_spec = False # ToDo: check if already existing in save folder
+        if not os.path.exists(os.path.join(self.save_path, 'spec.npy')):
+            self.get_sparse_spec = True
         self.sparse_spectra = None
-        self.x_borders, self.y_borders = None, None
+        self.sparse_time_borders, self.sparse_freq_borders = None, None
+        self.min_freq, self.max_freq = 0, 2000
+        self.monitor_res = (1920, 1080)
 
         ### fine spec
-        self.get_fine_spec = False
+        self.get_fine_spec = False # ToDo: check if already existing in save folder
+        if not os.path.exists(os.path.join(self.save_path, 'fine_spec.npy')):
+            self.get_fine_spec = True
+        self.fine_spec_str = os.path.join(self.save_path, 'fine_spec.npy')
         self.buffer_spectra = None
         self.fine_spec = None
         self.fine_spec_shape = None
@@ -346,6 +354,7 @@ class Spectrogram(object):
         self.gpu = True if available_GPU else False
 
     def snippet_spectrogram(self, data_snippet, i0=None):
+        # ToDo: replave i0 with TIME_SHIFT
         if self.gpu:
             result, self.spec_freqs, spec_times = tensorflow_spec(tf.transpose(data_snippet), samplerate=self.samplerate,
                                                              verbose=self.verbose, step=self.step, nfft = self.nfft,
@@ -360,11 +369,88 @@ class Spectrogram(object):
             self.spec_freqs = a[0][1]
             spec_times = a[0][2]
             pool.terminate()
-            self.tmp_times = spec_times + (i0 / self.samplerate)
+            self.spec_times = spec_times + (i0 / self.samplerate)
             self.sum_spec = np.sum(spectra, axis=0)
 
         self.times = np.concatenate((self.times, self.spec_times))
 
+        if self.get_sparse_spec:
+            self.create_plotable_spec()
+
+        if self.get_fine_spec:
+            self.create_fine_spec()
+
+        if self.terminate:
+            self.save()
+
+
+    def create_plotable_spec(self):
+        f1 = np.argmax(self.spec_freqs > self.max_freq)
+        plot_freqs = self.spec_freqs[:f1]
+        plot_spectra = self.sum_spec[:f1, :]
+
+        if not hasattr(self.sparse_spectra, '__len__'):
+            self.sparse_time_borders = np.linspace(0, self.data_shape[0] / self.samplerate, int(self.monitor_res[0]))
+            self.sparse_freq_borders = np.linspace(self.min_freq, self.max_freq, int(self.monitor_res[1]))
+
+            self.sparse_spectra = np.zeros((len(self.sparse_freq_borders) - 1, len(self.sparse_time_borders) - 1))
+
+            recreate_matrix = False
+            if (self.spec_times[1] - self.spec_times[0]) > (self.sparse_time_borders[1] - self.sparse_time_borders[0]):
+                self.sparse_time_borders = np.linspace(0, self.data_shape[0] / self.samplerate,
+                                                       int((self.data_shape[0] / self.samplerate) //
+                                                           (self.spec_times[1] - self.spec_times[0]) + 1))
+                recreate_matrix = True
+            if (self.spec_freqs[1] - self.spec_freqs[0]) > (self.sparse_freq_borders[1] - self.sparse_freq_borders[0]):
+                recreate_matrix = True
+                self.sparse_freq_borders = np.linspace(self.min_freq, self.max_freq,
+                                                       (self.max_freq - self.min_freq) //
+                                                       (self.spec_freqs[1] - self.spec_freqs[0]) + 1)
+            if recreate_matrix:
+                self.sparse_spectra = np.zeros((len(self.sparse_freq_borders) - 1, len(self.sparse_time_borders) - 1))
+
+        for i in range(len(self.sparse_freq_borders) - 1):
+            for j in range(len(self.sparse_time_borders) - 1):
+                if self.sparse_time_borders[j] > self.spec_times[-1]:
+                    break
+                if self.sparse_time_borders[j + 1] < self.spec_times[0]:
+                    continue
+                t_mask = np.arange(len(self.spec_times))[(self.spec_times >= self.sparse_time_borders[j]) & (self.spec_times < self.sparse_time_borders[j + 1])]
+                f_mask = np.arange(len(plot_spectra))[(plot_freqs >= self.sparse_freq_borders[i]) & (plot_freqs < self.sparse_freq_borders[i + 1])]
+                if len(t_mask) == 0 or len(f_mask) == 0:
+                    continue
+                self.sparse_spectra[i, j] = np.max(plot_spectra[f_mask[:, None], t_mask])
+
+    def create_fine_spec(self):
+        if not hasattr(self.fine_spec, '__len__'):
+            self.fine_spec = np.memmap(self.fine_spec_str, dtype='float', mode='w+',
+                                       shape=(len(self.spec_freqs), len(self.spec_times)), order='F')
+            self.fine_spec[:, :] = self.sum_spec
+            self.fine_spec_shape = np.shape(self.fine_spec)
+        else:
+            if not hasattr(self.buffer_spectra, '__len__'):
+                self.buffer_spectra = self.sum_spec
+            else:
+                self.buffer_spectra = np.append(self.buffer_spectra, self.sum_spec, axis=1)
+            if np.shape(self.buffer_spectra)[1] >= 500 or self.terminate:
+                self.fine_spec = np.memmap(self.fine_spec_str, dtype='float', mode='r+', shape=(
+                    self.fine_spec_shape[0], self.fine_spec_shape[1] + np.shape(self.buffer_spectra)[1]), order='F')
+                self.fine_spec[:, -np.shape(self.buffer_spectra)[1]:] = self.buffer_spectra
+                self.fine_spec_shape = np.shape(self.fine_spec)
+                self.buffer_spectra = np.empty((self.fine_spec_shape[0], 0))
+
+    def save(self):
+        if self.get_sparse_spec:
+            np.save(os.path.join(self.save_path, 'sparse_spectra.npy'), self.sparse_spectra)
+            sparse_time = self.sparse_time_borders[:-1] + np.diff(self.sparse_time_borders) / 2
+            np.save(os.path.join(self.save_path, 'sparse_time.npy'), sparse_time)
+            sparse_freq = self.sparse_freq_borders[:-1] + np.diff(self.sparse_freq_borders) / 2
+            np.save(os.path.join(self.save_path, 'sparse_freq.npy'), sparse_freq)
+
+        if self.get_fine_spec:
+            np.save(os.path.join(self.save_path, 'fine_spec_shape.npy'), self.fine_spec_shape)
+            np.save(os.path.join(self.save_path, 'fine_times.npy'), self.times)
+            np.save(os.path.join(self.save_path, 'fine_freqs.npy'), self.spec_freqs)
 def main():
     # ToDo: add example dataset to git
     example_data = "/home/raab/data/2023-02-09-08_16"
@@ -387,35 +473,59 @@ def main():
     # load data
     data, samplerate, channels, dataset, data_shape = open_raw_data(folder=args.folder, verbose=args.verbose,
                                                                     **cfg.spectrogram)
+    channels = data.channels if channels == -1 else channels
 
     # Spectrogram
     Spec = Spectrogram(args.folder, samplerate, data_shape, verbose=args.verbose, **cfg.raw, **cfg.spectrogram)
 
     if available_GPU:
+        if args.verbose >= 1:  print(f'{"Spectrogram (GPU)":^25}: -- fine spec: {Spec.get_fine_spec} -- plotable spec: {Spec.get_sparse_spec}')
+
         iterations = int(np.ceil(data_shape[0] / Spec.snippet_size))
         pbar = tqdm(total=iterations)
         for snippet_data in dataset:
+            # last run !
+            if data.shape[0] // Spec.snippet_size * Spec.snippet_size == Spec.itter_count * Spec.snippet_size:
+                Spec.terminate = True
+
             Spec.snippet_spectrogram(snippet_data)
+
             Spec.itter_count += 1
             pbar.update(1)
         pbar.close()
 
     elif not available_GPU:
+        if args.verbose >= 1:  print(f'{"Spectrogram (CPU)":^25}: -- fine spec: {Spec.get_fine_spec} -- plotable spec: {Spec.get_sparse_spec}')
         for i0 in tqdm(np.arange(0, data.shape[0], Spec.snippet_size - Spec.noverlap), desc="File analysis."):
+            # last run
+            if data.shape[0] // (Spec.snippet_size - Spec.noverlap) * (Spec.snippet_size - Spec.noverlap) == i0:
+                Spec.terminate = True
+
             snippet_data = [data[i0: i0 + Spec.snippet_size, channel] for channel in Spec.channel_list]
             Spec.snippet_spectrogram(snippet_data, i0=i0)
 
 
-    if available_GPU and not args.cpu:
-        # example how to use gpu pipeline
-        # ToDo: implement and test memmap stuff for GPU
-        pipeline_spectrogram_gpu(dataset, samplerate=samplerate, data_shape=data_shape, verbose=args.verbose, folder=args.folder,
-                                 **cfg.raw, **cfg.spectrogram)
-    else:
-        # example how to use cpu pipeline
-        # ToDo: implement start and stop time
-        pipeline_spectrogram_cpu(data, samplerate=samplerate, data_shape=data_shape, verbose=args.verbose, folder=args.folder,
-                                 **cfg.raw, **cfg.spectrogram)
+    embed()
+    quit()
+
+
+
+
+
+
+
+
+
+    # if available_GPU and not args.cpu:
+    #     # example how to use gpu pipeline
+    #     # ToDo: implement and test memmap stuff for GPU
+    #     pipeline_spectrogram_gpu(dataset, samplerate=samplerate, data_shape=data_shape, verbose=args.verbose, folder=args.folder,
+    #                              **cfg.raw, **cfg.spectrogram)
+    # else:
+    #     # example how to use cpu pipeline
+    #     # ToDo: implement start and stop time
+    #     pipeline_spectrogram_cpu(data, samplerate=samplerate, data_shape=data_shape, verbose=args.verbose, folder=args.folder,
+    #                              **cfg.raw, **cfg.spectrogram)
 
 
 if __name__ == "__main__":

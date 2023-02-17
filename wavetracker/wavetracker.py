@@ -63,6 +63,8 @@ def main():
     # load data
     data, samplerate, channels, dataset, data_shape = open_raw_data(folder=args.folder, verbose=args.verbose,
                                                                     **cfg.spectrogram)
+    embed()
+    quit()
 
     # compute spectrograms
     if available_GPU:
