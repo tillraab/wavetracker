@@ -300,9 +300,70 @@ def pipeline_spectrogram_cpu(data, samplerate, data_shape, folder, nfft, snippet
 
 
 class Spectrogram(object):
-    def __init__(self, **kwargs):
-        pass
+    def __init__(self, folder, samplerate, data_shape, snippet_size, nfft, overlap_frac, channels, verbose, **kwargs):
+        # meta parameters
+        save_path = list(folder.split(os.sep))
+        save_path.insert(-1, 'derived_data')
+        self.save_path = os.sep.join(save_path)
+        if not os.path.exists(os.path.join(self.save_path, os.path.split(folder)[-1])):
+            os.makedirs(os.path.join(self.save_path, os.path.split(folder)[-1]))
+        self.verbose = verbose
+        self.kwargs = kwargs
 
+        # spectrogram parameters
+        self.snippet_size = snippet_size
+        self.nfft = nfft
+        self.overlap_frac = overlap_frac
+        self.channels = channels
+        self.channel_list = np.arange(channels)
+        self.samplerate = samplerate
+        self.data_shape = data_shape
+        self.step, self.noverlap = get_step_and_overlap(self.overlap_frac, self.nfft)
+
+        self.core_count = multiprocessing.cpu_count()
+        self.partial_func = partial(mlab_spec, samplerate=self.samplerate, nfft=self.nfft, noverlap=self.noverlap)
+
+        # output
+        self.itter_count = 0
+        self.times = np.array([])
+        self.sum_spec = None
+        self.spec_times = None
+        self.spec_freqs = None
+
+        # additional tasks
+        ### sparse spec
+        self.get_sparse_spec = False
+        self.sparse_spectra = None
+        self.x_borders, self.y_borders = None, None
+
+        ### fine spec
+        self.get_fine_spec = False
+        self.buffer_spectra = None
+        self.fine_spec = None
+        self.fine_spec_shape = None
+        self.terminate = False
+
+        self.gpu = True if available_GPU else False
+
+    def snippet_spectrogram(self, data_snippet, i0=None):
+        if self.gpu:
+            result, self.spec_freqs, spec_times = tensorflow_spec(tf.transpose(data_snippet), samplerate=self.samplerate,
+                                                             verbose=self.verbose, step=self.step, nfft = self.nfft,
+                                                             **self.kwargs)
+            self.sum_spec = np.swapaxes(np.sum(result, axis=0), 0, 1)
+            self.spec_times = spec_times + self.itter_count * self.snippet_size / self.samplerate
+            self.itter_count += 1
+        else:
+            pool = multiprocessing.Pool(self.core_count - 1)
+            a = pool.map(self.partial_func, data_snippet)  # ret: spec, freq, time
+            spectra = [a[channel][0] for channel in range(len(a))]
+            self.spec_freqs = a[0][1]
+            spec_times = a[0][2]
+            pool.terminate()
+            self.tmp_times = spec_times + (i0 / self.samplerate)
+            self.sum_spec = np.sum(spectra, axis=0)
+
+        self.times = np.concatenate((self.times, self.spec_times))
 
 def main():
     # ToDo: add example dataset to git
@@ -326,6 +387,24 @@ def main():
     # load data
     data, samplerate, channels, dataset, data_shape = open_raw_data(folder=args.folder, verbose=args.verbose,
                                                                     **cfg.spectrogram)
+
+    # Spectrogram
+    Spec = Spectrogram(args.folder, samplerate, data_shape, verbose=args.verbose, **cfg.raw, **cfg.spectrogram)
+
+    if available_GPU:
+        iterations = int(np.ceil(data_shape[0] / Spec.snippet_size))
+        pbar = tqdm(total=iterations)
+        for snippet_data in dataset:
+            Spec.snippet_spectrogram(snippet_data)
+            Spec.itter_count += 1
+            pbar.update(1)
+        pbar.close()
+
+    elif not available_GPU:
+        for i0 in tqdm(np.arange(0, data.shape[0], Spec.snippet_size - Spec.noverlap), desc="File analysis."):
+            snippet_data = [data[i0: i0 + Spec.snippet_size, channel] for channel in Spec.channel_list]
+            Spec.snippet_spectrogram(snippet_data, i0=i0)
+
 
     if available_GPU and not args.cpu:
         # example how to use gpu pipeline
