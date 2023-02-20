@@ -300,7 +300,8 @@ def pipeline_spectrogram_cpu(data, samplerate, data_shape, folder, nfft, snippet
 
 
 class Spectrogram(object):
-    def __init__(self, folder, samplerate, data_shape, snippet_size, nfft, overlap_frac, channels, verbose, **kwargs):
+    def __init__(self, folder, samplerate, data_shape, snippet_size, nfft, overlap_frac, channels, verbose, gpu_use,
+                 core_count = None, **kwargs):
         # meta parameters
         save_path = list(folder.split(os.sep))
         save_path.insert(-1, 'derived_data')
@@ -321,7 +322,7 @@ class Spectrogram(object):
         self.data_shape = data_shape
         self.step, self.noverlap = get_step_and_overlap(self.overlap_frac, self.nfft)
 
-        self.core_count = multiprocessing.cpu_count()
+        self.core_count = multiprocessing.cpu_count() if not core_count else core_count
         self.partial_func = partial(mlab_spec, samplerate=self.samplerate, nfft=self.nfft, noverlap=self.noverlap)
 
         # output
@@ -334,7 +335,7 @@ class Spectrogram(object):
         # additional tasks
         ### sparse spec
         self.get_sparse_spec = False # ToDo: check if already existing in save folder
-        if not os.path.exists(os.path.join(self.save_path, 'spec.npy')):
+        if not os.path.exists(os.path.join(self.save_path, 'sparse_spectra.npy')):
             self.get_sparse_spec = True
         self.sparse_spectra = None
         self.sparse_time_borders, self.sparse_freq_borders = None, None
@@ -351,27 +352,30 @@ class Spectrogram(object):
         self.fine_spec_shape = None
         self.terminate = False
 
-        self.gpu = True if available_GPU else False
+        self.gpu = gpu_use
+        # self.gpu = True if available_GPU else False
 
-    def snippet_spectrogram(self, data_snippet, i0=None):
-        # ToDo: replave i0 with TIME_SHIFT
+    def snippet_spectrogram(self, data_snippet, snipptet_t0):
         if self.gpu:
-            result, self.spec_freqs, spec_times = tensorflow_spec(tf.transpose(data_snippet), samplerate=self.samplerate,
+            self.spec, self.spec_freqs, spec_times = tensorflow_spec(tf.transpose(data_snippet), samplerate=self.samplerate,
                                                              verbose=self.verbose, step=self.step, nfft = self.nfft,
                                                              **self.kwargs)
-            self.sum_spec = np.swapaxes(np.sum(result, axis=0), 0, 1)
-            self.spec_times = spec_times + self.itter_count * self.snippet_size / self.samplerate
+            self.spec = np.swapaxes(self.spec, 1, 2)
+            self.sum_spec = np.sum(self.spec, axis=0)
+            # self.spec_times = spec_times + self.itter_count * self.snippet_size / self.samplerate
+            # self.spec_times = spec_times + snipptet_t0
             self.itter_count += 1
         else:
             pool = multiprocessing.Pool(self.core_count - 1)
             a = pool.map(self.partial_func, data_snippet)  # ret: spec, freq, time
-            spectra = [a[channel][0] for channel in range(len(a))]
+            self.spec = [a[channel][0] for channel in range(len(a))]
             self.spec_freqs = a[0][1]
             spec_times = a[0][2]
             pool.terminate()
-            self.spec_times = spec_times + (i0 / self.samplerate)
-            self.sum_spec = np.sum(spectra, axis=0)
+            # self.spec_times = spec_times + (i0 / self.samplerate)
+            self.sum_spec = np.sum(self.spec, axis=0)
 
+        self.spec_times = spec_times + snipptet_t0
         self.times = np.concatenate((self.times, self.spec_times))
 
         if self.get_sparse_spec:
@@ -460,10 +464,13 @@ def main():
     parser.add_argument('-v', '--verbose', action='count', dest='verbose', default=0,
                         help='verbosity level. Increase by specifying -v multiple times, or like -vvv')
     parser.add_argument('--cpu', action='store_true', help='analysis using only CPU.')
+    parser.add_argument('-r', '--renew', action='store_true', help='redo all analysis; dismiss pre-saved files.')
     args = parser.parse_args()
     args.folder = os.path.normpath(args.folder)
 
     if args.verbose >= 1: print(f'\n--- Running wavetracker.spectrogram ---')
+
+    if args.verbose >= 1: print(f'{"Hardware used":^25}: {"GPU" if not (args.cpu and available_GPU) else "CPU"}')
 
     if args.verbose < 1: tqdm.__init__ = partialmethod(tqdm.__init__, disable=True)
 
@@ -473,36 +480,38 @@ def main():
     # load data
     data, samplerate, channels, dataset, data_shape = open_raw_data(folder=args.folder, verbose=args.verbose,
                                                                     **cfg.spectrogram)
-    channels = data.channels if channels == -1 else channels
 
     # Spectrogram
-    Spec = Spectrogram(args.folder, samplerate, data_shape, verbose=args.verbose, **cfg.raw, **cfg.spectrogram)
+    Spec = Spectrogram(args.folder, samplerate, data_shape, verbose=args.verbose,
+                       gpu_use=not args.cpu and available_GPU, **cfg.raw, **cfg.spectrogram)
+    if args.renew:
+        Spec.get_sparse_spec, Spec.get_fine_spec = True, True
 
-    if available_GPU:
-        if args.verbose >= 1:  print(f'{"Spectrogram (GPU)":^25}: -- fine spec: {Spec.get_fine_spec} -- plotable spec: {Spec.get_sparse_spec}')
+    if available_GPU and not args.cpu:
+        if args.verbose >= 1:print(f'{"Spectrogram (GPU)":^25}: -- fine spec: {Spec.get_fine_spec} -- plotable spec: {Spec.get_sparse_spec}')
 
         iterations = int(np.ceil(data_shape[0] / Spec.snippet_size))
         pbar = tqdm(total=iterations)
         for snippet_data in dataset:
             # last run !
-            if data.shape[0] // Spec.snippet_size * Spec.snippet_size == Spec.itter_count * Spec.snippet_size:
+            snippet_t0 = Spec.itter_count * Spec.snippet_size / samplerate
+            if data.shape[0] // Spec.snippet_size == Spec.itter_count:
                 Spec.terminate = True
 
-            Spec.snippet_spectrogram(snippet_data)
-
-            Spec.itter_count += 1
+            Spec.snippet_spectrogram(snippet_data, snipptet_t0=snippet_t0)
             pbar.update(1)
         pbar.close()
 
-    elif not available_GPU:
-        if args.verbose >= 1:  print(f'{"Spectrogram (CPU)":^25}: -- fine spec: {Spec.get_fine_spec} -- plotable spec: {Spec.get_sparse_spec}')
+    else:
+        if args.verbose >= 1: print(f'{"Spectrogram (CPU)":^25}: -- fine spec: {Spec.get_fine_spec} -- plotable spec: {Spec.get_sparse_spec}')
         for i0 in tqdm(np.arange(0, data.shape[0], Spec.snippet_size - Spec.noverlap), desc="File analysis."):
-            # last run
+            snippet_t0 = i0 / samplerate
+
             if data.shape[0] // (Spec.snippet_size - Spec.noverlap) * (Spec.snippet_size - Spec.noverlap) == i0:
                 Spec.terminate = True
 
             snippet_data = [data[i0: i0 + Spec.snippet_size, channel] for channel in Spec.channel_list]
-            Spec.snippet_spectrogram(snippet_data, i0=i0)
+            Spec.snippet_spectrogram(snippet_data, snipptet_t0=snippet_t0)
 
 
     embed()

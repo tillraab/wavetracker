@@ -13,3 +13,18 @@ spectrogram:
   nfft: 32768 # 2**15
   overlap_frac: 0.9
 
+harmonic_groups:
+  low_threshold: 0.
+  high_threshold: 0.
+  low_thresh_factor: 6.0
+  high_thresh_factor: 10.0
+  freq_tol_fac: 1.
+  max_freq_tol: 1.
+  mains_freq: 50.
+  mains_freq_tol: 1.
+  min_freq: 300.
+  max_freq: 1000.
+  max_db_diff: 20.
+  max_divisor: 2
+  min_group_size: 2
+
