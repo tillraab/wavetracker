@@ -368,7 +368,7 @@ class Spectrogram(object):
         else:
             pool = multiprocessing.Pool(self.core_count - 1)
             a = pool.map(self.partial_func, data_snippet)  # ret: spec, freq, time
-            self.spec = [a[channel][0] for channel in range(len(a))]
+            self.spec = np.array([a[channel][0] for channel in range(len(a))])
             self.spec_freqs = a[0][1]
             spec_times = a[0][2]
             pool.terminate()

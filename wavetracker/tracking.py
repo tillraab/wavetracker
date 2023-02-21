@@ -48,7 +48,7 @@ def reshape_old_data_format(times, fundamentals, signatures, max_dt):
 
 
 def freq_tracking_v6(fund_v, idx_v, sign_v, times, freq_tolerance= 2.5, channels=None, max_dt=10.,
-                     min_freq=200, max_freq=1200, emit = False):
+                     min_freq=200, max_freq=1200, emit = False, **kwargs):
     """
     Sorting algorithm which sorts fundamental EOD frequnecies detected in consecutive powespectra of single or
     multielectrode recordings using frequency difference and frequnency-power amplitude difference on the electodes.
@@ -115,7 +115,7 @@ def freq_tracking_v6(fund_v, idx_v, sign_v, times, freq_tolerance= 2.5, channels
         for each assigned identity the index of the datapoint on which basis the assignement was made.
     """
 
-    def get_tmp_identities(i0_m, i1_m, error_cube, fund_v, idx_v, i, idx_comp_range):
+    def get_tmp_identities(i0_m, i1_m, error_cube, fund_v, idx_v, start_idx, idx_comp_range):
         """
         extract temporal identities for a datasnippted of 2*index compare range of the original tracking algorithm.
         for each data point in the data window finds the best connection within index compare range and, thus connects
@@ -188,7 +188,7 @@ def freq_tracking_v6(fund_v, idx_v, sign_v, times, freq_tolerance= 2.5, channels
 
             # _____ some control functions _____ ###
 
-            if tmp_idx_v[i1_m[layer][idx1]] - i > idx_comp_range * 3:
+            if tmp_idx_v[i1_m[layer][idx1]] - start_idx > idx_comp_range * 3:
                 continue
 
             if np.isnan(tmp_ident_v[i0_m[layer][idx0]]):
@@ -292,7 +292,7 @@ def freq_tracking_v6(fund_v, idx_v, sign_v, times, freq_tolerance= 2.5, channels
 
         return tmp_ident_v_ret, errors_to_v
 
-    def get_a_and_f_error_dist(fund_v, idx_v, sign_v, start_idx, idx_comp_range, min_freq, max_freq):
+    def get_a_and_f_error_dist(fund_v, idx_v, norm_sign_v, start_idx, idx_comp_range, min_freq, max_freq):
         f_error_distribution = []
         a_error_distribution = []
 
@@ -317,13 +317,13 @@ def freq_tracking_v6(fund_v, idx_v, sign_v, times, freq_tolerance= 2.5, channels
                     if fund_v[i1_v[enu1]] < min_freq or fund_v[i1_v[enu1]] > max_freq:
                         continue
                     a_error_distribution.append(np.sqrt(np.sum(
-                        [(sign_v[i0_v[enu0]][k] - sign_v[i1_v[enu1]][k]) ** 2 for k in
-                         range(len(sign_v[i0_v[enu0]]))])))
+                        [(norm_sign_v[i0_v[enu0]][k] - norm_sign_v[i1_v[enu1]][k]) ** 2 for k in
+                         range(len(norm_sign_v[i0_v[enu0]]))])))
                     f_error_distribution.append(np.abs(fund_v[i0_v[enu0]] - fund_v[i1_v[enu1]]))
                     i0s.append(i0_v[enu0])
                     i1s.append(i1_v[enu1])
 
-        return np.array(a_error_distribution), np.array(f_error_distribution), np.array(i0s), np.array(i1s)
+        return np.array(a_error_distribution), np.array(f_error_distribution)
 
     def create_error_cube(i0_m, i1_m, error_cube, cube_app_idx, min_freq, max_freq, update=False):
         if update:
@@ -364,7 +364,7 @@ def freq_tracking_v6(fund_v, idx_v, sign_v, times, freq_tolerance= 2.5, channels
                     if np.abs(fund_v[i0_v[enu0]] - fund_v[i1_v[enu1]]) >= freq_tolerance:  # freq difference to high
                         continue
                     a_error = np.sqrt(
-                        np.sum([(sign_v[i0_v[enu0]][j] - sign_v[i1_v[enu1]][j]) ** 2 for j in range(channels)]))
+                        np.sum([(norm_sign_v[i0_v[enu0]][j] - norm_sign_v[i1_v[enu1]][j]) ** 2 for j in range(channels)]))
                     f_error = np.abs(fund_v[i0_v[enu0]] - fund_v[i1_v[enu1]])
                     t_error = 1. * np.abs(idx_v[i0_v[enu0]] - idx_v[i1_v[enu1]]) / dps
 
@@ -405,7 +405,8 @@ def freq_tracking_v6(fund_v, idx_v, sign_v, times, freq_tolerance= 2.5, channels
 
         already_assigned = []
         for layer, idx0, idx1 in zip(layers[:i_non_nan], idx0s[:i_non_nan], idx1s[:i_non_nan]):
-            idents_to_assigne = p_ident_v[~np.isnan(p_tmp_ident_v) & (p_idx_v > i + idx_comp_range) & (p_idx_v <= i + idx_comp_range * 2)]
+            idents_to_assigne = p_ident_v[~np.isnan(p_tmp_ident_v) & (p_idx_v > start_idx + idx_comp_range) &
+                                          (p_idx_v <= start_idx + idx_comp_range * 2)]
 
             if len(idents_to_assigne[np.isnan(idents_to_assigne)]) == 0:
                 break
@@ -434,10 +435,10 @@ def freq_tracking_v6(fund_v, idx_v, sign_v, times, freq_tolerance= 2.5, channels
             if np.isnan(p_ident_v[p_i0_m[layer][idx0]]):
                 continue
 
-            idxs_i0 = p_idx_v[(p_ident_v == p_ident_v[p_i0_m[layer][idx0]]) & (p_idx_v > i + idx_comp_range) &
-                              (p_idx_v <= i + idx_comp_range * 2)]
+            idxs_i0 = p_idx_v[(p_ident_v == p_ident_v[p_i0_m[layer][idx0]]) & (p_idx_v > start_idx + idx_comp_range) &
+                              (p_idx_v <= start_idx + idx_comp_range * 2)]
             idxs_i1 = p_idx_v[(p_tmp_ident_v == p_tmp_ident_v[p_i1_m[layer][idx1]]) & (np.isnan(p_ident_v)) &
-                              (p_idx_v > i + idx_comp_range) & (p_idx_v <= i + idx_comp_range * 2)]
+                              (p_idx_v > start_idx + idx_comp_range) & (p_idx_v <= start_idx + idx_comp_range * 2)]
 
             if np.any(np.diff(sorted(np.concatenate((idxs_i0, idxs_i1)))) == 0):
                 continue
@@ -448,13 +449,13 @@ def freq_tracking_v6(fund_v, idx_v, sign_v, times, freq_tolerance= 2.5, channels
             already_assigned.append(p_i1_m[layer][idx1])
 
             p_ident_v[(p_tmp_ident_v == p_tmp_ident_v[p_i1_m[layer][idx1]]) &
-                      (np.isnan(p_ident_v)) & (p_idx_v > i + idx_comp_range) &
-                      (p_idx_v <= i + idx_comp_range * 2)] = p_ident_v[p_i0_m[layer][idx0]]
+                      (np.isnan(p_ident_v)) & (p_idx_v > start_idx + idx_comp_range) &
+                      (p_idx_v <= start_idx + idx_comp_range * 2)] = p_ident_v[p_i0_m[layer][idx0]]
 
         for ident in np.unique(p_tmp_ident_v[~np.isnan(p_tmp_ident_v)]):
             if len(p_ident_v[p_tmp_ident_v == ident][~np.isnan(p_ident_v[p_tmp_ident_v == ident])]) == 0:
-                p_ident_v[(p_tmp_ident_v == ident) & (p_idx_v > i + idx_comp_range) & (
-                        p_idx_v <= i + idx_comp_range * 2)] = next_identity
+                p_ident_v[(p_tmp_ident_v == ident) & (p_idx_v > start_idx + idx_comp_range) & (
+                        p_idx_v <= start_idx + idx_comp_range * 2)] = next_identity
                 next_identity += 1
 
         return ident_v, next_identity
@@ -471,37 +472,39 @@ def freq_tracking_v6(fund_v, idx_v, sign_v, times, freq_tolerance= 2.5, channels
 
     ident_v = np.full(len(fund_v), np.nan)
 
-    sign_v = (sign_v - np.min(sign_v, axis=1).reshape(len(sign_v), 1)) / (np.max(sign_v, axis=1).reshape(len(sign_v), 1) - np.min(sign_v, axis=1).reshape(len(sign_v), 1))
+    norm_sign_v = (sign_v - np.min(sign_v, axis=1).reshape(len(sign_v), 1)) / (np.max(sign_v, axis=1).reshape(len(sign_v), 1) - np.min(sign_v, axis=1).reshape(len(sign_v), 1))
 
 
     # start_idx = 0 if not ioi_fti else idx_v[ioi_fti]  # Index Of Interest for temporal identities
+    abs_start_idx = np.min(idx_v)
     start_idx = np.min(idx_v)  # Index Of Interest for temporal identities
 
-    a_error_distribution, f_error_distribution, error_dist_i0s, error_dist_i1s = \
-        get_a_and_f_error_dist(fund_v, idx_v, sign_v, start_idx, idx_comp_range, min_freq, max_freq)
+    a_error_distribution, f_error_distribution = \
+        get_a_and_f_error_dist(fund_v, idx_v, norm_sign_v, abs_start_idx, idx_comp_range, min_freq, max_freq)
 
     error_cube, i0_m, i1_m, cube_app_idx = create_error_cube(i0_m=None, i1_m=None, error_cube=None, min_freq=min_freq,
                                                              max_freq=max_freq, cube_app_idx=None)
 
     next_identity = 0
 
-    # for i in tqdm(np.arange(len(fundamentals)), desc='tracking'):
-    for i in tqdm(np.arange(np.max(idx_v)+1), desc='tracking'):
+
+    # for i in tqdm(np.arange(np.max(idx_v)+1), desc='tracking'):
+    for start_idx in tqdm(np.arange(np.min(idx_v), np.max(idx_v)+1), desc='tracking'):
         # if emit == True:
         #     Emit.progress.emit(i / len(fundamentals) * 100)
 
         if len(np.hstack(i0_m)) == 0 or len(np.hstack(i1_m)) == 0:
             error_cube, i0_m, i1_m, cube_app_idx = create_error_cube(i0_m, i1_m, error_cube, cube_app_idx, min_freq, max_freq, update=True)
-            start_idx += 1
+            # start_idx += 1
             continue
 
-        if i % idx_comp_range == 0:  # next total sorting step
+        if (abs_start_idx - start_idx) % idx_comp_range == 0:  # next total sorting step
 
-            tmp_ident_v, errors_to_v = get_tmp_identities(i0_m, i1_m, error_cube, fund_v, idx_v, i, idx_comp_range)
+            tmp_ident_v, errors_to_v = get_tmp_identities(i0_m, i1_m, error_cube, fund_v, idx_v, start_idx, idx_comp_range)
 
-            if i == 0: # initial assignment of tmp_identities
+            if abs_start_idx - start_idx == 0: # initial assignment of tmp_identities
                 for ident in np.unique(tmp_ident_v[~np.isnan(tmp_ident_v)]):
-                    ident_v[(tmp_ident_v == ident) & (idx_v <= i + idx_comp_range)] = next_identity
+                    ident_v[(tmp_ident_v == ident) & (idx_v <= start_idx + idx_comp_range)] = next_identity
                     next_identity += 1
 
             # assing tmp identities ##################################
@@ -510,7 +513,7 @@ def freq_tracking_v6(fund_v, idx_v, sign_v, times, freq_tolerance= 2.5, channels
 
         error_cube, i0_m, i1_m, cube_app_idx = create_error_cube(i0_m, i1_m, error_cube, cube_app_idx, min_freq, max_freq,
                                                                  update=True)
-        start_idx += 1
+        # start_idx += 1
 
     return ident_v
 
