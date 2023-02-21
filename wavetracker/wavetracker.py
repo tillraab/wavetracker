@@ -2,6 +2,7 @@ import sys
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import argparse
+import time
 import multiprocessing
 import threading
 import queue
@@ -13,7 +14,7 @@ from tqdm import tqdm
 from .config import Configuration
 from .datahandler import open_raw_data
 from .spectrogram import Spectrogram
-from .signal_tracker import freq_tracking_v5
+from .tracking import freq_tracking_v6
 
 from thunderfish.harmonics import harmonic_groups, fundamental_freqs
 from thunderfish.powerspectrum import decibel
@@ -50,7 +51,26 @@ class Analysis_pipeline(object):
 
         self.Spec = Spectrogram(self.folder, self.samplerate, self.data_shape, verbose=verbose,
                                 gpu_use=gpu_use, **cfg.raw, **cfg.spectrogram)
+
+        # out
+        self._fund_v = []
+        self._idx_v = []
+        self._sign_v = []
+        self.ident_v = []
+        self.times = []
         pass
+
+    @property
+    def fund_v(self):
+        return np.array(self._fund_v)
+
+    @property
+    def idx_v(self):
+        return np.array(self._idx_v)
+
+    @property
+    def sign_v(self):
+        return np.array(self._sign_v)
 
     def run(self):
         if self.gpu_use:
@@ -58,21 +78,24 @@ class Analysis_pipeline(object):
         else:
             self.pipeline_CPU()
 
+        # self.ident_v = freq_tracking_v6(self._fund_v, self._idx_v, self._sign_v, self.times, channels=self.channels)
+        self.ident_v = freq_tracking_v6(self._fund_v, self._idx_v, self._sign_v, self.times)
+
+
     def pipeline_GPU(self):
         if self.verbose >= 1: print(f'{"Spectrogram (GPU)":^25}: -- fine spec: '
                                     f'{self.Spec.get_fine_spec} -- plotable spec: {self.Spec.get_sparse_spec}')
 
         iterations = int(np.ceil(self.data_shape[0] / self.Spec.snippet_size))
         pbar = tqdm(total=iterations)
-        for snippet_data in self.dataset:
+        for enu, snippet_data in enumerate(self.dataset):
             snippet_t0 = self.Spec.itter_count * self.Spec.snippet_size / self.samplerate
             if self.data.shape[0] // self.Spec.snippet_size == self.Spec.itter_count:
                 self.Spec.terminate = True
 
+            # t0 = time.time()
             self.Spec.snippet_spectrogram(snippet_data, snipptet_t0=snippet_t0)
-            # csum_spec = np.copy(self.Spec.sum_spec)
-            # cspec_times = np.copy(self.Spec.spec_times)
-            # cspec_freqs = np.copy(self.Spec.spec_freqs)
+            # print(f'Spec for snippted: {time.time() - t0}s'); t0 = time.time()
 
             partial_harmonic_groups = partial(harmonic_groups, self.Spec.spec_freqs, **self.cfg.harmonic_groups)
             pool = multiprocessing.Pool(self.core_count - 1)
@@ -81,24 +104,30 @@ class Analysis_pipeline(object):
             groups_per_time = [a[groups][0] for groups in range(len(a))]
             tmp_fundamentals = pool.map(fundamental_freqs, groups_per_time)
             pool.terminate()
+            # print(f'Harmonic groups: {time.time() - t0}s'); t0 = time.time()
 
-            idx_0 = len(self.Spec.times) - len(self.Spec.spec_times)
-            tmp_idx_v = np.array(np.hstack([np.ones(len(f)) * (enu+idx_0) for enu, f in enumerate(tmp_fundamentals)]), dtype=int)
             tmp_fund_v = np.hstack(tmp_fundamentals)
+            tmp_idx_v = np.array(np.hstack([np.ones(len(f)) * enu for enu, f in enumerate(tmp_fundamentals)]), dtype=int)
 
-
-            f_idx = np.argmin(np.abs(np.subtract(*np.meshgrid(self.Spec.spec_freqs, tmp_fund_v))), axis=1)
+            f_idx = [np.argmin(np.abs(self.Spec.spec_freqs - f)) for i in range(len(tmp_fundamentals)) for f in tmp_fundamentals[i]]
             tmp_sign_v = self.Spec.spec[:, f_idx, tmp_idx_v].transpose()
 
-            # f_idx = np.array([np.argmin(np.abs(self.Spec.spec_freqs - f)) for f in fundamentals])
-            embed()
-            quit()
+            idx_0 = len(self.Spec.times) - len(self.Spec.spec_times)
 
+            self._fund_v.extend(tmp_fund_v)
+            self._idx_v.extend(tmp_idx_v + idx_0)
+            self._sign_v.extend(tmp_sign_v)
 
-            # embed()
-            # quit()
+            if enu >= 3:
+                break
+
             pbar.update(1)
+        self.times = self.Spec.times
+        self._fund_v = np.array(self._fund_v)
+        self._idx_v = np.array(self._idx_v)
+        self._sign_v = np.array(self._sign_v)
         pbar.close()
+
 
     def pipeline_CPU(self):
         if self.verbose >= 1: print(f'{"Spectrogram (CPU)":^25}: -- fine spec: '
@@ -122,8 +151,12 @@ def main():
                         help='verbosity level. Increase by specifying -v multiple times, or like -vvv')
     parser.add_argument('--cpu', action='store_true', help='analysis using only CPU.')
     parser.add_argument('-r', '--renew', action='store_true', help='redo all analysis; dismiss pre-saved files.')
+    parser.add_argument('-l', '--logging', action='store_true', help='store sys.out in log.txt.')
+    parser.add_argument('-n', '--nosave', action='store_true', help='dont save spectrograms')
     args = parser.parse_args()
     args.folder = os.path.normpath(args.folder)
+
+    if args.logging: sys.stdout = open('./log.txt', 'w')
 
     if args.verbose >= 1: print(f'\n--- Running wavetracker.wavetracker ---')
 
@@ -144,7 +177,24 @@ def main():
     if args.renew:
         Analysis.Spec.get_sparse_spec, Analysis.Spec.get_fine_spec = True, True
 
+    if args.nosave:
+        Analysis.Spec.get_sparse_spec, Analysis.Spec.get_fine_spec = False, False
+
     Analysis.run()
+
+    ##########################################
+    fig, ax = plt.subplots(figsize=(20/2.54, 12/2.54))
+    ax.scatter(Analysis.times[Analysis.idx_v], Analysis.fund_v, color='grey', alpha = 0.5)
+    for id in np.unique(Analysis.ident_v[~np.isnan(Analysis.ident_v)]):
+        c = np.random.rand(3)
+        ax.plot(Analysis.times[Analysis.idx_v[Analysis.ident_v == id]], Analysis.fund_v[Analysis.ident_v == id],
+                marker='.', color=c)
+    plt.show()
+    #########################################
+    embed()
+    quit()
+
+    sys.stdout.close()
 
 if __name__ == '__main__':
     main()
