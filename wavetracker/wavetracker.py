@@ -89,7 +89,15 @@ class Analysis_pipeline(object):
 
 
     def extract_snippet_signals(self):
+        # embed()
+        # quit()
+        # harmonic_groups(self.Spec.spec_freqs, )
+
         partial_harmonic_groups = partial(harmonic_groups, self.Spec.spec_freqs, **self.cfg.harmonic_groups)
+        # ToDo: this is for checking the functionality of hg
+        a = partial_harmonic_groups(self.Spec.sum_spec[:, 0])
+        # ToDo: this is for checking the functionality of hg
+
         pool = multiprocessing.Pool(self.core_count - 1)
         a = pool.map(partial_harmonic_groups, self.Spec.sum_spec.transpose())
         # embed()
