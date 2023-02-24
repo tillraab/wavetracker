@@ -124,6 +124,8 @@ class Analysis_pipeline(object):
 
 
     def extract_snippet_signals(self):
+        embed()
+        quit()
         ######################################################################################
 
         # partial_harmonic_groups = partial(harmonic_groups, self.Spec.spec_freqs, **self.cfg.harmonic_groups)
@@ -176,7 +178,7 @@ class Analysis_pipeline(object):
         # # ToDo: this is for checking the functionality of hg
         #
         #
-        # print(f'paralell cpu: {t11-t00:.4f} , gpu: {t1 - t0:.4f}')
+        # print(f'parallel cpu: {t11-t00:.4f} , gpu: {t1 - t0:.4f}')
         #
         # embed()
         # quit()
