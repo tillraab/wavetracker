@@ -168,10 +168,20 @@ def build_harmonic_groups(peak_candidates, freq_tol, max_freq_tol, min_group_siz
     fmaxidx = 0
     for i in range(peak_candidates.shape[0]):
         if peak_candidates[i, 4] == 1:
+            peak_candidates[i, 5] = 1
             if peak_candidates[i, 1] > peak_candidates[fmaxidx, 1]:
                 fmaxidx = i
-    fmax = peak_candidates[fmaxidx:fmaxidx+2, 0]
-    best_group = []
+    fmax = peak_candidates[fmaxidx, 0]
+
+    for i in range(peak_candidates.shape[0]):
+        if peak_candidates[i, 5] == 1:
+            print(peak_candidates[i, 0])
+
+
+
+    # print(peak_candidates[workframe])
+    # print(fmax[0], fmax[1], fmax[2])
+    # best_group = []
     best_value = -1e6
     best_divisor = 0
     best_fzero = 0.0
@@ -181,7 +191,7 @@ def build_harmonic_groups(peak_candidates, freq_tol, max_freq_tol, min_group_siz
 
 @cuda.jit("f8[:,:], f8, f8, f8, f8, f8, f8", device=True)
 def harmonic_groups(peak_candidates, mains_freq, mains_freq_tol, freq_tol, max_freq_tol, min_group_size, max_divisor):
-    # peak_candidates[time, peak no, [freq, peak, count???, trough, good]]
+    # peak_candidates[time, peak no, [freq, peak, count???, trough, good, helper_mask]]
     good_count = 0
     max_idx = peak_candidates.shape[0]
     # print(mains_freq, mains_freq_tol)
@@ -210,7 +220,7 @@ def harmonic_groups(peak_candidates, mains_freq, mains_freq_tol, freq_tol, max_f
         # print(good_count)
         # ToDo: [check freq] implementations
         build_harmonic_groups(peak_candidates, freq_tol, max_freq_tol, min_group_size, max_divisor)
-        good_count -= 1
+        good_count = 0
 
         # r = test(peak_candidates, good_count)
         # print(r)
@@ -297,7 +307,7 @@ def main():
 
     t0 = time.time()
     # all_freqs = cuda.device_array(shape=(g_peaks.shape[0], int(max(np.sum(g_peaks, axis=1))), 5))
-    all_freqs = np.full(shape=(peaks.shape[0], int(np.max(np.sum(peaks, axis=1))), 5), fill_value=math.nan)
+    all_freqs = np.full(shape=(peaks.shape[0], int(np.max(np.sum(peaks, axis=1))), 6), fill_value=math.nan)
     # [t][freq_idx][freq, peak, count???, trough, good]
 
     for i in range(peaks.shape[0]):
