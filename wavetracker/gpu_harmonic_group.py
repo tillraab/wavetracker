@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from IPython import embed
 import numpy as np
 import cupy as cp
-from numba import cuda, jit
+from numba import cuda, jit, float64
 import random
 # try:
 #     from numba import cuda, jit
@@ -166,7 +166,7 @@ def test(peak_candidates, good_count):
 @cuda.jit('f8[:,:], f8, f8, f8, f8', device=True)
 def build_harmonic_groups(peak_candidates, freq_tol, max_freq_tol, min_group_size, max_divisor):
     fmaxidx = 0
-    test_array = cuda.local.array(10, numba.float32)
+    test_array = cuda.local.array(10, float32)
     test_array[0] = 1
     for i in range(peak_candidates.shape[0]):
         if peak_candidates[i, 4] == 1:
