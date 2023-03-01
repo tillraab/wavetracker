@@ -17,9 +17,15 @@ from .tracking import freq_tracking_v6
 
 from thunderfish.harmonics import harmonic_groups, fundamental_freqs
 from thunderfish.powerspectrum import decibel
-
-from numba import jit, cuda
-
+try:
+    from numba import jit, cuda
+except ImportError:
+    class cuda():
+            @classmethod
+            def jit(cls, *args, **kwargs):
+                def decorator_jit(func):
+                    return func
+                return decorator_jit
 
 try:
     import tensorflow as tf
@@ -124,8 +130,6 @@ class Analysis_pipeline(object):
 
 
     def extract_snippet_signals(self):
-        embed()
-        quit()
         ######################################################################################
 
         # partial_harmonic_groups = partial(harmonic_groups, self.Spec.spec_freqs, **self.cfg.harmonic_groups)
@@ -192,6 +196,8 @@ class Analysis_pipeline(object):
         #     self.cfg.harmonic_groups["high_threshold"] = a[0][6]
 
         partial_harmonic_groups = partial(harmonic_groups, self.Spec.spec_freqs, **self.cfg.harmonic_groups)
+        a = partial_harmonic_groups(self.Spec.sum_spec[:, 0]) # TEST
+
         pool = multiprocessing.Pool(self.core_count - 1)
         a = pool.map(partial_harmonic_groups, self.Spec.sum_spec.transpose())
 
@@ -266,6 +272,7 @@ class Analysis_pipeline(object):
 
             t0_hg = time.time()
             self.extract_snippet_signals()
+            print('yay')
             t1_hg = time.time()
             t1_snip = time.time()
             if self.verbose >= 3: print(f'{" ":^25}  Progress {counter / iterations:3.1%} '
