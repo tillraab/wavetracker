@@ -173,31 +173,27 @@ def peak_detekt_coordinater(peaks, troughs, spec, low_th):
 
 ####################################################################
 #3)
-@cuda.jit('f8(f8[:,:], f8)', device=True)
-def test(peak_candidates, good_count):
-    r = 1
-    return r
 
 @cuda.jit(device=True)
-def group_candidate(peak_candidates, freq, divisor, freq_tol, max_freq_tol, fzero, fzero_harmonics, new_group, new_penalties):
+def group_candidate(peak_candidates, freq, divisor, freq_tol, max_freq_tol, fzero, fzero_harmonics, new_group, new_penalties, out):
     # ToDo: issue of device functions: I can alter stuff, but not access it !!!
     # ToDo: I can only send hard code out !!!
-
-
-
-    # 1. find harmonics in good_freqs and adjust fzero accordingly:
-    group_size = min_group_size if divisor <= min_group_size else divisor
-
+    # # 1. find harmonics in good_freqs and adjust fzero accordingly:
+    # group_size = min_group_size if divisor <= min_group_size else divisor
+    #
     fzero = freq
     fzero_harmonics = 1
+    # fzero = 0
 
     good_count = 0
     for i in range(len(peak_candidates)):
         good_count += peak_candidates[i, 4]
+
     if good_count > 0:
         prev_freq = divisor * freq
         breaker = 0
         for h in range(divisor + 1, 2 * min_group_size + 1):
+
             min_df = 1e6
             idx = 0
             for j in range(len(peak_candidates)):
@@ -209,8 +205,10 @@ def group_candidate(peak_candidates, freq, divisor, freq_tol, max_freq_tol, fzer
                 else:
                     pass
             ff = peak_candidates[idx, 0]
+
             if abs(ff/h - fzero) > freq_tol:
                 continue
+
             df = ff - prev_freq
             dh = round(df / fzero)
             fe = abs(df / dh - fzero)
@@ -223,71 +221,74 @@ def group_candidate(peak_candidates, freq, divisor, freq_tol, max_freq_tol, fzer
                 prev_freq = ff
                 fzero_harmonics = h
                 fzero = ff / fzero_harmonics
+            # peak_candidates[h, 5] = 1
 
+        # out[1] = fzero_harmonics
+        # out[2] = prev_freq
+
+            # peak_candidates[h, 5] = 1
     # 2. check fzero:
     # freq might not be in our group anymore, because fzero was adjusted:
-    if abs(freq - fzero) < freq_tol:
-        freqs = cuda.local.array(shape=(min_group_size,), dtype=float64)
-        # next_freq_idx = 0
-        peak_candidates[0, 5] = 0
-        prev_h = 0
-        prev_fe = 0.0
-
-        for h in range(1, min_group_size + 1):
-            penalty = 0
-            i = 0
-            min_df = 1e6
-            for j in range(len(peak_candidates)):
-                if abs(peak_candidates[j, 0]/h - fzero) < min_df:
-                    min_df = abs(peak_candidates[j, 0]/h - fzero)
-                    i = j
-            f = peak_candidates[i, 0]
-            fac = 1.0 if h >= divisor else 2.0
-            fe = abs(f/h - fzero)
-            if fe > fac*max_freq_tol:
-                continue
-            if fe > fac*freq_tol:
-                penalty = (fe - (fac*freq_tol)) / (fac*max_freq_tol - fac*freq_tol)
-
-            if peak_candidates[0, 5] > 0:
-                pf = freqs[peak_candidates[0, 5] - 1]
-                df = f - pf
-                if df < 0.5 * fzero:
-                    if peak_candidates[0, 5] > 0:
-                        pf = freqs[peak_candidates[0, 5]-2]
-                        df = f - pf
-                    else:
-                        pf = 0.0
-                        df = h*fzero
-                dh = math.floor(df/fzero + 0.5)
-                fe = math.fabs(df/dh - fzero)
-                if fe > 2*dh*fac*max_freq_tol:
-                    continue
-                if fe > 2*dh*fac*freq_tol:
-                    penalty = (fe - (dh*fac*freq_tol)) / (2*dh*fac*max_freq_tol - dh*fac*freq_tol)
-            else:
-                fe = 0.0
-
-            if h > prev_h or fe < prev_fe:
-                if prev_h <= 0 and h - prev_h <= 1:
-                    if h == prev_h and peak_candidates[0, 5] > 0:
-                        freqs[peak_candidates[0, 5] - 1] = -1
-                        peak_candidates[0, 5] -= 1
-                    freqs[peak_candidates[0, 5]] = f
-                    peak_candidates[0, 5] = peak_candidates[0, 5] + 1
-
-                    new_group[peak_candidates[0, 5]] = i
-                    new_penalties[peak_candidates[0, 5]] = penalty
-                    # prev_h = h
-                    prev_fe = fe
-
-        # 4. check new group:
-
-        # almost all harmonics in min_group_size required:
+    # if abs(freq - fzero) < freq_tol:
+    #     freqs = cuda.local.array(shape=(min_group_size,), dtype=float64)
+    #     next_freq_idx = 0
+    #     prev_h = 0
+    #     prev_fe = 0.0
+    #
+    #     for h in range(1, min_group_size + 1):
+    #         # next_freq_idx = 0
+    #         penalty = 0
+    #         i = 0
+    #         min_df = 1e6
+    #         for j in range(len(peak_candidates)):
+    #             if abs(peak_candidates[j, 0]/h - fzero) < min_df:
+    #                 min_df = abs(peak_candidates[j, 0]/h - fzero)
+    #                 i = j
+    #         f = peak_candidates[i, 0]
+    #         fac = 1.0 if h >= divisor else 2.0
+    #         fe = abs(f/h - fzero)
+    #         if fe > fac*max_freq_tol:
+    #             continue
+    #         if fe > fac*freq_tol:
+    #             penalty = (fe - (fac*freq_tol)) / (fac*max_freq_tol - fac*freq_tol)
+    #
+    #         if next_freq_idx > 0:
+    #             pf = freqs[next_freq_idx - 1]
+    #             df = f - pf
+    #             if df < 0.5 * fzero:
+    #                 if next_freq_idx > 0:
+    #                     pf = freqs[next_freq_idx-2]
+    #                     df = f - pf
+    #                 else:
+    #                     pf = 0.0
+    #                     df = h*fzero
+    #             dh = math.floor(df/fzero + 0.5)
+    #             fe = math.fabs(df/dh - fzero)
+    #             if fe > 2*dh*fac*max_freq_tol:
+    #                 continue
+    #             if fe > 2*dh*fac*freq_tol:
+    #                 penalty = (fe - (dh*fac*freq_tol)) / (2*dh*fac*max_freq_tol - dh*fac*freq_tol)
+    #         else:
+    #             fe = 0.0
+    # peak_candidates[idx, 5] = 1
+            # if h > prev_h or fe < prev_fe:
+            #     if prev_h <= 0 and h - prev_h <= 1:
+            #         if h == prev_h and next_freq_idx > 0:
+            #             freqs[next_freq_idx - 1] = -1
+            #             next_freq_idx = next_freq_idx - 1
+            #
+            #         freqs[next_freq_idx] = f
+            #         new_group[next_freq_idx+1] = i
+            #         new_penalties[next_freq_idx+1] = penalty
+            #
+            #         next_freq_idx = next_freq_idx + 1
+            #         prev_h = h
+            #         prev_fe = fe
 
 
 @cuda.jit('f8[:,:], f8, f8', device=True)
 def build_harmonic_groups(peak_candidates, freq_tol, max_freq_tol):
+
     fmaxidx = 0
     for i in range(peak_candidates.shape[0]):
         if peak_candidates[i, 4] == 1:
@@ -317,11 +318,11 @@ def build_harmonic_groups(peak_candidates, freq_tol, max_freq_tol):
 
     for divisor in range(1, max_divisor + 1):
         freq = fmax / divisor
-        group_candidate(peak_candidates, freq, divisor, freq_tol, max_freq_tol, fzero, fzero_harmonics, new_group, new_penalties)
-        # peak_candidates[0, 5] = fzero_harmonics
+        out = cuda.local.array(shape=(3,), dtype=float64)
+        group_candidate(peak_candidates, freq, divisor, freq_tol, max_freq_tol, fzero, fzero_harmonics, new_group, new_penalties, out)
+        print(out[0])
 
-
-@cuda.jit("f8[:,:], f8, f8, f8, f8", device=True)
+@cuda.jit("void(f8[:,:], f8, f8, f8, f8)", device=True)
 def harmonic_groups(peak_candidates, mains_freq, mains_freq_tol, freq_tol, max_freq_tol):
     # peak_candidates[time, peak no, [freq, peak, count???, trough, good, helper_mask]]
     good_count = 0
@@ -345,7 +346,6 @@ def harmonic_groups(peak_candidates, mains_freq, mains_freq_tol, freq_tol, max_f
                 good_count -= 1
 
     # print(sum(peak_candidates[:, 4]))
-    # print(good_count)
 
     first = True
     while good_count > 0:
@@ -361,7 +361,7 @@ def harmonic_group_coordinater(peak_candidates, mains_freq, mains_freq_tol, freq
     if i < 1:
         harmonic_groups(peak_candidates[i], mains_freq, mains_freq_tol, freq_tol, max_freq_tol)
 
-    cuda.syncthreads()
+    # cuda.syncthreads()
 
 ####################################################################
 
