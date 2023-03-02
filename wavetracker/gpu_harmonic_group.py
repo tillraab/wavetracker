@@ -228,7 +228,8 @@ def group_candidate(peak_candidates, freq, divisor, freq_tol, max_freq_tol, fzer
     # freq might not be in our group anymore, because fzero was adjusted:
     if abs(freq - fzero) < freq_tol:
         freqs = cuda.local.array(shape=(min_group_size,), dtype=float64)
-        next_freq_idx = 0
+        # next_freq_idx = 0
+        peak_candidates[0, 5] = 0
         prev_h = 0
         prev_fe = 0.0
 
@@ -248,12 +249,12 @@ def group_candidate(peak_candidates, freq, divisor, freq_tol, max_freq_tol, fzer
             if fe > fac*freq_tol:
                 penalty = (fe - (fac*freq_tol)) / (fac*max_freq_tol - fac*freq_tol)
 
-            if next_freq_idx > 0:
-                pf = freqs[next_freq_idx - 1]
+            if peak_candidates[0, 5] > 0:
+                pf = freqs[peak_candidates[0, 5] - 1]
                 df = f - pf
                 if df < 0.5 * fzero:
-                    if next_freq_idx > 0:
-                        pf = freqs[next_freq_idx-2]
+                    if peak_candidates[0, 5] > 0:
+                        pf = freqs[peak_candidates[0, 5]-2]
                         df = f - pf
                     else:
                         pf = 0.0
@@ -269,14 +270,14 @@ def group_candidate(peak_candidates, freq, divisor, freq_tol, max_freq_tol, fzer
 
             if h > prev_h or fe < prev_fe:
                 if prev_h <= 0 and h - prev_h <= 1:
-                    if h == prev_h and next_freq_idx > 0:
-                        freqs[next_freq_idx - 1] = -1
-                        next_freq_idx = next_freq_idx -1
-                    freqs[next_freq_idx] = f
-                    next_freq_idx = next_freq_idx + 1
+                    if h == prev_h and peak_candidates[0, 5] > 0:
+                        freqs[peak_candidates[0, 5] - 1] = -1
+                        peak_candidates[0, 5] -= 1
+                    freqs[peak_candidates[0, 5]] = f
+                    peak_candidates[0, 5] = peak_candidates[0, 5] + 1
 
-                    new_group[next_freq_idx] = i
-                    new_penalties[next_freq_idx] = penalty
+                    new_group[peak_candidates[0, 5]] = i
+                    new_penalties[peak_candidates[0, 5]] = penalty
                     # prev_h = h
                     prev_fe = fe
 
