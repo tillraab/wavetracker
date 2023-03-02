@@ -21,8 +21,23 @@ import random
 #                 return func
 #             return decorator_jit
 #
+
+# min_group_size_glob = 2
+
 from thunderfish.powerspectrum import decibel
 from thunderfish.eventdetection import detect_peaks
+
+def define_globals():
+    global min_group_size
+    min_group_size = 2
+
+    global max_divisor
+    max_divisor = 2
+
+    global breaker
+    breaker = False
+
+define_globals()
 
 ####################################################################
 # 1)
@@ -163,37 +178,150 @@ def test(peak_candidates, good_count):
     r = 1
     return r
 
-@cuda.jit('f8[:,:], f8, f8, f8, f8', device=True)
-def build_harmonic_groups(peak_candidates, freq_tol, max_freq_tol, min_group_size, max_divisor):
+@cuda.jit(device=True)
+def group_candidate(peak_candidates, freq, divisor, freq_tol, max_freq_tol, fzero, fzero_harmonics, new_group, new_penalties):
+    # ToDo: issue of device functions: I can alter stuff, but not access it !!!
+    # ToDo: I can only send hard code out !!!
+
+
+
+    # 1. find harmonics in good_freqs and adjust fzero accordingly:
+    group_size = min_group_size if divisor <= min_group_size else divisor
+
+    fzero = freq
+    fzero_harmonics = 1
+
+    good_count = 0
+    for i in range(len(peak_candidates)):
+        good_count += peak_candidates[i, 4]
+    if good_count > 0:
+        prev_freq = divisor * freq
+        breaker = 0
+        for h in range(divisor + 1, 2 * min_group_size + 1):
+            min_df = 1e6
+            idx = 0
+            for j in range(len(peak_candidates)):
+                if peak_candidates[j, 4] == 0: # TODO: CHECK !!!
+                    continue
+                if abs(peak_candidates[j, 0]/h - fzero) < min_df:
+                    min_df = abs(peak_candidates[j, 0]/h - fzero)
+                    idx = j
+                else:
+                    pass
+            ff = peak_candidates[idx, 0]
+            if abs(ff/h - fzero) > freq_tol:
+                continue
+            df = ff - prev_freq
+            dh = round(df / fzero)
+            fe = abs(df / dh - fzero)
+
+            if fe > 2.0*freq_tol:
+                if h > min_group_size:
+                    breaker = 1
+
+            if breaker == 0:
+                prev_freq = ff
+                fzero_harmonics = h
+                fzero = ff / fzero_harmonics
+
+    # 2. check fzero:
+    # freq might not be in our group anymore, because fzero was adjusted:
+    if abs(freq - fzero) < freq_tol:
+        freqs = cuda.local.array(shape=(min_group_size,), dtype=float64)
+        next_freq_idx = 0
+        prev_h = 0
+        prev_fe = 0.0
+
+        for h in range(1, min_group_size + 1):
+            penalty = 0
+            i = 0
+            min_df = 1e6
+            for j in range(len(peak_candidates)):
+                if abs(peak_candidates[j, 0]/h - fzero) < min_df:
+                    min_df = abs(peak_candidates[j, 0]/h - fzero)
+                    i = j
+            f = peak_candidates[i, 0]
+            fac = 1.0 if h >= divisor else 2.0
+            fe = abs(f/h - fzero)
+            if fe > fac*max_freq_tol:
+                continue
+            if fe > fac*freq_tol:
+                penalty = (fe - (fac*freq_tol)) / (fac*max_freq_tol - fac*freq_tol)
+
+            if next_freq_idx > 0:
+                pf = freqs[next_freq_idx - 1]
+                df = f - pf
+                if df < 0.5 * fzero:
+                    if next_freq_idx > 0:
+                        pf = freqs[next_freq_idx-2]
+                        df = f - pf
+                    else:
+                        pf = 0.0
+                        df = h*fzero
+                dh = math.floor(df/fzero + 0.5)
+                fe = math.fabs(df/dh - fzero)
+                if fe > 2*dh*fac*max_freq_tol:
+                    continue
+                if fe > 2*dh*fac*freq_tol:
+                    penalty = (fe - (dh*fac*freq_tol)) / (2*dh*fac*max_freq_tol - dh*fac*freq_tol)
+            else:
+                fe = 0.0
+
+            if h > prev_h or fe < prev_fe:
+                if prev_h <= 0 and h - prev_h <= 1:
+                    if h == prev_h and next_freq_idx > 0:
+                        freqs[next_freq_idx - 1] = -1
+                        next_freq_idx = next_freq_idx -1
+                    freqs[next_freq_idx] = f
+                    next_freq_idx = next_freq_idx + 1
+
+                    new_group[next_freq_idx] = i
+                    new_penalties[next_freq_idx] = penalty
+                    # prev_h = h
+                    prev_fe = fe
+
+        # 4. check new group:
+
+        # almost all harmonics in min_group_size required:
+
+
+@cuda.jit('f8[:,:], f8, f8', device=True)
+def build_harmonic_groups(peak_candidates, freq_tol, max_freq_tol):
     fmaxidx = 0
-    test_array = cuda.local.array(2, int64)
-    test_array[0] = 1
-    test_array[0] = 2
     for i in range(peak_candidates.shape[0]):
         if peak_candidates[i, 4] == 1:
             peak_candidates[i, 5] = 1
             if peak_candidates[i, 1] > peak_candidates[fmaxidx, 1]:
                 fmaxidx = i
     fmax = peak_candidates[fmaxidx, 0]
+            # print(peak_candidates[i, 0])
 
-    for i in range(peak_candidates.shape[0]):
-        if peak_candidates[i, 5] == 1:
-            print(peak_candidates[i, 0])
+    # container for harmonic groups:
+    # print(min_group_size)
+    d1 = min_group_size if min_group_size >= max_divisor else max_divisor
 
-
-
-    # print(peak_candidates[workframe])
-    # print(fmax[0], fmax[1], fmax[2])
-    # best_group = []
+    best_group = cuda.local.array(shape=(d1,), dtype=float64)
     best_value = -1e6
     best_divisor = 0
     best_fzero = 0.0
     best_fzero_harmonics = 0
 
+    fzero = 0.
+    new_group = cuda.local.array(shape=(d1,), dtype=float64)
+    new_penalties = cuda.local.array(shape=(d1,), dtype=float64)
+    for i in range(len(new_group)):
+        new_group[i] = -1
+        new_group[i] = 1
+    fzero_harmonics = 0
+
+    for divisor in range(1, max_divisor + 1):
+        freq = fmax / divisor
+        group_candidate(peak_candidates, freq, divisor, freq_tol, max_freq_tol, fzero, fzero_harmonics, new_group, new_penalties)
+        # peak_candidates[0, 5] = fzero_harmonics
 
 
-@cuda.jit("f8[:,:], f8, f8, f8, f8, f8, f8", device=True)
-def harmonic_groups(peak_candidates, mains_freq, mains_freq_tol, freq_tol, max_freq_tol, min_group_size, max_divisor):
+@cuda.jit("f8[:,:], f8, f8, f8, f8", device=True)
+def harmonic_groups(peak_candidates, mains_freq, mains_freq_tol, freq_tol, max_freq_tol):
     # peak_candidates[time, peak no, [freq, peak, count???, trough, good, helper_mask]]
     good_count = 0
     max_idx = peak_candidates.shape[0]
@@ -205,9 +333,7 @@ def harmonic_groups(peak_candidates, mains_freq, mains_freq_tol, freq_tol, max_f
             max_idx = i
             break
 
-    # print(max_idx)
     peak_candidates[:, 2] = 0.0
-    # h = max_idx
 
     if mains_freq > 0.0:
         for i in range(max_idx):
@@ -216,29 +342,23 @@ def harmonic_groups(peak_candidates, mains_freq, mains_freq_tol, freq_tol, max_f
             if abs(peak_candidates[i, 0] - round(peak_candidates[i, 0]/mains_freq)*mains_freq) < mains_freq_tol:
                 peak_candidates[i, 4] = 0
                 good_count -= 1
+
+    # print(sum(peak_candidates[:, 4]))
     # print(good_count)
 
     first = True
     while good_count > 0:
         # print(good_count)
         # ToDo: [check freq] implementations
-        build_harmonic_groups(peak_candidates, freq_tol, max_freq_tol, min_group_size, max_divisor)
+        build_harmonic_groups(peak_candidates, freq_tol, max_freq_tol)
         good_count = 0
 
-        # r = test(peak_candidates, good_count)
-        # print(r)
-        # print(peak_candidates[0, 0], good_count)
-        # for i in range(arr):
-        #     print(arr[i])
-        # print(a[0])
-        # break
-
-@cuda.jit("void(f8[:,:,:], f8, f8, f8, f8, f8, f8)")
-def harmonic_group_coordinater(peak_candidates, mains_freq, mains_freq_tol, freq_tol, max_freq_tol, min_group_size, max_divisor):
+@cuda.jit("void(f8[:,:,:], f8, f8, f8, f8)")
+def harmonic_group_coordinater(peak_candidates, mains_freq, mains_freq_tol, freq_tol, max_freq_tol):
     i = cuda.grid(1)
     # if i < peak_candidates.shape[0]:
     if i < 1:
-        harmonic_groups(peak_candidates[i], mains_freq, mains_freq_tol, freq_tol, max_freq_tol, min_group_size, max_divisor)
+        harmonic_groups(peak_candidates[i], mains_freq, mains_freq_tol, freq_tol, max_freq_tol)
 
     cuda.syncthreads()
 
@@ -314,6 +434,7 @@ def main():
     # [t][freq_idx][freq, peak, count???, trough, good]
 
     for i in range(peaks.shape[0]):
+        all_freqs[i, :, 4] = 0
         all_freqs[i, :len(spec_freq[peaks[i] == 1]), 0] = spec_freq[peaks[i] == 1]
         all_freqs[i, :len(spec_freq[peaks[i] == 1]), 1] = log_spec[i][peaks[i] == 1]
         all_freqs[i, :len(spec_freq[peaks[i] == 1]), 3] = log_spec[i][troughs[i] == 1]
@@ -336,8 +457,10 @@ def main():
     main_freqs_tol = 1.
     freq_tol_fac = 1.
     max_freq_tol = 1.
-    min_group_size = 2
-    max_divisor = 2
+    global min_group_size
+    min_group_size = int(2)
+    # min_group_size = int(2)
+    # max_divisor = int(2)
     #################
     delta_f = spec_freq[1] - spec_freq[0]
     freq_tol = delta_f*freq_tol_fac
@@ -345,11 +468,8 @@ def main():
         max_freq_tol = 1.1*freq_tol
 
     g_all_freqs = cuda.to_device(all_freqs)
+    harmonic_group_coordinater[bpg, tpb](g_all_freqs, main_freqs, main_freqs_tol, freq_tol, max_freq_tol)
 
-    harmonic_group_coordinater[bpg, tpb](g_all_freqs, main_freqs, main_freqs_tol, freq_tol, max_freq_tol, min_group_size, max_divisor)
-    # cuda.syncthreads()
-
-    print('yay')
 
     # harmonic_groups(all_freqs[0], 50., 1.)
 
