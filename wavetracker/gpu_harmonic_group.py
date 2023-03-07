@@ -26,6 +26,7 @@ import random
 
 from thunderfish.powerspectrum import decibel
 from thunderfish.eventdetection import detect_peaks
+from thunderfish.eventdetection import detect_peaks_fixed as dpf
 
 def define_globals():
     global min_group_size
@@ -163,7 +164,7 @@ def detect_peaks_fixed(data, peaks, trough, th):
         pass
 
 @cuda.jit('void(f4[:,:], f4[:,:], f4[:,:], f4)')
-def peak_detekt_coordinater(peaks, troughs, spec, low_th):
+def peak_detekt_coordinater(spec, peaks, troughs, low_th):
     i = cuda.grid(1)
     if i < spec.shape[0]:
         detect_peaks_fixed(spec[i], peaks[i], troughs[i], low_th)
@@ -322,6 +323,7 @@ def build_harmonic_groups(peak_candidates, freq_tol, max_freq_tol):
         group_candidate(peak_candidates, freq, divisor, freq_tol, max_freq_tol, fzero, fzero_harmonics, new_group, new_penalties, out)
         print(out[0])
 
+
 @cuda.jit("void(f8[:,:], f8, f8, f8, f8)", device=True)
 def harmonic_groups(peak_candidates, mains_freq, mains_freq_tol, freq_tol, max_freq_tol):
     # peak_candidates[time, peak no, [freq, peak, count???, trough, good, helper_mask]]
@@ -354,6 +356,7 @@ def harmonic_groups(peak_candidates, mains_freq, mains_freq_tol, freq_tol, max_f
         build_harmonic_groups(peak_candidates, freq_tol, max_freq_tol)
         good_count = 0
 
+
 @cuda.jit("void(f8[:,:,:], f8, f8, f8, f8)")
 def harmonic_group_coordinater(peak_candidates, mains_freq, mains_freq_tol, freq_tol, max_freq_tol):
     i = cuda.grid(1)
@@ -364,6 +367,88 @@ def harmonic_group_coordinater(peak_candidates, mains_freq, mains_freq_tol, freq
     # cuda.syncthreads()
 
 ####################################################################
+
+@cuda.jit('void(f4[:], f8[:], f4[:], f4[:], f4[:], f4[:])', device=True)
+def get_group(log_spec, spec_freqs, peaks, troughs, good_peaks, out):
+    max_devisor = 1
+    min_group_size = 2
+    freq_tol_fac = 1.
+    freq_tol = freq_tol_fac * (spec_freqs[1] - spec_freqs[0])
+    print(freq_tol)
+
+    devisor_groups = cuda.local.array(shape=(max_devisor, min_group_size), dtype=int64)
+
+    good_c = 0
+    for i in range(len(good_peaks)):
+        if good_peaks[i] == 1:
+            good_c += 1
+
+    # while good_c > 0:
+    # get best peak
+    fmaxidx = 0
+    for i in range(len(good_peaks)):
+        if good_peaks[i] == 1:
+            if log_spec[i] > log_spec[fmaxidx]:
+                fmaxidx = i
+    fmax = spec_freqs[fmaxidx]
+
+    fzero = fmax
+    fzero_idx = fmaxidx
+
+    # is there someone better at half / a third
+    for devisor in range(1, max_devisor+1):
+        for i in range(len(peaks)):
+            if good_peaks[i] == 1:
+                if math.fabs(spec_freqs[i] - fmax/devisor) < freq_tol:
+                    fzero = spec_freqs[i]
+                    devisor_groups[devisor-1, 0] = i
+                    break
+    print(devisor_groups[0, 0])
+    print(devisor_groups[1, 0])
+    print(devisor_groups[2, 0])
+
+    out[devisor_groups[0, 0]] = 2
+    # good_peaks[fmaxidx] = 0
+
+    print(fmax, fzero)
+    good_c -= 1
+@cuda.jit('void(f4[:], f8[:], f4[:], f4[:], f4[:])', device=True)
+def get_good_peaks(log_spec, spec_freqs, peaks, troughs, good_peaks):
+    high_th = 15.
+    mains_freq = 50.
+    mains_freq_tol = 1.
+
+    pp = 0.
+    p_inx = 0
+    tp = 0.
+    t_inx = 0
+    for i in range(len(peaks)):
+        if peaks[i] == 1:
+            p_inx = i
+            pp = log_spec[i]
+        if troughs[i] == 1:
+            t_inx = i
+            tp = log_spec[i]
+
+        if pp != 0 and tp != 0:
+            if abs(spec_freqs[p_inx] - round(spec_freqs[p_inx] / mains_freq) * mains_freq) < mains_freq_tol:
+                pp = 0.
+                tp = 0.
+            elif log_spec[p_inx] - log_spec[t_inx] > high_th:
+                good_peaks[p_inx] = 1
+                pp = 0.
+                tp = 0.
+@cuda.jit('void(f4[:,:], f8[:], f4[:,:], f4[:,:], f4[:,:], f4[:,:])')
+def hg_coordinater(log_spec, spec_freqs, peaks, troughs, good_peaks, out):
+    i = cuda.grid(1)
+    # if i < log_spec.shape[0]:
+    if i < 1:
+        get_good_peaks(log_spec[i], spec_freqs, peaks[i], troughs[i], good_peaks[i])
+        # cuda.syncthreads()
+        get_group(log_spec[i], spec_freqs, peaks[i], troughs[i], good_peaks[i], out[i])
+    pass
+
+###############################################################################
 
 def harmonic_groups_test_cpu(psd, verbose=0,
                              low_threshold=10, high_threshold=0.0, thresh_bins=100,
@@ -422,7 +507,7 @@ def main():
     bpg = g_spec.shape[0]
     # tpb = 1024
     # bpg = 1000
-    peak_detekt_coordinater[bpg, tpb](g_peaks, g_troughs, g_log_spec, low_threshold)
+    peak_detekt_coordinater[bpg, tpb](g_log_spec, g_peaks, g_troughs, low_threshold)
     # peak_detekt_coordinater[griddim, blockdim](g_peaks, g_log_spec, low_threshold)
 
     peaks = g_peaks.copy_to_host()
@@ -444,21 +529,49 @@ def main():
     # all_freqs[]
 
     # all_freqs[time, peak no, [freq, peak, count???, trough, good]]
-    #############################################################################################
+
+
+
 
     # all_freqs = np.load('all_freqs.npy')
     tpb = 1024
-    bpg = all_freqs.shape[0]
+    bpg = log_spec.shape[0]
+    out = cuda.device_array_like(g_log_spec)
+    g_good_peaks = cuda.device_array_like(peaks)
+    hg_coordinater[bpg, tpb](g_log_spec, g_spec_freq, g_peaks, g_troughs, g_good_peaks, out)
 
+    out_cpu = g_good_peaks.copy_to_host()
+    out2_cpu = out.copy_to_host()
+
+    p, t = dpf(log_spec[0], threshold=low_threshold)
+
+    fig, ax = plt.subplots(2, 1, sharex = 'all')
+    ax[0].plot(spec_freq, log_spec[0])
+    ax[0].plot(spec_freq[peaks[0] == 1], log_spec[0][peaks[0] == 1], 'o', color='k')
+    ax[0].plot(spec_freq[troughs[0] == 1], log_spec[0][troughs[0] == 1], 'o', color='grey')
+    ax[0].plot(spec_freq[out_cpu[0] == 1], log_spec[0][out_cpu[0] == 1], 'o', color='red')
+
+    ax[1].plot(spec_freq, log_spec[0])
+    ax[1].plot(spec_freq[p], log_spec[0][p], 'o', color='k')
+    ax[1].plot(spec_freq[t], log_spec[0][t], 'o', color='grey')
+    ax[1].plot(spec_freq[out2_cpu[0] == 2], log_spec[0][out2_cpu[0] == 2], 'o', color='red')
+    # ax[1].plot(spec_freq[out_cpu[0] == 1], log_spec[0][out_cpu[0] == 1], 'o', color='red')
+    plt.show()
+
+    embed()
+    quit()
+
+    #############################################################################################
     # embed()
     # quit()
+    tpb = 1024
+    bpg = all_freqs.shape[0]
 
     ### from .cfg ###
     main_freqs = 50.
     main_freqs_tol = 1.
     freq_tol_fac = 1.
     max_freq_tol = 1.
-    global min_group_size
     min_group_size = int(2)
     # min_group_size = int(2)
     # max_divisor = int(2)
@@ -506,8 +619,8 @@ def main():
         ax[0].plot(np.ones(len(spec_freq[peaks[i] == 1])) * i, spec_freq[peaks[i] == 1], 'o', color='red')
 
     # fig, ax = plt.subplots(figsize=(20/2.54, 12/2.54))
-    for i in range(len(a)):
-        ax[1].plot(np.ones(len(a[i][0]))*i, spec_freq[a[i][0]], 'o', color='red')
+    # for i in range(len(a)):
+    #     ax[1].plot(np.ones(len(a[i][0]))*i, spec_freq[a[i][0]], 'o', color='red')
 
     plt.show()
     embed()
