@@ -367,51 +367,97 @@ def harmonic_group_coordinater(peak_candidates, mains_freq, mains_freq_tol, freq
     # cuda.syncthreads()
 
 ####################################################################
-
-@cuda.jit('void(f4[:], f8[:], f4[:], f4[:], f4[:], f4[:])', device=True)
-def get_group(log_spec, spec_freqs, peaks, troughs, good_peaks, out):
-    max_devisor = 1
-    min_group_size = 2
+@cuda.jit(device=True)
+def get_devisor_group(spec_freqs, peaks, good_peaks, fmaxidx, devisor, out):
+    min_group_size = 3
     freq_tol_fac = 1.
     freq_tol = freq_tol_fac * (spec_freqs[1] - spec_freqs[0])
-    print(freq_tol)
+    max_freq_tol = 1.
+    if max_freq_tol < 1.1*freq_tol:
+        max_freq_tol = 1.1*freq_tol
 
-    devisor_groups = cuda.local.array(shape=(max_devisor, min_group_size), dtype=int64)
+    devisor_groups = cuda.local.array(shape=(min_group_size, ), dtype=int64)
 
-    good_c = 0
-    for i in range(len(good_peaks)):
-        if good_peaks[i] == 1:
-            good_c += 1
-
-    # while good_c > 0:
-    # get best peak
-    fmaxidx = 0
-    for i in range(len(good_peaks)):
-        if good_peaks[i] == 1:
-            if log_spec[i] > log_spec[fmaxidx]:
-                fmaxidx = i
+    # devisor = 3
     fmax = spec_freqs[fmaxidx]
-
-    fzero = fmax
+    fzero = fmax / devisor
+    fe = 1e6
+    ioi = 0
+    penalty = 0
     fzero_idx = fmaxidx
+    # devisor = 3
 
-    # is there someone better at half / a third
-    for devisor in range(1, max_devisor+1):
+    for h in range(1, min_group_size+1):
         for i in range(len(peaks)):
             if good_peaks[i] == 1:
-                if math.fabs(spec_freqs[i] - fmax/devisor) < freq_tol:
-                    fzero = spec_freqs[i]
-                    devisor_groups[devisor-1, 0] = i
-                    break
-    print(devisor_groups[0, 0])
-    print(devisor_groups[1, 0])
-    print(devisor_groups[2, 0])
+                new_fe = abs(spec_freqs[i]/h - fzero)
+                if new_fe < fe and new_fe < max_freq_tol:
+                    ioi = i
+                    fe = new_fe
+                if new_fe > fe:
+                    if ioi != 0:
+                        devisor_groups[h-1] = ioi
+                        print(devisor_groups[0])
+                        print(devisor_groups[1])
+                        print(devisor_groups[2])
 
-    out[devisor_groups[0, 0]] = 2
-    # good_peaks[fmaxidx] = 0
+                        if new_fe > freq_tol:
+                            penalty = (new_fe - freq_tol) / (max_freq_tol - freq_tol)
+                        # ToDo: peanalty add
+                        break
+    out[devisor_groups[0]] = 1
+    out[devisor_groups[1]] = 1
+    out[devisor_groups[2]] = 1
+    return penalty
 
-    print(fmax, fzero)
-    good_c -= 1
+@cuda.jit('void(f8, f4[:], f8[:], f4[:], i8[:])', device=True)
+def get_group(freq, log_spec, spec_freqs, peaks, out):
+
+    fzero = freq
+    fzero_h = 1
+    fzero_idx = 0.
+    fe = 1e6
+    ioi = 0
+    penalty = 0
+    devisor = 2
+    max_freq_tol = 1.
+    peak_power = 0
+    # penalties = cuda.local.array(shape=(max_devisor, ), dtype=float64)
+
+    # for devisor in range(1, max_devisor+1):
+    for h in range(1, len(out)):
+        for i in range(len(peaks)):
+            if peaks[i] == 1:
+                new_fe = abs(spec_freqs[i]/h - fzero/fzero_h)
+                if new_fe < fe and new_fe < max_freq_tol:
+                    ioi = i
+                    fe = new_fe
+                if new_fe > fe:
+                    if ioi != 0:
+                        fzero = spec_freqs[ioi]
+                        fzero_h = h
+                        out[h-1] = ioi
+                        out[-1] = log_spec[ioi]
+                        # devisor_groups[devisor-1, h-1] = ioi
+                        # print(devisor_groups[devisor-1, 0])
+                        # print(devisor_groups[devisor-1, 1])
+                        # print(devisor_groups[devisor-1, 2])
+                        #
+                        # if new_fe > freq_tol:
+                        #     penalty = (new_fe - freq_tol) / (max_freq_tol - freq_tol)
+                        # penalties[devisor-1] = penalty
+                        # # ToDo: peanalty add
+                        break
+
+        ioi = 0
+        fe = 1e6
+        peak_power = 0
+    # print(freq - fzero/fzero_h)
+    # out[devisor_groups[0, 0]] = 2
+    # out[devisor_groups[0, 1]] = 2
+    # out[devisor_groups[0, 2]] = 2
+    # out[devisor_groups[0, 2]] = 2
+
 @cuda.jit('void(f4[:], f8[:], f4[:], f4[:], f4[:])', device=True)
 def get_good_peaks(log_spec, spec_freqs, peaks, troughs, good_peaks):
     high_th = 15.
@@ -438,15 +484,16 @@ def get_good_peaks(log_spec, spec_freqs, peaks, troughs, good_peaks):
                 good_peaks[p_inx] = 1
                 pp = 0.
                 tp = 0.
-@cuda.jit('void(f4[:,:], f8[:], f4[:,:], f4[:,:], f4[:,:], f4[:,:])')
-def hg_coordinater(log_spec, spec_freqs, peaks, troughs, good_peaks, out):
-    i = cuda.grid(1)
+
+
+
+@cuda.jit('void(f8[:,:], f4[:,:], f8[:], f4[:, :], i8[:,:,:])')
+def hg_coordinater(g_check_freqs, g_log_spec, spec_freq, peaks, out):
+    i, j = cuda.grid(2)
     # if i < log_spec.shape[0]:
-    if i < 1:
-        get_good_peaks(log_spec[i], spec_freqs, peaks[i], troughs[i], good_peaks[i])
-        # cuda.syncthreads()
-        get_group(log_spec[i], spec_freqs, peaks[i], troughs[i], good_peaks[i], out[i])
-    pass
+    if i < g_check_freqs.shape[0] and j < g_check_freqs.shape[1]:
+        if g_check_freqs[i, j] != 0:
+            get_group(g_check_freqs[i, j], g_log_spec[i], spec_freq, peaks[i], out[i, j, :])
 
 ###############################################################################
 
@@ -534,14 +581,68 @@ def main():
 
 
     # all_freqs = np.load('all_freqs.npy')
-    tpb = 1024
-    bpg = log_spec.shape[0]
-    out = cuda.device_array_like(g_log_spec)
-    g_good_peaks = cuda.device_array_like(peaks)
-    hg_coordinater[bpg, tpb](g_log_spec, g_spec_freq, g_peaks, g_troughs, g_good_peaks, out)
 
-    out_cpu = g_good_peaks.copy_to_host()
-    out2_cpu = out.copy_to_host()
+    # out = cuda.device_array_like(g_log_spec)
+    g_good_peaks = cuda.device_array_like(peaks)
+    max_devisor = 3
+    # min_group_size = 2
+    # devisor_groups = cuda.device_array(shape=(max_devisor, min_group_size), dtype=float64)
+
+    t0 = time.time()
+    check_freqs = np.zeros(shape=(peaks.shape[0], 3*int(np.max(np.sum(peaks, axis=1)))))
+    for i in range(len(peaks)):
+        fs = spec_freq[peaks[i] == 1]
+        for d in range(max_devisor):
+            check_freqs[i, d*len(fs):(d+1)*len(fs)] = fs/(d+1)
+    g_check_freqs = cuda.to_device(check_freqs)
+    out = cuda.device_array(shape=(check_freqs.shape[0], check_freqs.shape[1], 6), dtype=int)
+
+    tpb = (32, 32)
+    bpg = (check_freqs.shape[0] // tpb[0] + 1, check_freqs.shape[1] // tpb[1] + 1)
+
+    hg_coordinater[bpg, tpb](g_check_freqs, g_log_spec, g_spec_freq, g_peaks, out)
+
+    out_cpu = out.copy_to_host()
+    print(f'hg: {time.time() - t0:.4f}s')
+    embed()
+    quit()
+
+    entities = len(peaks[0][peaks[0] == 1])
+    powers = out_cpu[0, :entities*3, -1].reshape(entities, 3)
+    for i in np.argsort(np.max(powers, axis=1)):
+    # for i in range(len(peaks[0][peaks[0] == 1])):
+        if check_freqs[0, i] >= 400:
+            fig, ax = plt.subplots(figsize=(30/2.54, 18/2.54))
+            ax.plot(spec_freq, log_spec[0])
+            ax.plot(spec_freq[peaks[0] == 1], log_spec[0][peaks[0] == 1], 'o', color='grey', markersize=8, alpha = 0.5)
+
+            i0 = i
+            i1 = i + 1*len(spec_freq[peaks[0] == 1])
+            i2 = i + 2*len(spec_freq[peaks[0] == 1])
+
+
+            p_idx0 = out_cpu[0, i0, :5][out_cpu[0, i0, :5] != 0]
+            ax.plot(spec_freq[p_idx0], log_spec[0][p_idx0], marker='o', color='k')
+
+            p_idx1 = out_cpu[0, i1, :5][out_cpu[0, i1, :5] != 0]
+            ax.plot(spec_freq[p_idx1], log_spec[0][p_idx1]+1, marker='o', color='orange')
+
+            p_idx2 = out_cpu[0, i2, :5][out_cpu[0, i2, :5] != 0]
+            ax.plot(spec_freq[p_idx2], log_spec[0][p_idx2]+2, marker='o', color='red')
+
+            dada_freqs = spec_freq[np.hstack([p_idx0, p_idx1, p_idx2])]
+            min_f, max_f = np.min(dada_freqs), np.max(dada_freqs)
+            x0, x1 = min_f - (max_f-min_f)*0.1, max_f + (max_f-min_f)*0.1
+            ax.set_xlim(x0,x1)
+            ax.set_title(f'fundamnetal {check_freqs[0, i]:.2f}Hz')
+            plt.show()
+
+
+    embed()
+    quit()
+
+    # out_cpu = g_good_peaks.copy_to_host()
+    # out2_cpu = out.copy_to_host()
 
     p, t = dpf(log_spec[0], threshold=low_threshold)
 
@@ -549,7 +650,7 @@ def main():
     ax[0].plot(spec_freq, log_spec[0])
     ax[0].plot(spec_freq[peaks[0] == 1], log_spec[0][peaks[0] == 1], 'o', color='k')
     ax[0].plot(spec_freq[troughs[0] == 1], log_spec[0][troughs[0] == 1], 'o', color='grey')
-    ax[0].plot(spec_freq[out_cpu[0] == 1], log_spec[0][out_cpu[0] == 1], 'o', color='red')
+    # ax[0].plot(spec_freq[out_cpu[0] == 1], log_spec[0][out_cpu[0] == 1], 'o', color='red')
 
     ax[1].plot(spec_freq, log_spec[0])
     ax[1].plot(spec_freq[p], log_spec[0][p], 'o', color='k')
