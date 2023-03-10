@@ -410,55 +410,6 @@ def get_devisor_group(spec_freqs, peaks, good_peaks, fmaxidx, devisor, out):
     out[devisor_groups[2]] = 1
     return penalty
 
-@cuda.jit('void(f8, f4[:], f8[:], f4[:], i8[:])', device=True)
-def get_group(freq, log_spec, spec_freqs, peaks, out):
-
-    fzero = freq
-    fzero_h = 1
-    fzero_idx = 0.
-    fe = 1e6
-    ioi = 0
-    penalty = 0
-    devisor = 2
-    max_freq_tol = 1.
-    peak_power = 0
-    # penalties = cuda.local.array(shape=(max_devisor, ), dtype=float64)
-
-    # for devisor in range(1, max_devisor+1):
-    for h in range(1, len(out)):
-        for i in range(len(peaks)):
-            if peaks[i] == 1:
-                new_fe = abs(spec_freqs[i]/h - fzero/fzero_h)
-                if new_fe < fe and new_fe < max_freq_tol:
-                    ioi = i
-                    fe = new_fe
-                if new_fe > fe:
-                    if ioi != 0:
-                        fzero = spec_freqs[ioi]
-                        fzero_h = h
-                        out[h-1] = ioi
-                        if log_spec[ioi] > peak_power:
-                            peak_power = log_spec[ioi]
-                            out[-1] = peak_power
-                        # devisor_groups[devisor-1, h-1] = ioi
-                        # print(devisor_groups[devisor-1, 0])
-                        # print(devisor_groups[devisor-1, 1])
-                        # print(devisor_groups[devisor-1, 2])
-                        #
-                        # if new_fe > freq_tol:
-                        #     penalty = (new_fe - freq_tol) / (max_freq_tol - freq_tol)
-                        # penalties[devisor-1] = penalty
-                        # # ToDo: peanalty add
-                        break
-
-        ioi = 0
-        fe = 1e6
-        peak_power = 0
-    # print(freq - fzero/fzero_h)
-    # out[devisor_groups[0, 0]] = 2
-    # out[devisor_groups[0, 1]] = 2
-    # out[devisor_groups[0, 2]] = 2
-    # out[devisor_groups[0, 2]] = 2
 
 @cuda.jit('void(f4[:], f8[:], f4[:], f4[:], f4[:])', device=True)
 def get_good_peaks(log_spec, spec_freqs, peaks, troughs, good_peaks):
@@ -487,6 +438,57 @@ def get_good_peaks(log_spec, spec_freqs, peaks, troughs, good_peaks):
                 pp = 0.
                 tp = 0.
 
+
+@cuda.jit('void(f8, f4[:], f8[:], f4[:], i8[:])', device=True)
+def get_group(freq, log_spec, spec_freqs, peaks, out):
+
+    fzero = freq
+    fzero_h = 1
+    fzero_idx = 0.
+    fe = 1e6
+    ioi = 0
+    penalty = 0
+    devisor = 2
+    max_freq_tol = 1.
+    peak_power = 0
+    # penalties = cuda.local.array(shape=(max_devisor, ), dtype=float64)
+
+    # for devisor in range(1, max_devisor+1):
+    for h in range(1, len(out)):
+        for i in range(len(peaks)):
+            if peaks[i] == 1:
+                new_fe = abs(spec_freqs[i]/h - fzero/fzero_h)
+                if new_fe < fe and new_fe < max_freq_tol:
+                    ioi = i
+                    fe = new_fe
+                if new_fe > fe:
+                    if ioi != 0:
+                        fzero = spec_freqs[ioi]
+                        fzero_h = h
+                        out[h-1] = ioi
+                        if log_spec[ioi] > peak_power:
+                            print('yay')
+                            peak_power = log_spec[ioi]
+                            out[-1] = peak_power
+                        # devisor_groups[devisor-1, h-1] = ioi
+                        # print(devisor_groups[devisor-1, 0])
+                        # print(devisor_groups[devisor-1, 1])
+                        # print(devisor_groups[devisor-1, 2])
+                        #
+                        # if new_fe > freq_tol:
+                        #     penalty = (new_fe - freq_tol) / (max_freq_tol - freq_tol)
+                        # penalties[devisor-1] = penalty
+                        # # ToDo: peanalty add
+                        break
+
+        ioi = 0
+        fe = 1e6
+        peak_power = 0
+    # print(freq - fzero/fzero_h)
+    # out[devisor_groups[0, 0]] = 2
+    # out[devisor_groups[0, 1]] = 2
+    # out[devisor_groups[0, 2]] = 2
+    # out[devisor_groups[0, 2]] = 2
 
 
 @cuda.jit('void(f8[:,:], f4[:,:], f8[:], f4[:, :], i8[:,:,:])')
