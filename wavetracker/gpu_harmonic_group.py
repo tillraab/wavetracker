@@ -450,7 +450,7 @@ def get_group(freq, log_spec, spec_freqs, peaks, out):
     penalty = 0
     devisor = 2
     max_freq_tol = 1.
-    peak_power = 0
+    peak_power = -1e6
     # penalties = cuda.local.array(shape=(max_devisor, ), dtype=float64)
 
     # for devisor in range(1, max_devisor+1):
