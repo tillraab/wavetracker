@@ -441,7 +441,6 @@ def get_good_peaks(log_spec, spec_freqs, peaks, troughs, good_peaks):
 
 @cuda.jit('void(f8, f4[:], f8[:], f4[:], i8[:])', device=True)
 def get_group(freq, log_spec, spec_freqs, peaks, out):
-
     fzero = freq
     fzero_h = 1
     fzero_idx = 0.
@@ -451,6 +450,7 @@ def get_group(freq, log_spec, spec_freqs, peaks, out):
     devisor = 2
     max_freq_tol = 1.
     peak_power = -1e6
+    out[-1] = peak_power
     # penalties = cuda.local.array(shape=(max_devisor, ), dtype=float64)
 
     # for devisor in range(1, max_devisor+1):
