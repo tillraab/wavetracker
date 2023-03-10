@@ -466,30 +466,22 @@ def get_group(freq, log_spec, spec_freqs, peaks, out):
                         fzero = spec_freqs[ioi]
                         fzero_h = h
                         out[h-1] = ioi
-                        if log_spec[ioi] > peak_power:
-                            if h <= 3:
+                        if h <= 3:
+                            if log_spec[ioi] > peak_power:
                                 peak_power = log_spec[ioi]
                                 out[-1] = peak_power
-                        # devisor_groups[devisor-1, h-1] = ioi
-                        # print(devisor_groups[devisor-1, 0])
-                        # print(devisor_groups[devisor-1, 1])
-                        # print(devisor_groups[devisor-1, 2])
-                        #
-                        # if new_fe > freq_tol:
-                        #     penalty = (new_fe - freq_tol) / (max_freq_tol - freq_tol)
-                        # penalties[devisor-1] = penalty
-                        # # ToDo: peanalty add
-                        break
-
         ioi = 0
         fe = 1e6
         peak_power = 0
-    # print(freq - fzero/fzero_h)
-    # out[devisor_groups[0, 0]] = 2
-    # out[devisor_groups[0, 1]] = 2
-    # out[devisor_groups[0, 2]] = 2
-    # out[devisor_groups[0, 2]] = 2
 
+    # n = 0
+    # sum = 0
+    # std = 0
+    # for i in range(len(out)-1):
+    #     if out[i] != 0:
+    #         n += 1
+    #         sum += log_spec[out[i]]
+    # mean = sum / n
 
 @cuda.jit('void(f8[:,:], f4[:,:], f8[:], f4[:, :], i8[:,:,:])')
 def hg_coordinater(g_check_freqs, g_log_spec, spec_freq, peaks, out):
@@ -610,6 +602,7 @@ def main():
     print(f'hg: {time.time() - t0:.4f}s')
     embed()
     quit()
+    #ToDo: apply filters -- mains_freqs -- identify good peaks
     mains_freqs_tol = 1.
     mains_freqs = 50.
 
@@ -622,6 +615,7 @@ def main():
     fig, ax = plt.subplots(figsize=(30 / 2.54, 18 / 2.54))
     ax.plot(spec_freq, log_spec[0])
     ax.plot(spec_freq[peaks[0] == 1], log_spec[0][peaks[0] == 1], 'o', color='grey', markersize=8, alpha=0.5)
+    ax.set_xlim(400, 2500)
     cfs = []
     for i in order:
         if power_array[i] == -1e6:
