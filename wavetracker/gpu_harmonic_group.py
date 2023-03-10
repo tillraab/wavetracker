@@ -467,7 +467,6 @@ def get_group(freq, log_spec, spec_freqs, peaks, out):
                         fzero_h = h
                         out[h-1] = ioi
                         if log_spec[ioi] > peak_power:
-                            print('yay')
                             peak_power = log_spec[ioi]
                             out[-1] = peak_power
                         # devisor_groups[devisor-1, h-1] = ioi
