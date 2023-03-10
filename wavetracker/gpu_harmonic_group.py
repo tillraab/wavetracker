@@ -467,8 +467,9 @@ def get_group(freq, log_spec, spec_freqs, peaks, out):
                         fzero_h = h
                         out[h-1] = ioi
                         if log_spec[ioi] > peak_power:
-                            peak_power = log_spec[ioi]
-                            out[-1] = peak_power
+                            if h <= 2:
+                                peak_power = log_spec[ioi]
+                                out[-1] = peak_power
                         # devisor_groups[devisor-1, h-1] = ioi
                         # print(devisor_groups[devisor-1, 0])
                         # print(devisor_groups[devisor-1, 1])
@@ -609,38 +610,96 @@ def main():
     print(f'hg: {time.time() - t0:.4f}s')
     embed()
     quit()
+    mains_freqs_tol = 1.
+    mains_freqs = 50.
 
+    harmonic_helper = np.cumsum(out_cpu>0, axis= 2)
     entities = len(peaks[0][peaks[0] == 1])
     powers = out_cpu[0, :entities*3, -1].reshape(entities, 3)
+    power_array = out_cpu[0, :entities*3, -1]
+    order = np.argsort(power_array)[::-1]
+
+    fig, ax = plt.subplots(figsize=(30 / 2.54, 18 / 2.54))
+    ax.plot(spec_freq, log_spec[0])
+    ax.plot(spec_freq[peaks[0] == 1], log_spec[0][peaks[0] == 1], 'o', color='grey', markersize=8, alpha=0.5)
+    cfs = []
+    for i in order:
+        if power_array[i] == -1e6:
+            continue
+        if not 400 <= check_freqs[0][i] <= 1200:
+            continue
+        if check_freqs[0, i] % mains_freqs < mains_freqs_tol or abs(check_freqs[0, i] % mains_freqs - 50) < mains_freqs_tol:
+            continue
+        if harmonic_helper[0, i, 3] < 3:
+            continue
+        if check_freqs[0, i] in cfs:
+            print('yay')
+            continue
+        cfs.append(check_freqs[0, i])
+        # print(cf)
+        print(i, f'{check_freqs[0, i]:.2f}Hz', f'{power_array[i]:.1f}dB max', spec_freq[out_cpu[0, i, :5]])
+        p_idx0 = out_cpu[0, i, :5][out_cpu[0, i, :5] != 0]
+        ax.plot(spec_freq[p_idx0], log_spec[0][p_idx0], marker='o')
+    plt.show()
+
     for i in np.argsort(np.max(powers, axis=1))[::-1]:
         if np.max(powers[i]) == -1e6:
             continue
+        if check_freqs[0, i] % mains_freqs < mains_freqs_tol or abs(check_freqs[0, i] % mains_freqs - 50) < mains_freqs_tol:
+            # print(f'main freq: {check_freqs[0, i]:.2f}Hz')
+            continue
     # for i in range(len(peaks[0][peaks[0] == 1])):
-        if check_freqs[0, i] >= 400:
-            fig, ax = plt.subplots(figsize=(30/2.54, 18/2.54))
-            ax.plot(spec_freq, log_spec[0])
-            ax.plot(spec_freq[peaks[0] == 1], log_spec[0][peaks[0] == 1], 'o', color='grey', markersize=8, alpha = 0.5)
+        i0 = i
+        i1 = i + 1*entities
+        i2 = i + 2*entities
 
-            i0 = i
-            i1 = i + 1*len(spec_freq[peaks[0] == 1])
-            i2 = i + 2*len(spec_freq[peaks[0] == 1])
+        h_helper = harmonic_helper[0, (i0, i1, i2), 3]
+        if not 400 <= check_freqs[0][i0] <= 1200:
+            h_helper[0] = -1
+        if not 400 <= check_freqs[0][i1] <= 1200:
+            h_helper[1] = -1
+        if not 400 <= check_freqs[0][i2] <= 1200:
+            h_helper[2] = -1
 
 
-            p_idx0 = out_cpu[0, i0, :5][out_cpu[0, i0, :5] != 0]
+        if np.all(h_helper < 3):
+            continue
+        print('\n', i, entities)
+
+        print(f'{check_freqs[0, i0]:.2f}Hz', f'{powers[i, 0]:.1f}dB max', spec_freq[out_cpu[0, i0, :5]])
+        print(f'{check_freqs[0, i1]:.2f}Hz', f'{powers[i, 1]:.1f}dB max', spec_freq[out_cpu[0, i1, :5]])
+        print(f'{check_freqs[0, i2]:.2f}Hz', f'{powers[i, 2]:.1f}dB max', spec_freq[out_cpu[0, i2, :5]])
+
+
+        fig, ax = plt.subplots(figsize=(30/2.54, 18/2.54))
+        ax.plot(spec_freq, log_spec[0])
+        ax.plot(spec_freq[peaks[0] == 1], log_spec[0][peaks[0] == 1], 'o', color='grey', markersize=8, alpha = 0.5)
+
+
+        p_idx0 = out_cpu[0, i0, :5][out_cpu[0, i0, :5] != 0]
+        if h_helper[0] >= 3:
             ax.plot(spec_freq[p_idx0], log_spec[0][p_idx0], marker='o', color='k')
+        else:
+            ax.plot(spec_freq[p_idx0], log_spec[0][p_idx0], marker='o', color='k', markeredgecolor='k', markerfacecolor='None')
 
-            p_idx1 = out_cpu[0, i1, :5][out_cpu[0, i1, :5] != 0]
+        p_idx1 = out_cpu[0, i1, :5][out_cpu[0, i1, :5] != 0]
+        if h_helper[1] >= 3:
             ax.plot(spec_freq[p_idx1], log_spec[0][p_idx1]+1, marker='o', color='orange')
+        else:
+            ax.plot(spec_freq[p_idx1], log_spec[0][p_idx1] + 1, marker='o', color='orange', markeredgecolor='orange', markerfacecolor='None')
 
-            p_idx2 = out_cpu[0, i2, :5][out_cpu[0, i2, :5] != 0]
+        p_idx2 = out_cpu[0, i2, :5][out_cpu[0, i2, :5] != 0]
+        if h_helper[2] >= 3:
             ax.plot(spec_freq[p_idx2], log_spec[0][p_idx2]+2, marker='o', color='red')
+        else:
+            ax.plot(spec_freq[p_idx2], log_spec[0][p_idx2] + 2, marker='o', color='red', markeredgecolor='red', markerfacecolor='None')
 
-            dada_freqs = spec_freq[np.hstack([p_idx0, p_idx1, p_idx2])]
-            min_f, max_f = np.min(dada_freqs), np.max(dada_freqs)
-            x0, x1 = min_f - (max_f-min_f)*0.1, max_f + (max_f-min_f)*0.1
-            ax.set_xlim(x0,x1)
-            ax.set_title(f'fundamnetal {check_freqs[0, i]:.2f}Hz')
-            plt.show()
+        dada_freqs = spec_freq[np.hstack([p_idx0, p_idx1, p_idx2])]
+        min_f, max_f = np.min(dada_freqs), np.max(dada_freqs)
+        x0, x1 = min_f - (max_f-min_f)*0.1, max_f + (max_f-min_f)*0.1
+        ax.set_xlim(x0,x1)
+        ax.set_title(f'fundamnetal {check_freqs[0, i]:.2f}Hz')
+        plt.show()
 
 
     embed()
