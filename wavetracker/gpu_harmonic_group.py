@@ -612,7 +612,9 @@ def main():
 
     entities = len(peaks[0][peaks[0] == 1])
     powers = out_cpu[0, :entities*3, -1].reshape(entities, 3)
-    for i in np.argsort(np.max(powers, axis=1)):
+    for i in np.argsort(np.max(powers, axis=1))[::-1]:
+        if np.max(powers[i]) == -1e6:
+            continue
     # for i in range(len(peaks[0][peaks[0] == 1])):
         if check_freqs[0, i] >= 400:
             fig, ax = plt.subplots(figsize=(30/2.54, 18/2.54))
