@@ -172,286 +172,65 @@ def peak_detekt_coordinater(spec, peaks, troughs, low_th):
     # tester(spec[i], peaks[i], troughs[i])
     cuda.syncthreads()
 
-####################################################################
-#3)
+########################################################################################
 
-@cuda.jit(device=True)
-def group_candidate(peak_candidates, freq, divisor, freq_tol, max_freq_tol, fzero, fzero_harmonics, new_group, new_penalties, out):
-    # ToDo: issue of device functions: I can alter stuff, but not access it !!!
-    # ToDo: I can only send hard code out !!!
-    # # 1. find harmonics in good_freqs and adjust fzero accordingly:
-    # group_size = min_group_size if divisor <= min_group_size else divisor
-    #
-    fzero = freq
-    fzero_harmonics = 1
-    # fzero = 0
+@cuda.jit("f4[:], i8[:]", device=True)
+def get_value(log_spec, out):
 
-    good_count = 0
-    for i in range(len(peak_candidates)):
-        good_count += peak_candidates[i, 4]
-
-    if good_count > 0:
-        prev_freq = divisor * freq
-        breaker = 0
-        for h in range(divisor + 1, 2 * min_group_size + 1):
-
-            min_df = 1e6
-            idx = 0
-            for j in range(len(peak_candidates)):
-                if peak_candidates[j, 4] == 0: # TODO: CHECK !!!
-                    continue
-                if abs(peak_candidates[j, 0]/h - fzero) < min_df:
-                    min_df = abs(peak_candidates[j, 0]/h - fzero)
-                    idx = j
-                else:
-                    pass
-            ff = peak_candidates[idx, 0]
-
-            if abs(ff/h - fzero) > freq_tol:
-                continue
-
-            df = ff - prev_freq
-            dh = round(df / fzero)
-            fe = abs(df / dh - fzero)
-
-            if fe > 2.0*freq_tol:
-                if h > min_group_size:
-                    breaker = 1
-
-            if breaker == 0:
-                prev_freq = ff
-                fzero_harmonics = h
-                fzero = ff / fzero_harmonics
-            # peak_candidates[h, 5] = 1
-
-        # out[1] = fzero_harmonics
-        # out[2] = prev_freq
-
-            # peak_candidates[h, 5] = 1
-    # 2. check fzero:
-    # freq might not be in our group anymore, because fzero was adjusted:
-    # if abs(freq - fzero) < freq_tol:
-    #     freqs = cuda.local.array(shape=(min_group_size,), dtype=float64)
-    #     next_freq_idx = 0
-    #     prev_h = 0
-    #     prev_fe = 0.0
-    #
-    #     for h in range(1, min_group_size + 1):
-    #         # next_freq_idx = 0
-    #         penalty = 0
-    #         i = 0
-    #         min_df = 1e6
-    #         for j in range(len(peak_candidates)):
-    #             if abs(peak_candidates[j, 0]/h - fzero) < min_df:
-    #                 min_df = abs(peak_candidates[j, 0]/h - fzero)
-    #                 i = j
-    #         f = peak_candidates[i, 0]
-    #         fac = 1.0 if h >= divisor else 2.0
-    #         fe = abs(f/h - fzero)
-    #         if fe > fac*max_freq_tol:
-    #             continue
-    #         if fe > fac*freq_tol:
-    #             penalty = (fe - (fac*freq_tol)) / (fac*max_freq_tol - fac*freq_tol)
-    #
-    #         if next_freq_idx > 0:
-    #             pf = freqs[next_freq_idx - 1]
-    #             df = f - pf
-    #             if df < 0.5 * fzero:
-    #                 if next_freq_idx > 0:
-    #                     pf = freqs[next_freq_idx-2]
-    #                     df = f - pf
-    #                 else:
-    #                     pf = 0.0
-    #                     df = h*fzero
-    #             dh = math.floor(df/fzero + 0.5)
-    #             fe = math.fabs(df/dh - fzero)
-    #             if fe > 2*dh*fac*max_freq_tol:
-    #                 continue
-    #             if fe > 2*dh*fac*freq_tol:
-    #                 penalty = (fe - (dh*fac*freq_tol)) / (2*dh*fac*max_freq_tol - dh*fac*freq_tol)
-    #         else:
-    #             fe = 0.0
-    # peak_candidates[idx, 5] = 1
-            # if h > prev_h or fe < prev_fe:
-            #     if prev_h <= 0 and h - prev_h <= 1:
-            #         if h == prev_h and next_freq_idx > 0:
-            #             freqs[next_freq_idx - 1] = -1
-            #             next_freq_idx = next_freq_idx - 1
-            #
-            #         freqs[next_freq_idx] = f
-            #         new_group[next_freq_idx+1] = i
-            #         new_penalties[next_freq_idx+1] = penalty
-            #
-            #         next_freq_idx = next_freq_idx + 1
-            #         prev_h = h
-            #         prev_fe = fe
-
-
-@cuda.jit('f8[:,:], f8, f8', device=True)
-def build_harmonic_groups(peak_candidates, freq_tol, max_freq_tol):
-
-    fmaxidx = 0
-    for i in range(peak_candidates.shape[0]):
-        if peak_candidates[i, 4] == 1:
-            peak_candidates[i, 5] = 1
-            if peak_candidates[i, 1] > peak_candidates[fmaxidx, 1]:
-                fmaxidx = i
-    fmax = peak_candidates[fmaxidx, 0]
-            # print(peak_candidates[i, 0])
-
-    # container for harmonic groups:
-    # print(min_group_size)
-    d1 = min_group_size if min_group_size >= max_divisor else max_divisor
-
-    best_group = cuda.local.array(shape=(d1,), dtype=float64)
-    best_value = -1e6
-    best_divisor = 0
-    best_fzero = 0.0
-    best_fzero_harmonics = 0
-
-    fzero = 0.
-    new_group = cuda.local.array(shape=(d1,), dtype=float64)
-    new_penalties = cuda.local.array(shape=(d1,), dtype=float64)
-    for i in range(len(new_group)):
-        new_group[i] = -1
-        new_group[i] = 1
-    fzero_harmonics = 0
-
-    for divisor in range(1, max_divisor + 1):
-        freq = fmax / divisor
-        out = cuda.local.array(shape=(3,), dtype=float64)
-        group_candidate(peak_candidates, freq, divisor, freq_tol, max_freq_tol, fzero, fzero_harmonics, new_group, new_penalties, out)
-        print(out[0])
-
-
-@cuda.jit("void(f8[:,:], f8, f8, f8, f8)", device=True)
-def harmonic_groups(peak_candidates, mains_freq, mains_freq_tol, freq_tol, max_freq_tol):
-    # peak_candidates[time, peak no, [freq, peak, count???, trough, good, helper_mask]]
-    good_count = 0
-    max_idx = peak_candidates.shape[0]
-    # print(mains_freq, mains_freq_tol)
-    for i in range(len(peak_candidates)):
-        if peak_candidates[i, 4] == 1:
-            good_count += 1
-        if math.isnan(peak_candidates[i, 0]):
-            max_idx = i
-            break
-
-    peak_candidates[:, 2] = 0.0
-
-    if mains_freq > 0.0:
-        for i in range(max_idx):
-            if peak_candidates[i, 4] == 0:
-                continue
-            if abs(peak_candidates[i, 0] - round(peak_candidates[i, 0]/mains_freq)*mains_freq) < mains_freq_tol:
-                peak_candidates[i, 4] = 0
-                good_count -= 1
-
-    # print(sum(peak_candidates[:, 4]))
-
-    first = True
-    while good_count > 0:
-        # print(good_count)
-        # ToDo: [check freq] implementations
-        build_harmonic_groups(peak_candidates, freq_tol, max_freq_tol)
-        good_count = 0
-
-
-@cuda.jit("void(f8[:,:,:], f8, f8, f8, f8)")
-def harmonic_group_coordinater(peak_candidates, mains_freq, mains_freq_tol, freq_tol, max_freq_tol):
-    i = cuda.grid(1)
-    # if i < peak_candidates.shape[0]:
-    if i < 1:
-        harmonic_groups(peak_candidates[i], mains_freq, mains_freq_tol, freq_tol, max_freq_tol)
-
-    # cuda.syncthreads()
-
-####################################################################
-@cuda.jit(device=True)
-def get_devisor_group(spec_freqs, peaks, good_peaks, fmaxidx, devisor, out):
     min_group_size = 3
-    freq_tol_fac = 1.
-    freq_tol = freq_tol_fac * (spec_freqs[1] - spec_freqs[0])
-    max_freq_tol = 1.
-    if max_freq_tol < 1.1*freq_tol:
-        max_freq_tol = 1.1*freq_tol
+    peak_sum = 0
+    n = 0
 
-    devisor_groups = cuda.local.array(shape=(min_group_size, ), dtype=int64)
+    for i in range(len(out)-1):
+        if out[i] != 0:
+            n += 1
+            peak_sum += 10**log_spec[out[i]] / 10.
+    peak_sum = math.log10(peak_sum * min_group_size / n)
 
-    # devisor = 3
-    fmax = spec_freqs[fmaxidx]
-    fzero = fmax / devisor
-    fe = 1e6
-    ioi = 0
-    penalty = 0
-    fzero_idx = fmaxidx
-    # devisor = 3
+    diff_sum = 0
+    n = 0
+    v0 = 0.
+    for i in range(len(out)-1):
+        if out[i] == 0:
+            continue
+        if v0 == 0:
+            v0 = log_spec[out[i]]
+            continue
+        diff_sum += log_spec[out[i]] - v0
+        v0 = log_spec[out[i]]
+        n += 1
+    diff_mean = diff_sum / n
 
-    for h in range(1, min_group_size+1):
-        for i in range(len(peaks)):
-            if good_peaks[i] == 1:
-                new_fe = abs(spec_freqs[i]/h - fzero)
-                if new_fe < fe and new_fe < max_freq_tol:
-                    ioi = i
-                    fe = new_fe
-                if new_fe > fe:
-                    if ioi != 0:
-                        devisor_groups[h-1] = ioi
-                        print(devisor_groups[0])
-                        print(devisor_groups[1])
-                        print(devisor_groups[2])
+    # print(diff_sum / n1)
 
-                        if new_fe > freq_tol:
-                            penalty = (new_fe - freq_tol) / (max_freq_tol - freq_tol)
-                        # ToDo: peanalty add
-                        break
-    out[devisor_groups[0]] = 1
-    out[devisor_groups[1]] = 1
-    out[devisor_groups[2]] = 1
-    return penalty
+    std_vals = 0
+    n = 0
+    v0 = 0.
+    for i in range(len(out)-1):
+        if out[i] == 0:
+            continue
+        if v0 == 0:
+            v0 = log_spec[out[i]]
+            continue
+        # std_vals += ((log_spec[out[i]] - v0) - diff_mean)**2
+        v0 = log_spec[out[i]]
+        n += 1
+    diff_std = (std_vals / (n-1))**0.5
+    # print(peak_sum)
 
-
-@cuda.jit('void(f4[:], f8[:], f4[:], f4[:], f4[:])', device=True)
-def get_good_peaks(log_spec, spec_freqs, peaks, troughs, good_peaks):
-    high_th = 15.
-    mains_freq = 50.
-    mains_freq_tol = 1.
-
-    pp = 0.
-    p_inx = 0
-    tp = 0.
-    t_inx = 0
-    for i in range(len(peaks)):
-        if peaks[i] == 1:
-            p_inx = i
-            pp = log_spec[i]
-        if troughs[i] == 1:
-            t_inx = i
-            tp = log_spec[i]
-
-        if pp != 0 and tp != 0:
-            if abs(spec_freqs[p_inx] - round(spec_freqs[p_inx] / mains_freq) * mains_freq) < mains_freq_tol:
-                pp = 0.
-                tp = 0.
-            elif log_spec[p_inx] - log_spec[t_inx] > high_th:
-                good_peaks[p_inx] = 1
-                pp = 0.
-                tp = 0.
-
+    # print(peak_sum)
+    out[-1] = peak_sum / diff_std
 
 @cuda.jit('void(f8, f4[:], f8[:], f4[:], i8[:])', device=True)
 def get_group(freq, log_spec, spec_freqs, peaks, out):
     fzero = freq
     fzero_h = 1
-    fzero_idx = 0.
     fe = 1e6
     ioi = 0
-    penalty = 0
-    devisor = 2
     max_freq_tol = 1.
-    peak_power = -1e6
-    out[-1] = peak_power
-    # penalties = cuda.local.array(shape=(max_devisor, ), dtype=float64)
+    out[-1] = -1e6
+    mains_freqs = 50.
+    mains_freqs_tol = 1.
 
     # for devisor in range(1, max_devisor+1):
     for h in range(1, len(out)):
@@ -466,30 +245,39 @@ def get_group(freq, log_spec, spec_freqs, peaks, out):
                         fzero = spec_freqs[ioi]
                         fzero_h = h
                         out[h-1] = ioi
-                        if h <= 3:
-                            if log_spec[ioi] > peak_power:
-                                peak_power = log_spec[ioi]
-                                out[-1] = peak_power
+                        # if h <= 3:
+                        #     if log_spec[ioi] > peak_power:
+                        #         peak_power = log_spec[ioi]
+                        #         out[-1] = peak_power
         ioi = 0
         fe = 1e6
-        peak_power = 0
 
-    # n = 0
-    # sum = 0
-    # std = 0
-    # for i in range(len(out)-1):
-    #     if out[i] != 0:
-    #         n += 1
-    #         sum += log_spec[out[i]]
-    # mean = sum / n
+    min_group_size = 3
+    peak_sum = 0
+    n = 0
+    for i in range(min_group_size):
+        if out[i] != 0:
+            if spec_freqs[out[i]] % mains_freqs < mains_freqs_tol or abs(spec_freqs[out[i]] % mains_freqs - 50) < mains_freqs_tol:
+                continue
+            else:
+                n += 1
+                peak_sum += log_spec[out[i]]
+    # peak_mean = 10. * math.log10(peak_sum / n)
+    peak_mean = peak_sum / n
+    if n >= 2:
+        out[-1] = peak_mean * 100
+    else:
+        out[-1] = -1e6
 
 @cuda.jit('void(f8[:,:], f4[:,:], f8[:], f4[:, :], i8[:,:,:])')
 def hg_coordinater(g_check_freqs, g_log_spec, spec_freq, peaks, out):
     i, j = cuda.grid(2)
-    # if i < log_spec.shape[0]:
+    # if i < 1 and j < 1:
     if i < g_check_freqs.shape[0] and j < g_check_freqs.shape[1]:
         if g_check_freqs[i, j] != 0:
             get_group(g_check_freqs[i, j], g_log_spec[i], spec_freq, peaks[i], out[i, j, :])
+            # cuda.syncthreads()
+            # get_value(g_log_spec[i], out[i, j, :])
 
 ###############################################################################
 
@@ -579,213 +367,89 @@ def main():
     # all_freqs = np.load('all_freqs.npy')
 
     # out = cuda.device_array_like(g_log_spec)
-    g_good_peaks = cuda.device_array_like(peaks)
+    # g_good_peaks = cuda.device_array_like(peaks)
     max_devisor = 3
     # min_group_size = 2
     # devisor_groups = cuda.device_array(shape=(max_devisor, min_group_size), dtype=float64)
-
+    # embed()
+    # quit()
     t0 = time.time()
     check_freqs = np.zeros(shape=(peaks.shape[0], 3*int(np.max(np.sum(peaks, axis=1)))))
     for i in range(len(peaks)):
         fs = spec_freq[peaks[i] == 1]
+        # flist = []
         for d in range(max_devisor):
             check_freqs[i, d*len(fs):(d+1)*len(fs)] = fs/(d+1)
+            # flist.extend(fs/(d+1))
+        # unique_flist = np.unique(flist)
+        # check_freqs[i, :len(unique_flist)]  = unique_flist
     g_check_freqs = cuda.to_device(check_freqs)
+    # g_value = cuda.device_array_like(g_check_freqs)
     out = cuda.device_array(shape=(check_freqs.shape[0], check_freqs.shape[1], 6), dtype=int)
 
     tpb = (32, 32)
     bpg = (check_freqs.shape[0] // tpb[0] + 1, check_freqs.shape[1] // tpb[1] + 1)
 
     hg_coordinater[bpg, tpb](g_check_freqs, g_log_spec, g_spec_freq, g_peaks, out)
-
     out_cpu = out.copy_to_host()
+
     print(f'hg: {time.time() - t0:.4f}s')
-    embed()
-    quit()
-    #ToDo: apply filters -- mains_freqs -- identify good peaks
+    # embed()
+    # quit()
+
     mains_freqs_tol = 1.
     mains_freqs = 50.
 
     harmonic_helper = np.cumsum(out_cpu>0, axis= 2)
-    entities = len(peaks[0][peaks[0] == 1])
-    powers = out_cpu[0, :entities*3, -1].reshape(entities, 3)
-    power_array = out_cpu[0, :entities*3, -1]
-    order = np.argsort(power_array)[::-1]
 
-    fig, ax = plt.subplots(figsize=(30 / 2.54, 18 / 2.54))
-    ax.plot(spec_freq, log_spec[0])
-    ax.plot(spec_freq[peaks[0] == 1], log_spec[0][peaks[0] == 1], 'o', color='grey', markersize=8, alpha=0.5)
-    ax.set_xlim(400, 2500)
-    cfs = []
-    for i in order:
-        if power_array[i] == -1e6:
-            continue
-        if not 400 <= check_freqs[0][i] <= 1200:
-            continue
-        if check_freqs[0, i] % mains_freqs < mains_freqs_tol or abs(check_freqs[0, i] % mains_freqs - 50) < mains_freqs_tol:
-            continue
-        if harmonic_helper[0, i, 3] < 3:
-            continue
-        if check_freqs[0, i] in cfs:
-            print('yay')
-            continue
-        cfs.append(check_freqs[0, i])
-        # print(cf)
-        print(i, f'{check_freqs[0, i]:.2f}Hz', f'{power_array[i]:.1f}dB max', spec_freq[out_cpu[0, i, :5]])
-        p_idx0 = out_cpu[0, i, :5][out_cpu[0, i, :5] != 0]
-        ax.plot(spec_freq[p_idx0], log_spec[0][p_idx0], marker='o')
-    plt.show()
+    fund_list = []
+    for t in range(out_cpu.shape[0]):
+    # for t in range(20):
+        fund_list.append([])
+        print('\n')
 
-    for i in np.argsort(np.max(powers, axis=1))[::-1]:
-        if np.max(powers[i]) == -1e6:
-            continue
-        if check_freqs[0, i] % mains_freqs < mains_freqs_tol or abs(check_freqs[0, i] % mains_freqs - 50) < mains_freqs_tol:
-            # print(f'main freq: {check_freqs[0, i]:.2f}Hz')
-            continue
-    # for i in range(len(peaks[0][peaks[0] == 1])):
-        i0 = i
-        i1 = i + 1*entities
-        i2 = i + 2*entities
+        entities = len(peaks[t][peaks[t] == 1])
+        power_array = out_cpu[t, :entities*3, -1]
+        order = np.argsort(power_array)[::-1]
 
-        h_helper = harmonic_helper[0, (i0, i1, i2), 3]
-        if not 400 <= check_freqs[0][i0] <= 1200:
-            h_helper[0] = -1
-        if not 400 <= check_freqs[0][i1] <= 1200:
-            h_helper[1] = -1
-        if not 400 <= check_freqs[0][i2] <= 1200:
-            h_helper[2] = -1
+        # identify those peaks that are neccessary to assign
+        peak_idxs = np.arange(len(peaks[t]))[peaks[t] != 0]
+        peak_size = log_spec[t][peaks[t] != 0] - log_spec[t][troughs[t] != 0]
+        peak_idxs = peak_idxs[peak_size > high_threshold]
+        peak_idxs = peak_idxs[(spec_freq[peak_idxs] > 400) & (spec_freq[peak_idxs] < 1200)]
 
+        mains_mask = (spec_freq[peak_idxs] % mains_freqs < mains_freqs_tol) | (abs(spec_freq[peak_idxs] % mains_freqs - 50) < mains_freqs_tol)
+        peak_idxs = peak_idxs[~mains_mask]
 
-        if np.all(h_helper < 3):
-            continue
-        print('\n', i, entities)
+        sorting_mask = np.argsort(log_spec[t][peak_idxs])[::-1]
+        best_peak_idxs = peak_idxs[sorting_mask]
 
-        print(f'{check_freqs[0, i0]:.2f}Hz', f'{powers[i, 0]:.1f}dB max', spec_freq[out_cpu[0, i0, :5]])
-        print(f'{check_freqs[0, i1]:.2f}Hz', f'{powers[i, 1]:.1f}dB max', spec_freq[out_cpu[0, i1, :5]])
-        print(f'{check_freqs[0, i2]:.2f}Hz', f'{powers[i, 2]:.1f}dB max', spec_freq[out_cpu[0, i2, :5]])
+        assigned = np.zeros_like(peaks[t])
 
+        fig, ax = plt.subplots(figsize=(30 / 2.54, 18 / 2.54))
+        ax.plot(spec_freq, log_spec[t])
+        ax.plot(spec_freq[peaks[t] == 1], log_spec[t][peaks[t] == 1], 'o', color='grey', markersize=8, alpha=0.5)
+        ax.set_xlim(400, 2500)
 
-        fig, ax = plt.subplots(figsize=(30/2.54, 18/2.54))
-        ax.plot(spec_freq, log_spec[0])
-        ax.plot(spec_freq[peaks[0] == 1], log_spec[0][peaks[0] == 1], 'o', color='grey', markersize=8, alpha = 0.5)
+        for search_peak_idx in best_peak_idxs:
+            # print('\n', search_peak_idx)
+            for i in order:
+                if search_peak_idx in out_cpu[t, i, :max_devisor]:
+                    # if np.sum(assigned[out_cpu[0, i, :5]]) == 0:
+                    if np.sum(assigned[out_cpu[t, i, :5]]) == 0:
+                        assigned[out_cpu[t, i, :5]] += 1
+                        print(i, f'{check_freqs[t, i]:.2f}Hz', f'{power_array[i]:.1f}dB max', spec_freq[out_cpu[t, i, :5]])
+                        p_idx0 = out_cpu[t, i, :5][out_cpu[t, i, :5] != 0]
+                        ax.plot(spec_freq[p_idx0], log_spec[t][p_idx0], marker='o')
+                        fund_list[-1].append(spec_freq[out_cpu[t, i, 0]])
+        plt.close()
 
-
-        p_idx0 = out_cpu[0, i0, :5][out_cpu[0, i0, :5] != 0]
-        if h_helper[0] >= 3:
-            ax.plot(spec_freq[p_idx0], log_spec[0][p_idx0], marker='o', color='k')
-        else:
-            ax.plot(spec_freq[p_idx0], log_spec[0][p_idx0], marker='o', color='k', markeredgecolor='k', markerfacecolor='None')
-
-        p_idx1 = out_cpu[0, i1, :5][out_cpu[0, i1, :5] != 0]
-        if h_helper[1] >= 3:
-            ax.plot(spec_freq[p_idx1], log_spec[0][p_idx1]+1, marker='o', color='orange')
-        else:
-            ax.plot(spec_freq[p_idx1], log_spec[0][p_idx1] + 1, marker='o', color='orange', markeredgecolor='orange', markerfacecolor='None')
-
-        p_idx2 = out_cpu[0, i2, :5][out_cpu[0, i2, :5] != 0]
-        if h_helper[2] >= 3:
-            ax.plot(spec_freq[p_idx2], log_spec[0][p_idx2]+2, marker='o', color='red')
-        else:
-            ax.plot(spec_freq[p_idx2], log_spec[0][p_idx2] + 2, marker='o', color='red', markeredgecolor='red', markerfacecolor='None')
-
-        dada_freqs = spec_freq[np.hstack([p_idx0, p_idx1, p_idx2])]
-        min_f, max_f = np.min(dada_freqs), np.max(dada_freqs)
-        x0, x1 = min_f - (max_f-min_f)*0.1, max_f + (max_f-min_f)*0.1
-        ax.set_xlim(x0,x1)
-        ax.set_title(f'fundamnetal {check_freqs[0, i]:.2f}Hz')
-        plt.show()
-
-
+    fig, ax = plt.subplots()
+    for i in range(len(fund_list)):
+        ax.plot(np.ones(len(fund_list[i]))*i, fund_list[i], 'o')
     embed()
     quit()
 
-    # out_cpu = g_good_peaks.copy_to_host()
-    # out2_cpu = out.copy_to_host()
-
-    p, t = dpf(log_spec[0], threshold=low_threshold)
-
-    fig, ax = plt.subplots(2, 1, sharex = 'all')
-    ax[0].plot(spec_freq, log_spec[0])
-    ax[0].plot(spec_freq[peaks[0] == 1], log_spec[0][peaks[0] == 1], 'o', color='k')
-    ax[0].plot(spec_freq[troughs[0] == 1], log_spec[0][troughs[0] == 1], 'o', color='grey')
-    # ax[0].plot(spec_freq[out_cpu[0] == 1], log_spec[0][out_cpu[0] == 1], 'o', color='red')
-
-    ax[1].plot(spec_freq, log_spec[0])
-    ax[1].plot(spec_freq[p], log_spec[0][p], 'o', color='k')
-    ax[1].plot(spec_freq[t], log_spec[0][t], 'o', color='grey')
-    ax[1].plot(spec_freq[out2_cpu[0] == 2], log_spec[0][out2_cpu[0] == 2], 'o', color='red')
-    # ax[1].plot(spec_freq[out_cpu[0] == 1], log_spec[0][out_cpu[0] == 1], 'o', color='red')
-    plt.show()
-
-    embed()
-    quit()
-
-    #############################################################################################
-    # embed()
-    # quit()
-    tpb = 1024
-    bpg = all_freqs.shape[0]
-
-    ### from .cfg ###
-    main_freqs = 50.
-    main_freqs_tol = 1.
-    freq_tol_fac = 1.
-    max_freq_tol = 1.
-    min_group_size = int(2)
-    # min_group_size = int(2)
-    # max_divisor = int(2)
-    #################
-    delta_f = spec_freq[1] - spec_freq[0]
-    freq_tol = delta_f*freq_tol_fac
-    if max_freq_tol < 1.1*freq_tol:
-        max_freq_tol = 1.1*freq_tol
-
-    g_all_freqs = cuda.to_device(all_freqs)
-    harmonic_group_coordinater[bpg, tpb](g_all_freqs, main_freqs, main_freqs_tol, freq_tol, max_freq_tol)
-
-
-    # harmonic_groups(all_freqs[0], 50., 1.)
-
-
-
-
-    ### --- CPU COMPARISON --- ###
-    # t0 = time.time()
-    # core_count = multiprocessing.cpu_count()
-    # pool = multiprocessing.Pool(core_count - 1)
-    # a = pool.map(harmonic_groups_test_cpu, spec)
-    # print(f'time took on cpu: {time.time() - t0:.4f}s')
-
-    # troughs = g_peaks.copy_to_host()
-    # print(f'time took on gpu: {time.time() - t0:.4f}s')
-    #
-    # t0 = time.time()
-    # x, y = np.where(peaks == 1)
-    # print(f'test: {time.time() - t0:.4f}s')
-    #
-    # # good_peaks = np.copy(peaks)
-    # # good_peaks[log_spec[np.array(peaks, dtype=bool)] - log_spec[np.array(peaks, dtype=bool)]]
-    #
-    # good_g_peaks = cuda.device_array(shape=g_peaks.shape, dtype=bool)
-    # embed()
-    # quit()
-    ########################################################
-    embed()
-    quit()
-
-    fig, ax = plt.subplots(2, 1, figsize=(30/2.54, 20/2.54), sharex='all', sharey='all')
-    for i in range(peaks.shape[0]):
-        ax[0].plot(np.ones(len(spec_freq[peaks[i] == 1])) * i, spec_freq[peaks[i] == 1], 'o', color='red')
-
-    # fig, ax = plt.subplots(figsize=(20/2.54, 12/2.54))
-    # for i in range(len(a)):
-    #     ax[1].plot(np.ones(len(a[i][0]))*i, spec_freq[a[i][0]], 'o', color='red')
-
-    plt.show()
-    embed()
-    quit()
-
-    pass
 
 if __name__ == '__main__':
     main()
