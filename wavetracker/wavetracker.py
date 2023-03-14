@@ -238,6 +238,9 @@ class Analysis_pipeline(object):
             self.Spec.snippet_spectrogram(snippet_data, snipptet_t0=snippet_t0)
             t1_spec = time.time()
 
+            embed()
+            quit()
+
             t0_hg = time.time()
             self.extract_snippet_signals()
             t1_hg = time.time()

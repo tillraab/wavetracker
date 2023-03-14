@@ -22,11 +22,12 @@ harmonic_groups:
   max_freq_tol: 1.
   mains_freq: 50.
   mains_freq_tol: 1.
-  min_freq: 300.
-  max_freq: 1000.
+  min_freq: 400.
+  max_freq: 1200.
   max_db_diff: 20.
-  max_divisor: 2
-  min_group_size: 2
+  max_divisor: 3
+  min_group_size: 3
+  min_good_peak_power: -100
 
 tracking:
   freq_tolerance: 2.5 # 2.5
