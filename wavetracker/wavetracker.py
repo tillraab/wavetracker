@@ -1,5 +1,7 @@
 import sys
 import os
+import warnings
+warnings.filterwarnings('ignore')
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import argparse
 import time
@@ -14,18 +16,10 @@ from .config import Configuration
 from .datahandler import open_raw_data
 from .spectrogram import Spectrogram
 from .tracking import freq_tracking_v6
+from .gpu_harmonic_group import harmonic_group_pipeline, get_fundamentals
 
 from thunderfish.harmonics import harmonic_groups, fundamental_freqs
 from thunderfish.powerspectrum import decibel
-try:
-    from numba import jit, cuda
-except ImportError:
-    class cuda():
-            @classmethod
-            def jit(cls, *args, **kwargs):
-                def decorator_jit(func):
-                    return func
-                return decorator_jit
 
 try:
     import tensorflow as tf
@@ -35,41 +29,6 @@ try:
         available_GPU = True
 except:
     available_GPU = False
-
-@cuda.jit
-def jit_decibel(power, db_power):
-    """Transform power to decibel relative to ref_power.
-
-    \\[ decibel = 10 \\cdot \\log_{10}(power/ref\\_power) \\]
-    Power values smaller than `min_power` are set to `-np.inf`.
-
-    Parameters
-    ----------
-    power: float or array
-        Power values, for example from a power spectrum or spectrogram.
-    ref_power: float or None or 'peak'
-        Reference power for computing decibel.
-        If set to `None` or 'peak', the maximum power is used.
-    min_power: float
-        Power values smaller than `min_power` are set to `-np.inf`.
-
-    Returns
-    -------
-    decibel_psd: array
-        Power values in decibel relative to `ref_power`.
-    """
-    ref_power = 1.0
-    min_power = 1e-20
-    # if ref_power is None or ref_power == 'peak':
-    #     ref_power = np.max(power)
-
-    i, j = cuda.grid(2)
-    if (i > power.shape[0]) or (j > power.shape[1]):
-        return
-    if power[i, j] <= min_power:
-        db_power[i, j] = -math.inf
-    else:
-        db_power[i, j] = 10.0 * math.log10(power[i, j] / ref_power)
 
 
 class Analysis_pipeline(object):
@@ -130,80 +89,19 @@ class Analysis_pipeline(object):
 
 
     def extract_snippet_signals(self):
-        ######################################################################################
+        if self.gpu_use:
+            assigned_hg, peaks, log_spec = harmonic_group_pipeline(self.Spec.sum_spec, self.Spec.spec_freqs, self.cfg)
+            tmp_fundamentals = get_fundamentals(assigned_hg, self.Spec.spec_freqs)
+        else:
+            partial_harmonic_groups = partial(harmonic_groups, self.Spec.spec_freqs, **self.cfg.harmonic_groups)
+            a = partial_harmonic_groups(self.Spec.sum_spec[:, 0]) # TEST
 
-        # partial_harmonic_groups = partial(harmonic_groups, self.Spec.spec_freqs, **self.cfg.harmonic_groups)
-        #
-        # # init all cuda functions !
-        # a = partial_harmonic_groups(self.Spec.sum_spec[:, 0])
-        # embed()
-        # quit()
-        #
-        # ### LOG PSD ###
-        # t0 = time.time()
-        # for ii in range(len(self.Spec.spec_times)):
-        #     psd = decibel(self.Spec.sum_spec[:, ii])
-        # print(f'spet to db - CPU - loop: {time.time()-t0:.6f}s')
-        #
-        # t0 = time.time()
-        # psd_CPU = decibel(self.Spec.sum_spec)
-        # print(f'spet to db - CPU: {time.time() - t0:.6f}s')
-        #
-        # # cuda function
-        # t0 = time.time()
-        # g_spec = cuda.to_device(self.Spec.sum_spec)
-        # g_psd= cuda.device_array_like(g_spec)
-        # blockdim = (32, 32)
-        # griddim = (self.Spec.sum_spec.shape[0] // blockdim[0] + 1, self.Spec.sum_spec.shape[1] // blockdim[1] + 1)
-        # # griddim = (5, 5)
-        # jit_decibel[griddim, blockdim](g_spec, g_psd)
-        # psd_GPU = g_psd.copy_to_host()
-        # print(f'spet to db - GPU: {time.time()-t0:.6f}s')
-        #
-        #
-        #
-        #
-        # # ToDo: this is for checking the functionality of hg
-        # t0 = time.time()
-        # for ii in range(len(self.Spec.spec_times)):
-        #     a = partial_harmonic_groups(self.Spec.sum_spec[:, ii])
-        # t1 = time.time()
-        #
-        # print('\n')
-        #
-        # t00 = time.time()
-        # pool = multiprocessing.Pool(self.core_count - 1)
-        # a = pool.map(partial_harmonic_groups, self.Spec.sum_spec.transpose())
-        # t11 = time.time()
-        #
-        # # embed()
-        # # quit()
-        #
-        # # ToDo: this is for checking the functionality of hg
-        #
-        #
-        # print(f'parallel cpu: {t11-t00:.4f} , gpu: {t1 - t0:.4f}')
-        #
-        # embed()
-        # quit()
+            pool = multiprocessing.Pool(self.core_count - 1)
+            a = pool.map(partial_harmonic_groups, self.Spec.sum_spec.transpose())
 
-
-        ###################################################################################################
-        # embed()
-        # quit()
-        # if self.cfg.harmonic_groups["low_threshold"] == 0.:
-        #     self.cfg.harmonic_groups["low_threshold"] = a[0][5]
-        #     self.cfg.harmonic_groups["high_threshold"] = a[0][6]
-
-        partial_harmonic_groups = partial(harmonic_groups, self.Spec.spec_freqs, **self.cfg.harmonic_groups)
-        a = partial_harmonic_groups(self.Spec.sum_spec[:, 0]) # TEST
-
-        pool = multiprocessing.Pool(self.core_count - 1)
-        a = pool.map(partial_harmonic_groups, self.Spec.sum_spec.transpose())
-
-        groups_per_time = [a[groups][0] for groups in range(len(a))]
-        tmp_fundamentals = pool.map(fundamental_freqs, groups_per_time)
-        pool.terminate()
+            groups_per_time = [a[groups][0] for groups in range(len(a))]
+            tmp_fundamentals = pool.map(fundamental_freqs, groups_per_time)
+            pool.terminate()
 
         tmp_fund_v = np.hstack(tmp_fundamentals)
         tmp_idx_v = np.array(np.hstack([np.ones(len(f)) * enu for enu, f in enumerate(tmp_fundamentals)]), dtype=int)
@@ -238,8 +136,6 @@ class Analysis_pipeline(object):
             self.Spec.snippet_spectrogram(snippet_data, snipptet_t0=snippet_t0)
             t1_spec = time.time()
 
-            embed()
-            quit()
 
             t0_hg = time.time()
             self.extract_snippet_signals()
@@ -275,7 +171,6 @@ class Analysis_pipeline(object):
 
             t0_hg = time.time()
             self.extract_snippet_signals()
-            print('yay')
             t1_hg = time.time()
             t1_snip = time.time()
             if self.verbose >= 3: print(f'{" ":^25}  Progress {counter / iterations:3.1%} '

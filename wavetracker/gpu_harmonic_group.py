@@ -280,22 +280,19 @@ def get_harmonic_groups_coordinator(g_check_freqs, g_log_spec, spec_freq, peaks,
 
 ###############################################################################
 
-def harmonic_group_pipeline(spec, spec_freq, spec_times, cfg):
-    pass
+def get_fundamentals(assigned_hg, spec_freq):
+    f_list = []
+    for t in range(assigned_hg.shape[0]):
+        f_list.append([])
+        for hg in np.unique(assigned_hg[t]):
+            if hg == 0:
+                continue
+            f_list[-1].append(spec_freq[assigned_hg[t] == hg][0])
+    return f_list
 
-
-
-def main():
-    #############################################################################################
-    ### load example data ###
-    spec = np.load("./wavetracker/spec2.npy")
-    spec_freq = np.load("./wavetracker/spec_freqs2.npy")
-    spec_times = np.load("./wavetracker/spec_time2.npy")
-
-    cfg = Configuration()
-
+def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
     ### logaritmic spec ###
-    t0 = time.time()
+    if verbose >= 1: t0 = time.time()
     spec = spec.transpose()
     g_spec = cuda.to_device(spec)
     g_log_spec = cuda.device_array_like(g_spec)
@@ -305,10 +302,10 @@ def main():
     griddim = (g_spec.shape[0] // blockdim[0] + 1, g_spec.shape[1] // blockdim[1] + 1)
     jit_decibel[griddim, blockdim](g_spec, g_log_spec)
     log_spec = g_log_spec.copy_to_host()
-    print(f'power log transform: {time.time() - t0:.4f}s')
+    if verbose >= 1: print(f'power log transform: {time.time() - t0:.4f}s')
 
     ### peak detection ###
-    t0 = time.time()
+    if verbose >= 1: t0 = time.time()
     g_peaks = cuda.device_array_like(g_spec)
     g_troughs = cuda.device_array_like(g_spec)
     tpb = 1024
@@ -324,19 +321,19 @@ def main():
                                       float64(cfg.harmonic_groups['min_good_peak_power']))
     peaks = g_peaks.copy_to_host()
     # troughs = g_troughs.copy_to_host()
-    print(f'peak_detect: {time.time() - t0:.4f}s')
+    if verbose >= 1: print(f'peak_detect: {time.time() - t0:.4f}s')
 
     ### harmonic groups ###
-    t0 = time.time()
+    if verbose >= 1: t0 = time.time()
     check_freqs = np.zeros(shape=(peaks.shape[0], cfg.harmonic_groups['max_divisor']*int(np.max(np.sum(peaks == 2, axis=1)))))
     for i in range(len(peaks)):
         fs = spec_freq[peaks[i] == 2]
         fs = fs[(fs < cfg.harmonic_groups['max_freq']) & (fs > cfg.harmonic_groups['min_freq'])]
         for d in range(cfg.harmonic_groups['max_divisor']):
             check_freqs[i, d*len(fs):(d+1)*len(fs)] = fs/(d+1)
-    print(f'get check freqs: {time.time() - t0:.4f}s')
+    if verbose >= 1: print(f'get check freqs: {time.time() - t0:.4f}s')
 
-    t0 = time.time()
+    if verbose >= 1: t0 = time.time()
     # max_group_size = int(max_f * min_group_size // min_f)
     max_group_size = int(cfg.harmonic_groups['max_freq'] * cfg.harmonic_groups['min_group_size'] // cfg.harmonic_groups['min_freq'])
 
@@ -354,9 +351,9 @@ def main():
                                               float64(cfg.harmonic_groups['mains_freq_tol']))
     out_cpu = out.copy_to_host()
     value_cpu = value.copy_to_host()
-    print(f'get harmonic groups: {time.time() - t0:.4f}s')
+    if verbose >= 1: print(f'get harmonic groups: {time.time() - t0:.4f}s')
 
-
+    ### assign harmonic groups ###
     harmonic_helper = np.cumsum(out_cpu>0, axis= 2)
     assigned_hg = np.zeros_like(peaks)
     # fund_list = []
@@ -392,6 +389,20 @@ def main():
                         assigned_hg[t, non_zero_idx] = next_hg
                         next_hg += 1
                         break
+    return assigned_hg, peaks, log_spec
+
+
+
+def main():
+    #############################################################################################
+    ### load example data ###
+    spec = np.load("./wavetracker/spec2.npy")
+    spec_freq = np.load("./wavetracker/spec_freqs2.npy")
+    spec_times = np.load("./wavetracker/spec_time2.npy")
+
+    cfg = Configuration()
+
+    assigned_hg, peaks, log_spec = harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0)
 
     # for t in range(out_cpu.shape[0]):
     for t in range(10):
@@ -413,20 +424,21 @@ def main():
 
         # plt.show()
 
-    f_list = []
-    for t in range(assigned_hg.shape[0]):
-        f_list.append([])
-        for hg in np.unique(assigned_hg[t]):
-            if hg == 0:
-                continue
-            f_list[-1].append(spec_freq[assigned_hg[t] == hg][0])
+    fundamentals = get_fundamentals(assigned_hg, spec_freq)
+    # f_list = []
+    # for t in range(assigned_hg.shape[0]):
+    #     f_list.append([])
+    #     for hg in np.unique(assigned_hg[t]):
+    #         if hg == 0:
+    #             continue
+    #         f_list[-1].append(spec_freq[assigned_hg[t] == hg][0])
 
 
     fig, ax = plt.subplots(figsize=(30/2.54, 18/2.54))
     f1 = np.where(spec_freq > cfg.harmonic_groups['max_freq'] * cfg.harmonic_groups['min_group_size'])[0][0]
     ax.pcolormesh(spec_times, spec_freq[:f1], log_spec[:, :f1].transpose(), vmax=-50, vmin=-120, alpha=0.7, cmap='jet')
-    for i in range(out_cpu.shape[0]):
-        ax.plot(np.ones(len(f_list[i]))*spec_times[i], f_list[i], '.', color='k', zorder = 2)
+    for i in range(assigned_hg.shape[0]):
+        ax.plot(np.ones(len(fundamentals[i]))*spec_times[i], fundamentals[i], '.', color='k', zorder = 2)
     ax.set_ylim(cfg.harmonic_groups['min_freq'] - 100, cfg.harmonic_groups['max_freq'] + 100)
 
     plt.show()

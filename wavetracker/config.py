@@ -24,6 +24,8 @@ class Configuration(object):
         self.basic = {}
         self.spectrogram = {}
         self.raw = {}
+        self.harmonic_groups = {}
+        self.tracking = {}
 
         if self.verbose >= 1: print(f'{"Config file from":^25}: {os.path.realpath(self.file)}.')
 
