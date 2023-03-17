@@ -90,7 +90,6 @@ class Analysis_pipeline(object):
 
     def extract_snippet_signals(self):
         if self.gpu_use:
-            print('\nyay')
             assigned_hg, peaks, log_spec = harmonic_group_pipeline(self.Spec.sum_spec, self.Spec.spec_freqs, self.cfg)
             tmp_fundamentals = get_fundamentals(assigned_hg, self.Spec.spec_freqs)
         else:
@@ -117,6 +116,7 @@ class Analysis_pipeline(object):
         self._idx_v.extend(tmp_idx_v + idx_0)
         self._sign_v.extend(tmp_sign_v)
 
+        print('\nyay')
 
     def pipeline_GPU(self):
         if self.verbose >= 1: print(f'{"Spectrogram (GPU)":^25}: -- fine spec: '
