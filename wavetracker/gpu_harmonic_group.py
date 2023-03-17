@@ -276,7 +276,7 @@ def get_harmonic_groups_coordinator(g_check_freqs, g_log_spec, spec_freq, peaks,
         if g_check_freqs[i, j] != 0:
             value[i, j] = get_group(g_check_freqs[i, j], g_log_spec[i], spec_freq, peaks[i], out[i, j, :],
                                     min_group_size, max_freq_tol, mains_freq, mains_freq_tol)
-        cuda.syncthreads()
+            cuda.syncthreads()
 
 ###############################################################################
 
