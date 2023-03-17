@@ -223,8 +223,7 @@ def peak_detect_coordinater(spec, peaks, troughs, spec_freq, low_threshold, high
 
 ########################################################################################
 
-# @cuda.jit('f8(f8, f4[:], f8[:], f4[:], i8[:], i8, f8, f8, f8)', device=True)
-@cuda.jit('f8(f8, f4[:], f8[:], f4[:], i8[:], i8, f8, f8, f8)', target='cpu')
+@cuda.jit('f8(f8, f4[:], f8[:], f4[:], i8[:], i8, f8, f8, f8)', device=True)
 def get_group(freq, log_spec, spec_freqs, peaks, out, min_group_size, max_freq_tol, mains_freq, mains_freq_tol):
     fzero = freq
     fzero_h = 1
