@@ -262,7 +262,11 @@ def get_group(freq, log_spec, spec_freqs, peaks, out, min_group_size, max_freq_t
             else:
                 n += 1
                 peak_sum += log_spec[out[i]]
-    peak_mean = peak_sum / n
+
+    if n != 0:
+        peak_mean = peak_sum / n
+    else:
+        peak_mean = -1e6
 
     value = peak_mean if nn >= min_group_size - 1 else -1e6
     return value
