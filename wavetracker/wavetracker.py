@@ -77,10 +77,9 @@ class Analysis_pipeline(object):
     def run(self):
         if self.gpu_use:
             self.pipeline_GPU()
-            print('yay')
+            print('\nyay')
         else:
             self.pipeline_CPU()
-            print('nay')
 
         if self.verbose >= 1: print(f'{"Tracking":^25}: -- freq_tolerance: {self.cfg.tracking["freq_tolerance"]} -- '
                                     f'max_dt: {self.cfg.tracking["max_dt"]}')
