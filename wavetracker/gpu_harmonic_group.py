@@ -357,7 +357,7 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
     harmonic_helper = np.cumsum(out_cpu>0, axis= 2)
     assigned_hg = np.zeros_like(peaks)
     # fund_list = []
-    for t in tqdm(range(out_cpu.shape[0])):
+    for t in range(out_cpu.shape[0]):
         next_hg = 1
         assigned = np.zeros_like(peaks[t])
 
