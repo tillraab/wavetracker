@@ -276,7 +276,7 @@ def get_harmonic_groups_coordinator(g_check_freqs, g_log_spec, spec_freq, peaks,
         if g_check_freqs[i, j] != 0:
             value[i, j] = get_group(g_check_freqs[i, j], g_log_spec[i], spec_freq, peaks[i], out[i, j, :],
                                     min_group_size, max_freq_tol, mains_freq, mains_freq_tol)
-    cuda.syncthreads()
+    # cuda.syncthreads()
 
 ###############################################################################
 
@@ -343,8 +343,6 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
 
     tpb = (32, 32)
     bpg = (check_freqs.shape[0] // tpb[0] + 1, check_freqs.shape[1] // tpb[1] + 1)
-    embed()
-    quit()
     get_harmonic_groups_coordinator[bpg, tpb](g_check_freqs, g_log_spec, g_spec_freq, g_peaks, out, value,
                                               int64(cfg.harmonic_groups['min_group_size']),
                                               float64(cfg.harmonic_groups['max_freq_tol']),
