@@ -76,8 +76,8 @@ class Analysis_pipeline(object):
 
     def run(self):
         if self.gpu_use:
-            self.pipeline_GPU()
             print('\nyay')
+            self.pipeline_GPU()
         else:
             self.pipeline_CPU()
 
@@ -226,7 +226,6 @@ def main():
 
         if args.nosave:
             Analysis.Spec.get_sparse_spec, Analysis.Spec.get_fine_spec = False, False
-        print('got here ')
         Analysis.run()
 
         ##########################################
