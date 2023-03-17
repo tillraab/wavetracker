@@ -352,7 +352,7 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
                                               float64(cfg.harmonic_groups['max_freq_tol']),
                                               float64(cfg.harmonic_groups['mains_freq']),
                                               float64(cfg.harmonic_groups['mains_freq_tol']))
-    time.sleep(1)
+    time.sleep(2)
     out_cpu = out.copy_to_host()
     value_cpu = value.copy_to_host()
     if verbose >= 1: print(f'get harmonic groups: {time.time() - t0:.4f}s')
