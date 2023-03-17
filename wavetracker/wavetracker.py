@@ -92,6 +92,7 @@ class Analysis_pipeline(object):
         if self.gpu_use:
             assigned_hg, peaks, log_spec = harmonic_group_pipeline(self.Spec.sum_spec, self.Spec.spec_freqs, self.cfg)
             tmp_fundamentals = get_fundamentals(assigned_hg, self.Spec.spec_freqs)
+            print('\nyay')
         else:
             partial_harmonic_groups = partial(harmonic_groups, self.Spec.spec_freqs, **self.cfg.harmonic_groups)
             a = partial_harmonic_groups(self.Spec.sum_spec[:, 0]) # TEST
@@ -115,8 +116,6 @@ class Analysis_pipeline(object):
         self._fund_v.extend(tmp_fund_v)
         self._idx_v.extend(tmp_idx_v + idx_0)
         self._sign_v.extend(tmp_sign_v)
-
-        print('\nyay')
 
     def pipeline_GPU(self):
         if self.verbose >= 1: print(f'{"Spectrogram (GPU)":^25}: -- fine spec: '
