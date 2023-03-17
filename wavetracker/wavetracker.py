@@ -226,7 +226,7 @@ def main():
 
         if args.nosave:
             Analysis.Spec.get_sparse_spec, Analysis.Spec.get_fine_spec = False, False
-
+        print('got here ')
         Analysis.run()
 
         ##########################################
