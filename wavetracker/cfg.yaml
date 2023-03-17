@@ -8,8 +8,8 @@ raw:
 
 # add another comment
 spectrogram:
+  snippet_size: 1048576 # 2**20
   # snippet_size: 2097152 # 2**21
-  snippet_size: 2097152 # 2**21
   # nfft: 65536 # 2**16
   nfft: 32768 # 2**16
   overlap_frac: 0.9
