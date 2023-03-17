@@ -343,7 +343,8 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
 
     tpb = (32, 32)
     bpg = (check_freqs.shape[0] // tpb[0] + 1, check_freqs.shape[1] // tpb[1] + 1)
-
+    embed()
+    quit()
     get_harmonic_groups_coordinator[bpg, tpb](g_check_freqs, g_log_spec, g_spec_freq, g_peaks, out, value,
                                               int64(cfg.harmonic_groups['min_group_size']),
                                               float64(cfg.harmonic_groups['max_freq_tol']),
