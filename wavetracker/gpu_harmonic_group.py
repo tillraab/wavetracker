@@ -342,6 +342,7 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
     max_group_size = int(cfg.harmonic_groups['max_freq'] * cfg.harmonic_groups['min_group_size'] // cfg.harmonic_groups['min_freq'])
 
     g_check_freqs = cuda.to_device(check_freqs)
+    out_cpu = np.empty(shape=(check_freqs.shape[0], check_freqs.shape[1], max_group_size))
     out = cuda.device_array(shape=(check_freqs.shape[0], check_freqs.shape[1], max_group_size), dtype=int)
     value = cuda.device_array(shape=(check_freqs.shape[0], check_freqs.shape[1]), dtype=float)
 
@@ -352,8 +353,9 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
                                               float64(cfg.harmonic_groups['max_freq_tol']),
                                               float64(cfg.harmonic_groups['mains_freq']),
                                               float64(cfg.harmonic_groups['mains_freq_tol']))
-    time.sleep(2)
-    out_cpu = out.copy_to_host()
+
+    # out_cpu = out.copy_to_host()
+    cuda.memcpy_dtoh(out_cpu, out)
     value_cpu = value.copy_to_host()
     if verbose >= 1: print(f'get harmonic groups: {time.time() - t0:.4f}s')
 
