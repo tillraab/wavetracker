@@ -90,7 +90,6 @@ class Analysis_pipeline(object):
 
     def extract_snippet_signals(self):
         if self.gpu_use:
-            print('\nyay')
             assigned_hg, peaks, log_spec = harmonic_group_pipeline(self.Spec.sum_spec, self.Spec.spec_freqs, self.cfg)
             tmp_fundamentals = get_fundamentals(assigned_hg, self.Spec.spec_freqs)
 
