@@ -267,7 +267,7 @@ def get_group(freq, log_spec, spec_freqs, peaks, out, min_group_size, max_freq_t
     value = peak_mean if nn >= min_group_size - 1 else -1e6
     return value
 
-@cuda.jit('void(f8[:,:], f4[:,:], f8[:], f4[:, :], i8[:,:,:], f8[:, :], i8, f8, f8, f8)', target='cpu')
+@cuda.jit('void(f8[:,:], f4[:,:], f8[:], f4[:, :], i8[:,:,:], f8[:, :], i8, f8, f8, f8)')
 def get_harmonic_groups_coordinator(g_check_freqs, g_log_spec, spec_freq, peaks, out, value,
                                     min_group_size, max_freq_tol, mains_freq, mains_freq_tol):
     i, j = cuda.grid(2)
