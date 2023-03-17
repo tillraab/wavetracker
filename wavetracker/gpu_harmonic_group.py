@@ -331,7 +331,6 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
     if verbose >= 1: t0 = time.time()
     check_freqs = np.zeros(shape=(peaks.shape[0], cfg.harmonic_groups['max_divisor']*int(np.max(np.sum(peaks == 2, axis=1)))))
     embed()
-    quit()
     for i in range(len(peaks)):
         fs = spec_freq[peaks[i] == 2]
         fs = fs[(fs < cfg.harmonic_groups['max_freq']) & (fs > cfg.harmonic_groups['min_freq'])]
