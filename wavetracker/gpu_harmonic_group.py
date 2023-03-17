@@ -347,7 +347,7 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
     value = cuda.device_array(shape=(check_freqs.shape[0], check_freqs.shape[1]), dtype=float)
 
     #tpb = (32, 32)
-    tpb = 32
+    tpb = (32, 1)
     bpg = (check_freqs.shape[0] // tpb[0] + 1, check_freqs.shape[1] // tpb[1] + 1)
     get_harmonic_groups_coordinator[bpg, tpb](g_check_freqs, g_log_spec, g_spec_freq, g_peaks, out, value,
                                               int64(cfg.harmonic_groups['min_group_size']),
