@@ -350,7 +350,6 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
     #tpb = (32, 32)
     tpb = (32, 32)
     bpg = (check_freqs.shape[0] // tpb[0] + 1, check_freqs.shape[1] // tpb[1] + 1)
-    print(g_check_freqs.shape)
     get_harmonic_groups_coordinator[bpg, tpb](g_check_freqs, g_log_spec, g_spec_freq, g_peaks, out, value,
                                               int64(cfg.harmonic_groups['min_group_size']),
                                               float64(cfg.harmonic_groups['max_freq_tol']),
@@ -359,6 +358,7 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
 
     out.copy_to_host(out_cpu)
     value.copy_to_host(value_cpu)
+    embed()
     # cuda.memcpy_dtoh(out_cpu, out)
     # value_cpu = value.copy_to_host()
     if verbose >= 1: print(f'get harmonic groups: {time.time() - t0:.4f}s')
