@@ -76,7 +76,6 @@ class Analysis_pipeline(object):
 
     def run(self):
         if self.gpu_use:
-            print('\nyay')
             self.pipeline_GPU()
         else:
             self.pipeline_CPU()

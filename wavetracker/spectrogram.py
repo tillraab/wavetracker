@@ -357,6 +357,7 @@ class Spectrogram(object):
 
     def snippet_spectrogram(self, data_snippet, snipptet_t0):
         if self.gpu:
+            print('\nyay')
             self.spec, self.spec_freqs, spec_times = tensorflow_spec(tf.transpose(data_snippet), samplerate=self.samplerate,
                                                              verbose=self.verbose, step=self.step, nfft = self.nfft,
                                                              **self.kwargs)
