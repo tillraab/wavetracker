@@ -315,7 +315,11 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
     tpb = 1024
     bpg = g_spec.shape[0]
 
-    peak_detect_coordinater[bpg, tpb](g_log_spec, g_peaks, g_troughs, g_spec_freq,
+    # Start an asynchronous data transfer from the CPU to the GPU
+    stream = cuda.stream()
+    cuda.memcpy_htod_async(g_log_spec, log_spec, stream)
+
+    peak_detect_coordinater[bpg, tpb, stream](g_log_spec, g_peaks, g_troughs, g_spec_freq,
                                       float64(cfg.harmonic_groups['low_threshold']),
                                       float64(cfg.harmonic_groups['high_threshold']),
                                       float64(cfg.harmonic_groups['min_freq']),
@@ -326,6 +330,11 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
     peaks = g_peaks.copy_to_host()
     # troughs = g_troughs.copy_to_host()
     if verbose >= 1: print(f'peak_detect: {time.time() - t0:.4f}s')
+    meminfo = cuda.current_context().get_memory_info()
+
+    print("Currently allocated:", meminfo[0]/1024/1024, "MB")
+    print("Total memory:", meminfo[1]/1024/1024, "MB")
+    # print("Free memory:", meminfo[0]/1024/1024, "MB")
 
     ### harmonic groups ###
     if verbose >= 1: t0 = time.time()
@@ -358,7 +367,7 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
 
     out.copy_to_host(out_cpu)
     value.copy_to_host(value_cpu)
-    embed()
+    # embed()
     # cuda.memcpy_dtoh(out_cpu, out)
     # value_cpu = value.copy_to_host()
     if verbose >= 1: print(f'get harmonic groups: {time.time() - t0:.4f}s')

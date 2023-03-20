@@ -126,7 +126,15 @@ class Analysis_pipeline(object):
         pbar = tqdm(total=iterations)
 
         iter_counter = 0
+        # embed()
+        # quit()
         for enu, snippet_data in enumerate(self.dataset):
+        # for enu, snippet_data in enumerate(self.dataset.skip(10).take(1)):
+        #     print(snippet_data[0, :10].numpy())
+        #     quit()
+        #     if enu == 10:
+        #         print(snippet_data[0, :10].numpy())
+        #         quit()
             t0_snip = time.time()
             snippet_t0 = self.Spec.itter_count * self.Spec.snippet_size / self.samplerate
             if self.data.shape[0] // self.Spec.snippet_size == self.Spec.itter_count:
