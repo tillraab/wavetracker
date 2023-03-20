@@ -297,29 +297,38 @@ def get_fundamentals(assigned_hg, spec_freq):
 def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
     ### logaritmic spec ###
     if verbose >= 1: t0 = time.time()
+
+    # print('1')
     spec = spec.transpose()
-    g_spec = cuda.to_device(spec)
-    g_log_spec = cuda.device_array_like(g_spec)
-    g_spec_freq = cuda.to_device(spec_freq)
+    log_spec = np.zeros_like(spec)
+    # embed()
+    # quit()
+    with cuda.pinned(spec, log_spec, spec_freq):
+        stream = cuda.stream()
+        g_spec = cuda.to_device(spec, stream=stream)
+        g_log_spec = cuda.device_array_like(g_spec, stream=stream)
+        g_spec_freq = cuda.to_device(spec_freq, stream=stream)
 
-    blockdim = (32, 32)
-    griddim = (g_spec.shape[0] // blockdim[0] + 1, g_spec.shape[1] // blockdim[1] + 1)
-    jit_decibel[griddim, blockdim](g_spec, g_log_spec)
-    log_spec = g_log_spec.copy_to_host()
+        blockdim = (32, 32)
+        griddim = (g_spec.shape[0] // blockdim[0] + 1, g_spec.shape[1] // blockdim[1] + 1)
+        jit_decibel[griddim, blockdim, stream](g_spec, g_log_spec)
+        g_log_spec.copy_to_host(log_spec, stream=stream)
+        stream.synchronize()
+
     if verbose >= 1: print(f'power log transform: {time.time() - t0:.4f}s')
-
+    # print('2')
     ### peak detection ###
     if verbose >= 1: t0 = time.time()
-    g_peaks = cuda.device_array_like(g_spec)
-    g_troughs = cuda.device_array_like(g_spec)
+    g_peaks = cuda.device_array_like(g_log_spec)
+    g_troughs = cuda.device_array_like(g_log_spec)
     tpb = 1024
-    bpg = g_spec.shape[0]
+    bpg = g_log_spec.shape[0]
 
     # Start an asynchronous data transfer from the CPU to the GPU
-    stream = cuda.stream()
-    cuda.memcpy_htod_async(g_log_spec, log_spec, stream)
+    # stream = cuda.stream()
+    # cuda.memcpy_htod_async(g_log_spec, log_spec, stream)
 
-    peak_detect_coordinater[bpg, tpb, stream](g_log_spec, g_peaks, g_troughs, g_spec_freq,
+    peak_detect_coordinater[bpg, tpb](g_log_spec, g_peaks, g_troughs, g_spec_freq,
                                       float64(cfg.harmonic_groups['low_threshold']),
                                       float64(cfg.harmonic_groups['high_threshold']),
                                       float64(cfg.harmonic_groups['min_freq']),
@@ -331,9 +340,9 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
     # troughs = g_troughs.copy_to_host()
     if verbose >= 1: print(f'peak_detect: {time.time() - t0:.4f}s')
     meminfo = cuda.current_context().get_memory_info()
-
-    print("Currently allocated:", meminfo[0]/1024/1024, "MB")
-    print("Total memory:", meminfo[1]/1024/1024, "MB")
+    # print('3')
+    # print("Currently allocated:", meminfo[0]/1024/1024, "MB")
+    # print("Total memory:", meminfo[1]/1024/1024, "MB")
     # print("Free memory:", meminfo[0]/1024/1024, "MB")
 
     ### harmonic groups ###
@@ -350,26 +359,34 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
     # max_group_size = int(max_f * min_group_size // min_f)
     max_group_size = int(cfg.harmonic_groups['max_freq'] * cfg.harmonic_groups['min_group_size'] // cfg.harmonic_groups['min_freq'])
 
-    g_check_freqs = cuda.to_device(check_freqs)
-    out = cuda.device_array(shape=(check_freqs.shape[0], check_freqs.shape[1], max_group_size), dtype=int)
-    value = cuda.device_array(shape=(check_freqs.shape[0], check_freqs.shape[1]), dtype=float)
     out_cpu = np.zeros(shape=(check_freqs.shape[0], check_freqs.shape[1], max_group_size), dtype=int)
     value_cpu = np.zeros(shape=(check_freqs.shape[0], check_freqs.shape[1]), dtype=float)
 
-    #tpb = (32, 32)
-    tpb = (32, 32)
-    bpg = (check_freqs.shape[0] // tpb[0] + 1, check_freqs.shape[1] // tpb[1] + 1)
-    get_harmonic_groups_coordinator[bpg, tpb](g_check_freqs, g_log_spec, g_spec_freq, g_peaks, out, value,
-                                              int64(cfg.harmonic_groups['min_group_size']),
-                                              float64(cfg.harmonic_groups['max_freq_tol']),
-                                              float64(cfg.harmonic_groups['mains_freq']),
-                                              float64(cfg.harmonic_groups['mains_freq_tol']))
+    # print('4')
+    with cuda.pinned(check_freqs, out_cpu, value_cpu, log_spec, spec_freq, peaks):
+        stream_hg = cuda.stream()
+        g_check_freqs = cuda.to_device(check_freqs, stream = stream_hg)
+        g_spec_freq = cuda.to_device(spec_freq, stream=stream_hg)
+        g_peaks = cuda.to_device(peaks, stream = stream_hg)
+        g_log_spec = cuda.device_array_like(g_spec, stream=stream_hg)
+        out = cuda.device_array(shape=(check_freqs.shape[0], check_freqs.shape[1], max_group_size), dtype=int, stream = stream_hg)
+        value = cuda.device_array(shape=(check_freqs.shape[0], check_freqs.shape[1]), dtype=float, stream = stream_hg)
 
-    out.copy_to_host(out_cpu)
-    value.copy_to_host(value_cpu)
+        tpb = (32, 32)
+        bpg = (g_check_freqs.shape[0] // tpb[0] + 1, g_check_freqs.shape[1] // tpb[1] + 1)
+        get_harmonic_groups_coordinator[bpg, tpb](g_check_freqs, g_log_spec, g_spec_freq, g_peaks, out, value,
+                                                  int64(cfg.harmonic_groups['min_group_size']),
+                                                  float64(cfg.harmonic_groups['max_freq_tol']),
+                                                  float64(cfg.harmonic_groups['mains_freq']),
+                                                  float64(cfg.harmonic_groups['mains_freq_tol']))
+
+        out.copy_to_host(out_cpu)
+        value.copy_to_host(value_cpu)
+        stream_hg.synchronize()
     # cuda.memcpy_dtoh(out_cpu, out)
     # value_cpu = value.copy_to_host()
     if verbose >= 1: print(f'get harmonic groups: {time.time() - t0:.4f}s')
+    # print('5')
 
     ### assign harmonic groups ###
     harmonic_helper = np.cumsum(out_cpu>0, axis= 2)
@@ -407,6 +424,7 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
                         assigned_hg[t, non_zero_idx] = next_hg
                         next_hg += 1
                         break
+    # print('6\n')
     return assigned_hg, peaks, log_spec
 
 

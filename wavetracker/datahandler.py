@@ -26,7 +26,7 @@ def multi_channel_audio_file_generator(filename: str,
         while True:
             chunk = f.read(data_snippet_idxs * channels * 4) # 4 bytes per float32 value
             if chunk:
-                chunk = tf.io.decode_raw(chunk, tf.float32)
+                chunk = tf.io.decode_raw(chunk, tf.float32, fixed_length=data_snippet_idxs * channels * 4)
                 chunk = chunk.reshape([-1, channels])
                 yield chunk
             else:

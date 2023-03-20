@@ -84,8 +84,8 @@ class Analysis_pipeline(object):
                                     f'max_dt: {self.cfg.tracking["max_dt"]}')
 
         self.times = self.Spec.times
-        self.ident_v = freq_tracking_v6(self.fund_v, self.idx_v, self.sign_v, self.times,
-                                        **self.cfg.harmonic_groups, **self.cfg.tracking)
+        # self.ident_v = freq_tracking_v6(self.fund_v, self.idx_v, self.sign_v, self.times,
+        #                                 **self.cfg.harmonic_groups, **self.cfg.tracking)
 
 
     def extract_snippet_signals(self):
@@ -104,6 +104,8 @@ class Analysis_pipeline(object):
             tmp_fundamentals = pool.map(fundamental_freqs, groups_per_time)
             pool.terminate()
 
+        # embed()
+        # quit()
         tmp_fund_v = np.hstack(tmp_fundamentals)
         tmp_idx_v = np.array(np.hstack([np.ones(len(f)) * enu for enu, f in enumerate(tmp_fundamentals)]), dtype=int)
         f_idx = [np.argmin(np.abs(self.Spec.spec_freqs - f)) for i in range(len(tmp_fundamentals)) for f in
@@ -122,19 +124,16 @@ class Analysis_pipeline(object):
                                     f'{self.Spec.get_fine_spec} -- plotable spec: {self.Spec.get_sparse_spec}'
                                     f' -- snippet size: {self.Spec.snippet_size / self.samplerate:.2f}s')
 
-        iterations = int(np.ceil(self.data_shape[0] / self.Spec.snippet_size))
+        iterations = int(np.floor(self.data_shape[0] / self.Spec.snippet_size))
         pbar = tqdm(total=iterations)
 
         iter_counter = 0
+
         # embed()
         # quit()
         for enu, snippet_data in enumerate(self.dataset):
-        # for enu, snippet_data in enumerate(self.dataset.skip(10).take(1)):
-        #     print(snippet_data[0, :10].numpy())
-        #     quit()
-        #     if enu == 10:
-        #         print(snippet_data[0, :10].numpy())
-        #         quit()
+
+            # print(f'1) Memory usage on GPU: {tf.config.experimental.get_memory_info("GPU:0")["current"]/1e6}MB')
             t0_snip = time.time()
             snippet_t0 = self.Spec.itter_count * self.Spec.snippet_size / self.samplerate
             if self.data.shape[0] // self.Spec.snippet_size == self.Spec.itter_count:
@@ -143,10 +142,12 @@ class Analysis_pipeline(object):
             t0_spec = time.time()
             self.Spec.snippet_spectrogram(snippet_data, snipptet_t0=snippet_t0)
             t1_spec = time.time()
+            # print(f'2) Memory usage on GPU: {tf.config.experimental.get_memory_info("GPU:0")["current"] / 1e6}MB')
 
 
             t0_hg = time.time()
             self.extract_snippet_signals()
+            # print(f'3) Memory usage on GPU: {tf.config.experimental.get_memory_info("GPU:0")["current"] / 1e6}MB')
             t1_hg = time.time()
 
             iter_counter += 1
@@ -155,7 +156,14 @@ class Analysis_pipeline(object):
                                         f'-- Spectrogram: {t1_spec - t0_spec:.2f}s '
                                         f'-- Harmonic group: {t1_hg - t0_hg:.2f}s '
                                         f'--> {t1_snip-t0_snip:.2f}s', end="\r")
+            # if self.verbose >= 3: print(f'{" ":^25}  Progress {iter_counter / iterations:3.1%} '
+            #                             f'-- Spectrogram: {t1_spec - t0_spec:.2f}s '
+            #                             f'-- Harmonic group: {t1_hg - t0_hg:.2f}s '
+            #                             f'--> {t1_snip-t0_snip:.2f}s, {enu}')
             pbar.update(1)
+            if enu == iterations -1:
+                break
+
         pbar.close()
 
 
@@ -236,6 +244,8 @@ def main():
         Analysis.run()
 
         ##########################################
+        embed()
+        quit()
         fig, ax = plt.subplots(figsize=(20/2.54, 12/2.54))
         ax.scatter(Analysis.times[Analysis.idx_v], Analysis.fund_v, color='grey', alpha = 0.5)
         for id in np.unique(Analysis.ident_v[~np.isnan(Analysis.ident_v)]):
