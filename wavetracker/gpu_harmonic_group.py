@@ -367,7 +367,6 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
 
     out.copy_to_host(out_cpu)
     value.copy_to_host(value_cpu)
-    # embed()
     # cuda.memcpy_dtoh(out_cpu, out)
     # value_cpu = value.copy_to_host()
     if verbose >= 1: print(f'get harmonic groups: {time.time() - t0:.4f}s')
