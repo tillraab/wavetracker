@@ -142,6 +142,18 @@ class Analysis_pipeline(object):
             t0_spec = time.time()
             self.Spec.snippet_spectrogram(snippet_data, snipptet_t0=snippet_t0)
             t1_spec = time.time()
+            #
+            # embed()
+            # quit()
+            # import scipy.signal as sig
+            # n = self.Spec.sum_spec.shape[0]
+            # psd_data_seg = decibel(self.Spec.sum_spec.T[0, n//2:n*3//4])
+            # psd_detrend = sig.detrend(psd_data_seg, type='linear')
+            #
+            # fig, ax = plt.subplots(3, 1)
+            # ax[0].plot(self.Spec.spec_freqs[n//2:n*3//4], psd_data_seg)
+            # ax[1].plot(self.Spec.spec_freqs[n//2:n*3//4], psd_detrend)
+            # plt.show()
             # print(f'2) Memory usage on GPU: {tf.config.experimental.get_memory_info("GPU:0")["current"] / 1e6}MB')
 
 
@@ -244,8 +256,6 @@ def main():
         Analysis.run()
 
         ##########################################
-        embed()
-        quit()
         fig, ax = plt.subplots(figsize=(20/2.54, 12/2.54))
         ax.scatter(Analysis.times[Analysis.idx_v], Analysis.fund_v, color='grey', alpha = 0.5)
         for id in np.unique(Analysis.ident_v[~np.isnan(Analysis.ident_v)]):
