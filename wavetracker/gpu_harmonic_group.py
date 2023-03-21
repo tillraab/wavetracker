@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from IPython import embed
 import numpy as np
 import cupy as cp
-from numba import cuda, jit, float64, int64
+from numba import cuda, jit, float64, int64, types
 from .config import Configuration
 
 import random
@@ -101,6 +101,100 @@ def jit_decibel(power, db_power):
     else:
         db_power[i, j] = 10.0 * math.log10(power[i, j] / ref_power)
 
+@cuda.jit(device=True)
+def threshold_estimate(log_spec, log_spec_detrend, hist, bins):
+    n = len(log_spec)
+    i0, i1 = n // 2, n * 3 // 4
+    abs_sum_val = 0
+    for i in range(int(i1-i0)):
+        abs_sum_val += log_spec[i0+i]
+    abs_mean_val = abs_sum_val / (i1 - i0)
+
+    di = 128 # ToDo:Value outside!!!
+    itters = int(len(log_spec_detrend) / di)
+    for i in range(itters):
+        sum_val = 0
+        for j in range(di):
+            sum_val += log_spec[int(i0+i*di+j)]
+        mean_val = sum_val/di
+        for j in range(di):
+            log_spec_detrend[int(i*di+j)] = log_spec[int(i0+i*di+j)] - mean_val + abs_mean_val
+
+    maxd = -1e6
+    mind = 1e6
+
+    for i in range(len(log_spec_detrend)):
+        if log_spec_detrend[i] > maxd:
+            maxd = log_spec_detrend[i]
+        if log_spec_detrend[i] < mind:
+            mind = log_spec_detrend[i]
+    contrast = math.fabs((maxd - mind) / (maxd + mind))
+
+    # hist = cuda.local.array((100,), dtype=types.int64)
+    # hist = np.zeros(100)
+    # bins = cuda.local.array((101,), dtype=types.float64)
+    # bins = np.zeros(101)
+
+    r = maxd - mind
+    for i in range(100):
+        v0 = mind + r / 100 * i
+        v1 = mind + r / 100 * (i + 1)
+        bins[i] = v0
+        for j in range(len(log_spec_detrend)):
+            if log_spec_detrend[j] >= v0 and log_spec_detrend[j] < v1:
+                hist[i] += 1
+                hist[i] += 1
+    # for i in range(len(hist)):
+    #     out_h[i] = hist[i]
+
+    max_hist = 0
+    for i in range(len(hist)):
+        if hist[i] > max_hist:
+            max_hist = hist[i]
+    hist_th = max_hist * 1.0 / math.sqrt(math.e)
+    print(hist_th)
+    #
+    # lower_i = 0
+    # upper_i = 0
+    # for i in range(len(hist)):
+    #     if hist[i] > hist_th:
+    #         upper_i = i
+    #         if lower_i == 0:
+    #             lower_i = i
+    # x = bins[upper_i]-bins[lower_i]
+    # print(x)
+    return hist_th
+    # print(upper)
+    # std = 0.5 * (upper - lower)
+    # print(std * 5., std * 7)
+    #
+    # inx = hist > np.max(hist) * hist_height
+    # lower = bins[0:-1][inx][0]
+    # upper = bins[1:][inx][-1]
+    # center = 0.5 * (lower + upper)
+    # std = 0.5 * (upper - lower)
+    #
+    # low_th = std * 5.
+    # high_th = std * 7
+
+@cuda.jit
+def threshold_estimate_coordinator(log_spec, log_spec_detrend, hist, bins, hist_th, std):
+    i = cuda.grid(1)
+    if i < log_spec.shape[0]:
+    # if i < 1:
+        hist_th[i] = threshold_estimate(log_spec[i], log_spec_detrend[i], hist[i], bins[i])
+        cuda.syncthreads()
+
+        lower = 0
+        upper = 0
+        for j in range(len(hist[i])):
+            if hist[i][j] > hist_th[i]:
+                upper = bins[i, j+1]
+                if lower == 0:
+                    lower = bins[i, j]
+        cuda.syncthreads()
+        std[i] = 0.5 * (upper-lower)
+        # print(upper-lower)
 ####################################################################
 # 2)
 @cuda.jit('void(f4[:], f4[:], f4[:], f8[:], f8, f8, f8, f8, f8, f8, f8)', device=True)
@@ -317,13 +411,45 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
 
     if verbose >= 1: print(f'power log transform: {time.time() - t0:.4f}s')
     # print('2')
+
+    ###
+
+    tpb = 1024
+    bpg = g_log_spec.shape[0]
+    g_log_spec_detrend = cuda.device_array((g_log_spec.shape[0], g_log_spec.shape[1]*3//4-g_log_spec.shape[1]//2))
+    log_spec_detrend = np.zeros((g_log_spec.shape[0], g_log_spec.shape[1]*3//4-g_log_spec.shape[1]//2))
+
+    g_hist = cuda.device_array((g_log_spec.shape[0], 100))
+    hist = np.zeros(((g_log_spec.shape[0], 100)))
+    g_bins = cuda.device_array((g_log_spec.shape[0], 101))
+    bins = np.zeros(((g_log_spec.shape[0], 101)))
+
+    std = np.zeros((log_spec.shape[0], ))
+    g_std = cuda.device_array((log_spec.shape[0], ))
+
+    g_hist_th = cuda.device_array((g_log_spec.shape[0],))
+    hist_th = np.zeros((g_log_spec.shape[0],))
+
+    threshold_estimate_coordinator[bpg, tpb](g_log_spec, g_log_spec_detrend, g_hist, g_bins, g_hist_th, g_std)
+
+    g_log_spec_detrend.copy_to_host(log_spec_detrend)
+    g_hist.copy_to_host(hist)
+    g_hist_th.copy_to_host(hist_th)
+    g_std.copy_to_host(std)
+    embed()
+    quit()
+
+    fig, ax = plt.subplots(2, 1, sharex='all', sharey='all')
+    ax[0].plot(spec_freq[len(spec_freq) // 2:len(spec_freq) *3//4], log_spec[0, len(spec_freq) // 2:len(spec_freq) *3//4])
+    ax[1].plot(spec_freq[len(spec_freq) // 2:len(spec_freq) *3//4], log_spec_detrend[0])
+
+
     ### peak detection ###
     if verbose >= 1: t0 = time.time()
     g_peaks = cuda.device_array_like(g_log_spec)
     g_troughs = cuda.device_array_like(g_log_spec)
     tpb = 1024
     bpg = g_log_spec.shape[0]
-
     # Start an asynchronous data transfer from the CPU to the GPU
     # stream = cuda.stream()
     # cuda.memcpy_htod_async(g_log_spec, log_spec, stream)

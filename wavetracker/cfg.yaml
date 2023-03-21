@@ -18,8 +18,10 @@ spectrogram:
 harmonic_groups:
   low_threshold: 10.
   high_threshold: 15.
-  low_thresh_factor: 6.0
-  high_thresh_factor: 10.0
+  # low_thresh_factor: 6.0
+  low_thresh_factor: 4.0
+  # high_thresh_factor: 10.0
+  high_thresh_factor: 6.0
   freq_tol_fac: 1.
   max_freq_tol: 1.
   mains_freq: 50.

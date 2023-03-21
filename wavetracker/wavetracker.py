@@ -147,12 +147,44 @@ class Analysis_pipeline(object):
             # quit()
             # import scipy.signal as sig
             # n = self.Spec.sum_spec.shape[0]
-            # psd_data_seg = decibel(self.Spec.sum_spec.T[0, n//2:n*3//4])
-            # psd_detrend = sig.detrend(psd_data_seg, type='linear')
+            # i0, i1 = n//2, n*3//4
+            # psd_data_seg = decibel(self.Spec.sum_spec.T[0, i0:i1])
+            # psd_detrend = sig.detrend(psd_data_seg, type='linear') + np.mean(psd_data_seg)
             #
-            # fig, ax = plt.subplots(3, 1)
-            # ax[0].plot(self.Spec.spec_freqs[n//2:n*3//4], psd_data_seg)
-            # ax[1].plot(self.Spec.spec_freqs[n//2:n*3//4], psd_detrend)
+            # psd_detrend_manual = np.copy(psd_data_seg)
+            # di = int((i1-i0) / 100)
+            # for i in range(i0, i1, di):
+            #     psd_detrend_manual[i-i0:i-i0+di] = psd_data_seg[i-i0:i-i0+di] - np.mean(psd_data_seg[i-i0:i-i0+di])
+            # psd_detrend_manual += np.mean(psd_data_seg)
+            #
+            # maxd = np.max(psd_detrend_manual)
+            # mind = np.min(psd_detrend_manual)
+            # contrast = np.abs((maxd - mind) / (maxd + mind))
+            # hist = np.zeros(100)
+            # bins = np.zeros(101)
+            # hist_height = 1.0/math.sqrt(math.e)
+            # for i in range(100):
+            #     r = maxd-mind
+            #     v0 = mind + r/100 * i
+            #     v1 = mind + r / 100 * (i+1)
+            #     hist[i] = len(psd_detrend_manual[(psd_detrend_manual >= v0) & (psd_detrend_manual < v1)])
+            #     bins[i] = v0
+            #     print(v0, v1)
+            # bins[-1] = v1
+            #
+            # inx = hist > np.max(hist) * hist_height
+            # lower = bins[0:-1][inx][0]
+            # upper = bins[1:][inx][-1]
+            # center = 0.5 * (lower + upper)
+            # std = 0.5 * (upper - lower)
+            #
+            # low_th = std * 5.
+            # high_th = std * 7
+            #
+            # fig, ax = plt.subplots(2, 1)
+            # ax[0].plot(self.Spec.spec_freqs[i0:i1], psd_data_seg)
+            # ax[1].plot(self.Spec.spec_freqs[i0:i1], psd_detrend, color='k')
+            # ax[1].plot(self.Spec.spec_freqs[i0:i1], psd_detrend_manual, '--', color='r')
             # plt.show()
             # print(f'2) Memory usage on GPU: {tf.config.experimental.get_memory_info("GPU:0")["current"] / 1e6}MB')
 
