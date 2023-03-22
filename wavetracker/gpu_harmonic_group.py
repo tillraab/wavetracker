@@ -376,9 +376,10 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
     std = np.zeros((log_spec.shape[0], ))
     hist_th = np.zeros((g_log_spec.shape[0],))
 
-    with cuda.pinned(log_spec_detrend, hist, bins, std, hist_th):
+    with cuda.pinned(log_spec_detrend, log_spec, hist, bins, std, hist_th):
         steam_th_est = cuda.stream()
         g_log_spec_detrend = cuda.device_array((log_spec.shape[0], i1 - i0), stream=steam_th_est)
+        g_log_spec = cuda.to_device(log_spec, stream=steam_th_est)
         g_hist = cuda.device_array((g_log_spec.shape[0], 100), stream=steam_th_est)
         g_bins = cuda.device_array((g_log_spec.shape[0], 101), stream=steam_th_est)
         g_std = cuda.device_array((log_spec.shape[0],), stream=steam_th_est)
@@ -404,13 +405,14 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
     peaks = np.zeros_like(log_spec)
     troughs = np.zeros_like(log_spec)
 
-    with cuda.pinned(peaks, troughs, low_th, high_th, spec_freq):
+    with cuda.pinned(peaks, troughs, low_th, high_th, spec_freq, log_spec):
         stream_pd = cuda.stream()
         g_peaks = cuda.device_array_like(g_log_spec, stream=stream_pd)
         g_troughs = cuda.device_array_like(g_log_spec, stream=stream_pd)
         g_low_th = cuda.to_device(low_th, stream=stream_pd)
         g_high_th = cuda.to_device(high_th, stream=stream_pd)
         g_spec_freq = cuda.to_device(spec_freq, stream=stream_pd)
+        g_log_spec = cuda.to_device(log_spec, stream=stream_pd)
 
         tpb = 1024
         bpg = g_log_spec.shape[0]
@@ -423,6 +425,7 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
                                           float64(cfg.harmonic_groups['mains_freq_tol']),
                                           float64(cfg.harmonic_groups['min_good_peak_power']))
         g_peaks.copy_to_host(peaks, stream=stream_pd)
+        g_troughs.copy_to_host(troughs, stream=stream_pd)
         stream_pd.synchronize()
     # troughs = g_troughs.copy_to_host()
     if verbose >= 1: print(f'peak_detect: {time.time() - t0:.4f}s')
@@ -451,7 +454,8 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
         g_check_freqs = cuda.to_device(check_freqs, stream = stream_hg)
         g_spec_freq = cuda.to_device(spec_freq, stream=stream_hg)
         g_peaks = cuda.to_device(peaks, stream = stream_hg)
-        g_log_spec = cuda.device_array_like(g_spec, stream=stream_hg)
+        # g_log_spec = cuda.device_array_like(g_spec, stream=stream_hg)
+        g_log_spec = cuda.to_device(log_spec, stream=stream_hg)
         out = cuda.device_array(shape=(check_freqs.shape[0], check_freqs.shape[1], max_group_size), dtype=int, stream = stream_hg)
         value = cuda.device_array(shape=(check_freqs.shape[0], check_freqs.shape[1]), dtype=float, stream = stream_hg)
 
