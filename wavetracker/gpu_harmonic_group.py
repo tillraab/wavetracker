@@ -403,6 +403,7 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
     bpg = g_log_spec.shape[0]
 
     i0, i1 = log_spec.shape[1]//2, log_spec.shape[1]*3//4
+    # ToDo: fix that this is a potential of 2 (e.g. i1-i0 = 2**12); detrend with snippets of 128 (2**7)
 
     log_spec_detrend = np.zeros((log_spec.shape[0], i1-i0))
     hist = np.zeros(((log_spec.shape[0], 100)))
@@ -418,7 +419,7 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
         g_std = cuda.device_array((log_spec.shape[0],), stream=steam_th_est)
         g_hist_th = cuda.device_array((g_log_spec.shape[0],), stream=steam_th_est)
 
-        threshold_estimate_coordinator[bpg, tpb](g_log_spec, g_log_spec_detrend, g_hist, g_bins, g_hist_th, g_std)
+        threshold_estimate_coordinator[bpg, tpb, steam_th_est](g_log_spec, g_log_spec_detrend, g_hist, g_bins, g_hist_th, g_std)
 
         g_log_spec_detrend.copy_to_host(log_spec_detrend, stream=steam_th_est)
         g_hist.copy_to_host(hist, stream=steam_th_est)
