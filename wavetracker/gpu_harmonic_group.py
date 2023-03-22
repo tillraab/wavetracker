@@ -405,12 +405,13 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
     peaks = np.zeros_like(log_spec)
     troughs = np.zeros_like(log_spec)
 
-    with cuda.pinned(peaks, troughs, low_th, high_th, spec_freq, log_spec):
+    with cuda.pinned(peaks, troughs, spec_freq, log_spec):
+    # with cuda.pinned(peaks, troughs, low_th, high_th, spec_freq, log_spec):
         stream_pd = cuda.stream()
         g_peaks = cuda.device_array_like(g_log_spec, stream=stream_pd)
         g_troughs = cuda.device_array_like(g_log_spec, stream=stream_pd)
-        g_low_th = cuda.to_device(low_th, stream=stream_pd)
-        g_high_th = cuda.to_device(high_th, stream=stream_pd)
+        # g_low_th = cuda.to_device(low_th, stream=stream_pd)
+        # g_high_th = cuda.to_device(high_th, stream=stream_pd)
         g_spec_freq = cuda.to_device(spec_freq, stream=stream_pd)
         g_log_spec = cuda.to_device(log_spec, stream=stream_pd)
 
