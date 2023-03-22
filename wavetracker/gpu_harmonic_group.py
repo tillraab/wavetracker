@@ -403,8 +403,6 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
     bpg = g_log_spec.shape[0]
 
     i0, i1 = log_spec.shape[1]//2, log_spec.shape[1]*3//4
-    embed()
-    quit()
 
     log_spec_detrend = np.zeros((log_spec.shape[0], i1-i0))
     hist = np.zeros(((log_spec.shape[0], 100)))
