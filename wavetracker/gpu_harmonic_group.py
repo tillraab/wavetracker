@@ -128,12 +128,7 @@ def threshold_estimate(log_spec, log_spec_detrend, hist, bins):
             maxd = log_spec_detrend[i]
         if log_spec_detrend[i] < mind:
             mind = log_spec_detrend[i]
-    contrast = math.fabs((maxd - mind) / (maxd + mind))
-
-    # hist = cuda.local.array((100,), dtype=types.int64)
-    # hist = np.zeros(100)
-    # bins = cuda.local.array((101,), dtype=types.float64)
-    # bins = np.zeros(101)
+#     contrast = math.fabs((maxd - mind) / (maxd + mind))
 
     r = maxd - mind
     for i in range(100):
@@ -143,39 +138,12 @@ def threshold_estimate(log_spec, log_spec_detrend, hist, bins):
         for j in range(len(log_spec_detrend)):
             if log_spec_detrend[j] >= v0 and log_spec_detrend[j] < v1:
                 hist[i] += 1
-                hist[i] += 1
-    # for i in range(len(hist)):
-    #     out_h[i] = hist[i]
-
     max_hist = 0
     for i in range(len(hist)):
         if hist[i] > max_hist:
             max_hist = hist[i]
     hist_th = max_hist * 1.0 / math.sqrt(math.e)
-    print(hist_th)
-    #
-    # lower_i = 0
-    # upper_i = 0
-    # for i in range(len(hist)):
-    #     if hist[i] > hist_th:
-    #         upper_i = i
-    #         if lower_i == 0:
-    #             lower_i = i
-    # x = bins[upper_i]-bins[lower_i]
-    # print(x)
     return hist_th
-    # print(upper)
-    # std = 0.5 * (upper - lower)
-    # print(std * 5., std * 7)
-    #
-    # inx = hist > np.max(hist) * hist_height
-    # lower = bins[0:-1][inx][0]
-    # upper = bins[1:][inx][-1]
-    # center = 0.5 * (lower + upper)
-    # std = 0.5 * (upper - lower)
-    #
-    # low_th = std * 5.
-    # high_th = std * 7
 
 @cuda.jit
 def threshold_estimate_coordinator(log_spec, log_spec_detrend, hist, bins, hist_th, std):
@@ -399,6 +367,7 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
     if verbose >= 1: print(f'power log transform: {time.time() - t0:.4f}s')
 
     ### threshold estimate for peak detection ###
+    if verbose >= 1: t0 = time.time()
     tpb = 1024
     bpg = g_log_spec.shape[0]
 
@@ -426,13 +395,10 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
         g_hist_th.copy_to_host(hist_th, stream=steam_th_est)
         g_std.copy_to_host(std, stream=steam_th_est)
         steam_th_est.synchronize()
+    if verbose >= 1: print(f'power log transform: {time.time() - t0:.4f}s')
 
     embed()
     quit()
-
-    fig, ax = plt.subplots(2, 1, sharex='all', sharey='all')
-    ax[0].plot(spec_freq[len(spec_freq) // 2:len(spec_freq) *3//4], log_spec[0, len(spec_freq) // 2:len(spec_freq) *3//4])
-    ax[1].plot(spec_freq[len(spec_freq) // 2:len(spec_freq) *3//4], log_spec_detrend[0])
 
 
     ### peak detection ###
