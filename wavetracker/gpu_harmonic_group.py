@@ -353,11 +353,10 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
     if verbose >= 1: t0 = time.time()
     spec = spec.transpose()
     log_spec = np.zeros_like(spec)
-    with cuda.pinned(spec, log_spec, spec_freq):
+    with cuda.pinned(spec, log_spec):
         stream = cuda.stream()
         g_spec = cuda.to_device(spec, stream=stream)
         g_log_spec = cuda.device_array_like(g_spec, stream=stream)
-        g_spec_freq = cuda.to_device(spec_freq, stream=stream)
 
         blockdim = (32, 32)
         griddim = (g_spec.shape[0] // blockdim[0] + 1, g_spec.shape[1] // blockdim[1] + 1)
@@ -404,24 +403,27 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
 
     peaks = np.zeros_like(log_spec)
     troughs = np.zeros_like(log_spec)
-    g_peaks = cuda.device_array_like(g_log_spec)
-    g_troughs = cuda.device_array_like(g_log_spec)
 
-    # with cuda.pinned(peaks, troughs, low_th, high_th, spec_freq):
+    with cuda.pinned(peaks, troughs, low_th, high_th, spec_freq):
+        stream_pd = cuda.stream()
+        g_peaks = cuda.device_array_like(g_log_spec, stream=stream_pd)
+        g_troughs = cuda.device_array_like(g_log_spec, stream=stream_pd)
+        g_low_th = cuda.to_device(low_th, stream=stream_pd)
+        g_high_th = cuda.to_device(high_th, stream=stream_pd)
+        g_spec_freq = cuda.to_device(spec_freq, stream=stream_pd)
 
-
-    tpb = 1024
-    bpg = g_log_spec.shape[0]
-
-    peak_detect_coordinater[bpg, tpb](g_log_spec, g_peaks, g_troughs, g_spec_freq,
-                                      float64(cfg.harmonic_groups['low_threshold']),
-                                      float64(cfg.harmonic_groups['high_threshold']),
-                                      float64(cfg.harmonic_groups['min_freq']),
-                                      float64(cfg.harmonic_groups['max_freq']),
-                                      float64(cfg.harmonic_groups['mains_freq']),
-                                      float64(cfg.harmonic_groups['mains_freq_tol']),
-                                      float64(cfg.harmonic_groups['min_good_peak_power']))
-    peaks = g_peaks.copy_to_host()
+        tpb = 1024
+        bpg = g_log_spec.shape[0]
+        peak_detect_coordinater[bpg, tpb](g_log_spec, g_peaks, g_troughs, g_spec_freq,
+                                          float64(cfg.harmonic_groups['low_threshold']),
+                                          float64(cfg.harmonic_groups['high_threshold']),
+                                          float64(cfg.harmonic_groups['min_freq']),
+                                          float64(cfg.harmonic_groups['max_freq']),
+                                          float64(cfg.harmonic_groups['mains_freq']),
+                                          float64(cfg.harmonic_groups['mains_freq_tol']),
+                                          float64(cfg.harmonic_groups['min_good_peak_power']))
+        g_peaks.copy_to_host(peaks, stream=stream_pd)
+        stream_pd.synchronize()
     # troughs = g_troughs.copy_to_host()
     if verbose >= 1: print(f'peak_detect: {time.time() - t0:.4f}s')
 
@@ -464,10 +466,8 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
         out.copy_to_host(out_cpu)
         value.copy_to_host(value_cpu)
         stream_hg.synchronize()
-    # cuda.memcpy_dtoh(out_cpu, out)
-    # value_cpu = value.copy_to_host()
+
     if verbose >= 1: print(f'get harmonic groups: {time.time() - t0:.4f}s')
-    # print('5')
 
     ### assign harmonic groups ###
     harmonic_helper = np.cumsum(out_cpu>0, axis= 2)
