@@ -368,9 +368,6 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
 
     ### threshold estimate for peak detection ###
     if verbose >= 1: t0 = time.time()
-    tpb = 1024
-    bpg = g_log_spec.shape[0]
-
     i0, i1 = log_spec.shape[1]//2, log_spec.shape[1]*3//4
     # ToDo: fix that this is a potential of 2 (e.g. i1-i0 = 2**12); detrend with snippets of 128 (2**7)
 
@@ -388,6 +385,8 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
         g_std = cuda.device_array((log_spec.shape[0],), stream=steam_th_est)
         g_hist_th = cuda.device_array((g_log_spec.shape[0],), stream=steam_th_est)
 
+        tpb = 1024
+        bpg = g_log_spec.shape[0]
         threshold_estimate_coordinator[bpg, tpb, steam_th_est](g_log_spec, g_log_spec_detrend, g_hist, g_bins, g_hist_th, g_std)
 
         g_log_spec_detrend.copy_to_host(log_spec_detrend, stream=steam_th_est)
@@ -395,16 +394,22 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
         g_hist_th.copy_to_host(hist_th, stream=steam_th_est)
         g_std.copy_to_host(std, stream=steam_th_est)
         steam_th_est.synchronize()
+
+    low_th = std * cfg.harmonic_groups['low_thresh_factor']
+    high_th = std * cfg.harmonic_groups['high_thresh_factor']
     if verbose >= 1: print(f'power log transform: {time.time() - t0:.4f}s')
-
-    embed()
-    quit()
-
 
     ### peak detection ###
     if verbose >= 1: t0 = time.time()
+
+    peaks = np.zeros_like(log_spec)
+    troughs = np.zeros_like(log_spec)
     g_peaks = cuda.device_array_like(g_log_spec)
     g_troughs = cuda.device_array_like(g_log_spec)
+
+    # with cuda.pinned(peaks, troughs, low_th, high_th, spec_freq):
+
+
     tpb = 1024
     bpg = g_log_spec.shape[0]
 
