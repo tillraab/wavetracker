@@ -456,8 +456,8 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
         g_check_freqs = cuda.to_device(check_freqs, stream = stream_hg)
         g_spec_freq = cuda.to_device(spec_freq, stream=stream_hg)
         g_peaks = cuda.to_device(peaks, stream = stream_hg)
-        g_log_spec = cuda.device_array_like(g_spec, stream=stream_hg)
-        # g_log_spec = cuda.to_device(log_spec, stream=stream_hg)
+        # g_log_spec = cuda.device_array_like(g_spec, stream=stream_hg)
+        g_log_spec = cuda.to_device(log_spec, stream=stream_hg)
         out = cuda.device_array(shape=(check_freqs.shape[0], check_freqs.shape[1], max_group_size), dtype=int, stream = stream_hg)
         value = cuda.device_array(shape=(check_freqs.shape[0], check_freqs.shape[1]), dtype=float, stream = stream_hg)
 
