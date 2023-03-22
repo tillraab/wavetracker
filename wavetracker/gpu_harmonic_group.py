@@ -356,7 +356,7 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
     with cuda.pinned(spec, log_spec):
         stream = cuda.stream()
         g_spec = cuda.to_device(spec, stream=stream)
-        g_log_spec = cuda.device_array_like(g_spec, stream=stream)
+        g_log_spec = cuda.device_array_like(log_spec, stream=stream)
 
         blockdim = (32, 32)
         griddim = (g_spec.shape[0] // blockdim[0] + 1, g_spec.shape[1] // blockdim[1] + 1)
@@ -374,19 +374,19 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
     hist = np.zeros(((log_spec.shape[0], 100)))
     bins = np.zeros(((log_spec.shape[0], 101)))
     std = np.zeros((log_spec.shape[0], ))
-    hist_th = np.zeros((g_log_spec.shape[0],))
+    hist_th = np.zeros((log_spec.shape[0],))
 
     with cuda.pinned(log_spec_detrend, log_spec, hist, bins, std, hist_th):
         steam_th_est = cuda.stream()
         g_log_spec_detrend = cuda.device_array((log_spec.shape[0], i1 - i0), stream=steam_th_est)
         g_log_spec = cuda.to_device(log_spec, stream=steam_th_est)
-        g_hist = cuda.device_array((g_log_spec.shape[0], 100), stream=steam_th_est)
-        g_bins = cuda.device_array((g_log_spec.shape[0], 101), stream=steam_th_est)
+        g_hist = cuda.device_array((log_spec.shape[0], 100), stream=steam_th_est)
+        g_bins = cuda.device_array((log_spec.shape[0], 101), stream=steam_th_est)
         g_std = cuda.device_array((log_spec.shape[0],), stream=steam_th_est)
-        g_hist_th = cuda.device_array((g_log_spec.shape[0],), stream=steam_th_est)
+        g_hist_th = cuda.device_array((log_spec.shape[0],), stream=steam_th_est)
 
         tpb = 1024
-        bpg = g_log_spec.shape[0]
+        bpg = log_spec.shape[0]
         threshold_estimate_coordinator[bpg, tpb, steam_th_est](g_log_spec, g_log_spec_detrend, g_hist, g_bins, g_hist_th, g_std)
 
         g_log_spec_detrend.copy_to_host(log_spec_detrend, stream=steam_th_est)
@@ -428,6 +428,7 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
                                           float64(cfg.harmonic_groups['min_good_peak_power']))
         g_peaks.copy_to_host(peaks, stream=stream_pd)
         g_troughs.copy_to_host(troughs, stream=stream_pd)
+
         stream_pd.synchronize()
     # troughs = g_troughs.copy_to_host()
     if verbose >= 1: print(f'peak_detect: {time.time() - t0:.4f}s')
