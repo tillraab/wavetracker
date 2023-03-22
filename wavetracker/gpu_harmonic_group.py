@@ -321,14 +321,6 @@ def peak_detect_coordinater(spec, peaks, troughs, spec_freq, low_threshold, high
 def get_group(freq, log_spec, spec_freqs, peaks, out, min_group_size, max_freq_tol, mains_freq, mains_freq_tol):
     fzero = freq
     fzero_h = 1
-    # fe = 1e6
-    # ioi = 0
-    # max_freq_tol = 1.
-    # ToDo: globals or parameter !!!
-    # mains_freq = 50.
-    # mains_freq_tol = 1.
-
-    # for devisor in range(1, max_devisor+1):
     for h in range(1, len(out)):
         ioi = 0
         fe = 1e6
@@ -391,12 +383,8 @@ def get_fundamentals(assigned_hg, spec_freq):
 def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
     ### logaritmic spec ###
     if verbose >= 1: t0 = time.time()
-
-    # print('1')
     spec = spec.transpose()
     log_spec = np.zeros_like(spec)
-    # embed()
-    # quit()
     with cuda.pinned(spec, log_spec, spec_freq):
         stream = cuda.stream()
         g_spec = cuda.to_device(spec, stream=stream)
@@ -408,34 +396,38 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
         jit_decibel[griddim, blockdim, stream](g_spec, g_log_spec)
         g_log_spec.copy_to_host(log_spec, stream=stream)
         stream.synchronize()
-
     if verbose >= 1: print(f'power log transform: {time.time() - t0:.4f}s')
-    # print('2')
 
-    ###
-
+    ### threshold estimate for peak detection ###
     tpb = 1024
     bpg = g_log_spec.shape[0]
-    g_log_spec_detrend = cuda.device_array((g_log_spec.shape[0], g_log_spec.shape[1]*3//4-g_log_spec.shape[1]//2))
-    log_spec_detrend = np.zeros((g_log_spec.shape[0], g_log_spec.shape[1]*3//4-g_log_spec.shape[1]//2))
 
-    g_hist = cuda.device_array((g_log_spec.shape[0], 100))
-    hist = np.zeros(((g_log_spec.shape[0], 100)))
-    g_bins = cuda.device_array((g_log_spec.shape[0], 101))
-    bins = np.zeros(((g_log_spec.shape[0], 101)))
+    i0, i1 = log_spec.shape[1]//2, log_spec.shape[1]*3//4
+    embed()
+    quit()
 
+    log_spec_detrend = np.zeros((log_spec.shape[0], i1-i0))
+    hist = np.zeros(((log_spec.shape[0], 100)))
+    bins = np.zeros(((log_spec.shape[0], 101)))
     std = np.zeros((log_spec.shape[0], ))
-    g_std = cuda.device_array((log_spec.shape[0], ))
-
-    g_hist_th = cuda.device_array((g_log_spec.shape[0],))
     hist_th = np.zeros((g_log_spec.shape[0],))
 
-    threshold_estimate_coordinator[bpg, tpb](g_log_spec, g_log_spec_detrend, g_hist, g_bins, g_hist_th, g_std)
+    with cuda.pinned(log_spec_detrend, hist, bins, std, hist_th):
+        steam_th_est = cuda.stream()
+        g_log_spec_detrend = cuda.device_array((log_spec.shape[0], i1 - i0), stream=steam_th_est)
+        g_hist = cuda.device_array((g_log_spec.shape[0], 100), stream=steam_th_est)
+        g_bins = cuda.device_array((g_log_spec.shape[0], 101), stream=steam_th_est)
+        g_std = cuda.device_array((log_spec.shape[0],), stream=steam_th_est)
+        g_hist_th = cuda.device_array((g_log_spec.shape[0],), stream=steam_th_est)
 
-    g_log_spec_detrend.copy_to_host(log_spec_detrend)
-    g_hist.copy_to_host(hist)
-    g_hist_th.copy_to_host(hist_th)
-    g_std.copy_to_host(std)
+        threshold_estimate_coordinator[bpg, tpb](g_log_spec, g_log_spec_detrend, g_hist, g_bins, g_hist_th, g_std)
+
+        g_log_spec_detrend.copy_to_host(log_spec_detrend, stream=steam_th_est)
+        g_hist.copy_to_host(hist, stream=steam_th_est)
+        g_hist_th.copy_to_host(hist_th, stream=steam_th_est)
+        g_std.copy_to_host(std, stream=steam_th_est)
+        steam_th_est.synchronize()
+
     embed()
     quit()
 
@@ -450,9 +442,6 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
     g_troughs = cuda.device_array_like(g_log_spec)
     tpb = 1024
     bpg = g_log_spec.shape[0]
-    # Start an asynchronous data transfer from the CPU to the GPU
-    # stream = cuda.stream()
-    # cuda.memcpy_htod_async(g_log_spec, log_spec, stream)
 
     peak_detect_coordinater[bpg, tpb](g_log_spec, g_peaks, g_troughs, g_spec_freq,
                                       float64(cfg.harmonic_groups['low_threshold']),
@@ -465,11 +454,7 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
     peaks = g_peaks.copy_to_host()
     # troughs = g_troughs.copy_to_host()
     if verbose >= 1: print(f'peak_detect: {time.time() - t0:.4f}s')
-    meminfo = cuda.current_context().get_memory_info()
-    # print('3')
-    # print("Currently allocated:", meminfo[0]/1024/1024, "MB")
-    # print("Total memory:", meminfo[1]/1024/1024, "MB")
-    # print("Free memory:", meminfo[0]/1024/1024, "MB")
+
 
     ### harmonic groups ###
     if verbose >= 1: t0 = time.time()
