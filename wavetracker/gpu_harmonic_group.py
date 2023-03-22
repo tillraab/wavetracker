@@ -418,7 +418,7 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
 
         tpb = 1024
         bpg = g_log_spec.shape[0]
-        peak_detect_coordinater[bpg, tpb](g_log_spec, g_peaks, g_troughs, g_spec_freq,
+        peak_detect_coordinater[bpg, tpb, stream_pd](g_log_spec, g_peaks, g_troughs, g_spec_freq,
                                           float64(cfg.harmonic_groups['low_threshold']),
                                           float64(cfg.harmonic_groups['high_threshold']),
                                           float64(cfg.harmonic_groups['min_freq']),
@@ -463,7 +463,7 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
 
         tpb = (32, 32)
         bpg = (g_check_freqs.shape[0] // tpb[0] + 1, g_check_freqs.shape[1] // tpb[1] + 1)
-        get_harmonic_groups_coordinator[bpg, tpb](g_check_freqs, g_log_spec, g_spec_freq, g_peaks, out, value,
+        get_harmonic_groups_coordinator[bpg, tpb, stream_hg](g_check_freqs, g_log_spec, g_spec_freq, g_peaks, out, value,
                                                   int64(cfg.harmonic_groups['min_group_size']),
                                                   float64(cfg.harmonic_groups['max_freq_tol']),
                                                   float64(cfg.harmonic_groups['mains_freq']),
