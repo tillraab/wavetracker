@@ -353,6 +353,7 @@ def get_fundamentals(assigned_hg, spec_freq):
 def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
     ### logaritmic spec ###
     if verbose >= 1: t0 = time.time()
+
     # CPU arrays (pinned)
     spec = cuda.pinned_array((spec_arr.shape[1], spec_arr.shape[0]), dtype=np.float32)
     spec[:, :] = spec_arr.transpose()[:,:]
@@ -376,6 +377,7 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
     # helper variables
     i0, i1 = log_spec.shape[1]//2, log_spec.shape[1]*3//4
     #ToDo: fix that this is a potential of 2 (e.g. i1-i0 = 2**12); detrend with snippets of 128 (2**7)
+
 
     # CPU arrays (pinned)
     log_spec_detrend = cuda.pinned_array((log_spec.shape[0], i1-i0))
