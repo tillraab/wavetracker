@@ -100,6 +100,7 @@ def jit_decibel(power, db_power):
         db_power[i, j] = -math.inf
     else:
         db_power[i, j] = 10.0 * math.log10(power[i, j] / ref_power)
+    cuda.syncthreads()
 
 @cuda.jit(device=True)
 def threshold_estimate(log_spec, log_spec_detrend, hist, bins):
@@ -272,12 +273,12 @@ def detect_peaks_fixed(data, peaks, trough, spec_freq, low_threshold, high_thres
     else:
         pass
 
-@cuda.jit('void(f4[:,:], f4[:,:], f4[:,:], f8[:], f8, f8, f8, f8, f8, f8, f8)')
+@cuda.jit('void(f4[:,:], f4[:,:], f4[:,:], f8[:], f8[:], f8[:], f8, f8, f8, f8, f8)')
 def peak_detect_coordinater(spec, peaks, troughs, spec_freq, low_threshold, high_threshold, min_freq, max_freq,
                             mains_freq, mains_freq_tol, min_good_peak_power):
     i = cuda.grid(1)
     if i < spec.shape[0]:
-        detect_peaks_fixed(spec[i], peaks[i], troughs[i], spec_freq, low_threshold, high_threshold, min_freq, max_freq,
+        detect_peaks_fixed(spec[i], peaks[i], troughs[i], spec_freq, low_threshold[i], high_threshold[i], min_freq, max_freq,
                             mains_freq, mains_freq_tol, min_good_peak_power)
         # detect_peaks_fixed(spec[i], peaks[i], low_th)
     # tester(spec[i], peaks[i], troughs[i])
@@ -348,138 +349,138 @@ def get_fundamentals(assigned_hg, spec_freq):
             f_list[-1].append(spec_freq[assigned_hg[t] == hg][0])
     return f_list
 
-def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
+
+def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
     ### logaritmic spec ###
     if verbose >= 1: t0 = time.time()
-    spec = spec.transpose()
-    log_spec = np.zeros_like(spec)
-    with cuda.pinned(spec, log_spec):
-        stream = cuda.stream()
-        g_spec = cuda.to_device(spec, stream=stream)
-        g_log_spec = cuda.device_array_like(g_spec, stream=stream)
+    # CPU arrays (pinned)
+    spec = cuda.pinned_array((spec_arr.shape[1], spec_arr.shape[0]), dtype=np.float32)
+    spec[:, :] = spec_arr.transpose()[:,:]
+    log_spec = cuda.pinned_array_like(spec)
 
-        blockdim = (32, 32)
-        griddim = (g_spec.shape[0] // blockdim[0] + 1, g_spec.shape[1] // blockdim[1] + 1)
-        jit_decibel[griddim, blockdim, stream](g_spec, g_log_spec)
-        g_log_spec.copy_to_host(log_spec, stream=stream)
-        stream.synchronize()
+    # GPU arrays
+    g_spec = cuda.to_device(spec)
+    g_log_spec = cuda.device_array_like(g_spec)
+
+    # kernel setup & execution
+    blockdim = (32, 32)
+    griddim = (g_spec.shape[0] // blockdim[0] + 1, g_spec.shape[1] // blockdim[1] + 1)
+    jit_decibel[griddim, blockdim](g_spec, g_log_spec)
+
+    # copy GPU -> CPU
+    g_log_spec.copy_to_host(log_spec)
     if verbose >= 1: print(f'power log transform: {time.time() - t0:.4f}s')
 
     ### threshold estimate for peak detection ###
     if verbose >= 1: t0 = time.time()
+    # helper variables
     i0, i1 = log_spec.shape[1]//2, log_spec.shape[1]*3//4
-    # ToDo: fix that this is a potential of 2 (e.g. i1-i0 = 2**12); detrend with snippets of 128 (2**7)
+    #ToDo: fix that this is a potential of 2 (e.g. i1-i0 = 2**12); detrend with snippets of 128 (2**7)
 
-    log_spec_detrend = np.zeros((log_spec.shape[0], i1-i0))
-    hist = np.zeros(((log_spec.shape[0], 100)))
-    bins = np.zeros(((log_spec.shape[0], 101)))
-    std = np.zeros((log_spec.shape[0], ))
-    hist_th = np.zeros((g_log_spec.shape[0],))
+    # CPU arrays (pinned)
+    log_spec_detrend = cuda.pinned_array((log_spec.shape[0], i1-i0))
+    hist = cuda.pinned_array(((log_spec.shape[0], 100)))
+    std = cuda.pinned_array((log_spec.shape[0], ))
+    hist_th = cuda.pinned_array((g_log_spec.shape[0],))
 
-    with cuda.pinned(log_spec_detrend, log_spec, hist, bins, std, hist_th):
-        steam_th_est = cuda.stream()
-        g_log_spec_detrend = cuda.device_array((log_spec.shape[0], i1 - i0), stream=steam_th_est)
-        g_log_spec = cuda.to_device(log_spec, stream=steam_th_est)
-        g_hist = cuda.device_array((g_log_spec.shape[0], 100), stream=steam_th_est)
-        g_bins = cuda.device_array((g_log_spec.shape[0], 101), stream=steam_th_est)
-        g_std = cuda.device_array((log_spec.shape[0],), stream=steam_th_est)
-        g_hist_th = cuda.device_array((g_log_spec.shape[0],), stream=steam_th_est)
+    # GPU arrays
+    g_log_spec_detrend = cuda.device_array((log_spec.shape[0], i1 - i0))
+    g_hist = cuda.device_array((g_log_spec.shape[0], 100))
+    g_bins = cuda.device_array((g_log_spec.shape[0], 101))
+    g_std = cuda.device_array((g_log_spec.shape[0],))
+    g_hist_th = cuda.device_array((g_log_spec.shape[0],))
 
-        tpb = 1024
-        bpg = g_log_spec.shape[0]
-        threshold_estimate_coordinator[bpg, tpb, steam_th_est](g_log_spec, g_log_spec_detrend, g_hist, g_bins, g_hist_th, g_std)
+    # kernel setup & execution
+    tpb = 1024
+    bpg = g_log_spec.shape[0]
+    threshold_estimate_coordinator[bpg, tpb](g_log_spec, g_log_spec_detrend, g_hist, g_bins, g_hist_th, g_std)
 
-        g_log_spec_detrend.copy_to_host(log_spec_detrend, stream=steam_th_est)
-        g_hist.copy_to_host(hist, stream=steam_th_est)
-        g_hist_th.copy_to_host(hist_th, stream=steam_th_est)
-        g_std.copy_to_host(std, stream=steam_th_est)
-        steam_th_est.synchronize()
-
-    low_th = std * cfg.harmonic_groups['low_thresh_factor']
-    high_th = std * cfg.harmonic_groups['high_thresh_factor']
-
+    # copy GPU -> CPU
+    # g_log_spec_detrend.copy_to_host(log_spec_detrend)
+    # g_hist.copy_to_host(hist)
+    # g_hist_th.copy_to_host(hist_th)
+    g_std.copy_to_host(std)
     if verbose >= 1: print(f'power log transform: {time.time() - t0:.4f}s')
 
+    ##################################################################################
     ### peak detection ###
     if verbose >= 1: t0 = time.time()
+    # CPU arrays (pinned)
+    peaks = cuda.pinned_array_like(log_spec)
+    troughs = cuda.pinned_array_like(log_spec)
 
-    peaks = np.zeros_like(log_spec)
-    troughs = np.zeros_like(log_spec)
+    spec_freq = cuda.pinned_array_like(spec_freq_arr)
+    spec_freq[:] = spec_freq_arr[:]
+    low_th = cuda.pinned_array_like(std)
+    low_th[:] = (std * cfg.harmonic_groups['low_thresh_factor'])[:]
+    high_th = cuda.pinned_array_like(std)
+    high_th[:] = (std * cfg.harmonic_groups['high_thresh_factor'])[:]
 
-    with cuda.pinned(peaks, troughs, spec_freq, log_spec):
-    # with cuda.pinned(peaks, troughs, low_th, high_th, spec_freq, log_spec):
-        stream_pd = cuda.stream()
-        g_peaks = cuda.device_array_like(g_log_spec, stream=stream_pd)
-        g_troughs = cuda.device_array_like(g_log_spec, stream=stream_pd)
-        # g_low_th = cuda.to_device(low_th, stream=stream_pd)
-        # g_high_th = cuda.to_device(high_th, stream=stream_pd)
-        g_spec_freq = cuda.to_device(spec_freq, stream=stream_pd)
-        g_log_spec = cuda.to_device(log_spec, stream=stream_pd)
+    # GPU arrays
+    g_peaks = cuda.device_array_like(g_log_spec)
+    g_troughs = cuda.device_array_like(g_log_spec)
+    g_spec_freq = cuda.to_device(spec_freq)
+    g_low_th = cuda.to_device(low_th)
+    g_high_th = cuda.to_device(high_th)
 
-        tpb = 1024
-        bpg = g_log_spec.shape[0]
-        peak_detect_coordinater[bpg, tpb, stream_pd](g_log_spec, g_peaks, g_troughs, g_spec_freq,
-                                          float64(cfg.harmonic_groups['low_threshold']),
-                                          float64(cfg.harmonic_groups['high_threshold']),
-                                          float64(cfg.harmonic_groups['min_freq']),
-                                          float64(cfg.harmonic_groups['max_freq']),
-                                          float64(cfg.harmonic_groups['mains_freq']),
-                                          float64(cfg.harmonic_groups['mains_freq_tol']),
-                                          float64(cfg.harmonic_groups['min_good_peak_power']))
-        g_peaks.copy_to_host(peaks, stream=stream_pd)
-        g_troughs.copy_to_host(troughs, stream=stream_pd)
-        stream_pd.synchronize()
-    # troughs = g_troughs.copy_to_host()
+    # kernel setup & execution
+    tpb = 1024
+    bpg = g_log_spec.shape[0]
+    peak_detect_coordinater[bpg, tpb](g_log_spec, g_peaks, g_troughs, g_spec_freq, g_low_th, g_high_th,
+                                      float64(cfg.harmonic_groups['min_freq']),
+                                      float64(cfg.harmonic_groups['max_freq']),
+                                      float64(cfg.harmonic_groups['mains_freq']),
+                                      float64(cfg.harmonic_groups['mains_freq_tol']),
+                                      float64(cfg.harmonic_groups['min_good_peak_power']))
+
+    # copy GPU -> CPU
+    g_peaks.copy_to_host(peaks)
+    # g_troughs.copy_to_host(troughs)
     if verbose >= 1: print(f'peak_detect: {time.time() - t0:.4f}s')
 
-
+    ##################################################################################
     ### harmonic groups ###
     if verbose >= 1: t0 = time.time()
-    check_freqs = np.zeros(shape=(peaks.shape[0], cfg.harmonic_groups['max_divisor']*int(np.max(np.sum(peaks == 2, axis=1)))))
+    # helper variables
+    max_group_size = int(cfg.harmonic_groups['max_freq'] * cfg.harmonic_groups['min_group_size'] // cfg.harmonic_groups['min_freq'])
+
+    # CPU arrays (pinned)
+    check_freqs = cuda.pinned_array(shape=(peaks.shape[0], cfg.harmonic_groups['max_divisor']*int(np.max(np.sum(peaks == 2, axis=1)))))
     for i in range(len(peaks)):
         fs = spec_freq[peaks[i] == 2]
         fs = fs[(fs < cfg.harmonic_groups['max_freq']) & (fs > cfg.harmonic_groups['min_freq'])]
         for d in range(cfg.harmonic_groups['max_divisor']):
             check_freqs[i, d*len(fs):(d+1)*len(fs)] = fs/(d+1)
-    if verbose >= 1: print(f'get check freqs: {time.time() - t0:.4f}s')
 
-    if verbose >= 1: t0 = time.time()
-    # max_group_size = int(max_f * min_group_size // min_f)
-    max_group_size = int(cfg.harmonic_groups['max_freq'] * cfg.harmonic_groups['min_group_size'] // cfg.harmonic_groups['min_freq'])
+    out = cuda.pinned_array(shape=(check_freqs.shape[0], check_freqs.shape[1], max_group_size), dtype=int)
+    value = cuda.pinned_array(shape=(check_freqs.shape[0], check_freqs.shape[1]), dtype=float)
 
-    out_cpu = np.zeros(shape=(check_freqs.shape[0], check_freqs.shape[1], max_group_size), dtype=int)
-    value_cpu = np.zeros(shape=(check_freqs.shape[0], check_freqs.shape[1]), dtype=float)
+    # GPU arrays
+    g_check_freqs = cuda.to_device(check_freqs)
+    g_out = cuda.device_array(shape=(check_freqs.shape[0], check_freqs.shape[1], max_group_size), dtype=int)
+    g_value = cuda.device_array(shape=(check_freqs.shape[0], check_freqs.shape[1]), dtype=float)
 
-    # print('4')
-    with cuda.pinned(check_freqs, out_cpu, value_cpu, log_spec, spec_freq, peaks):
-        stream_hg = cuda.stream()
-        g_check_freqs = cuda.to_device(check_freqs, stream = stream_hg)
-        g_spec_freq = cuda.to_device(spec_freq, stream=stream_hg)
-        g_peaks = cuda.to_device(peaks, stream = stream_hg)
-        # g_log_spec = cuda.device_array_like(g_spec, stream=stream_hg)
-        g_log_spec = cuda.to_device(log_spec, stream=stream_hg)
-        out = cuda.device_array(shape=(check_freqs.shape[0], check_freqs.shape[1], max_group_size), dtype=int, stream = stream_hg)
-        value = cuda.device_array(shape=(check_freqs.shape[0], check_freqs.shape[1]), dtype=float, stream = stream_hg)
+    # kernel setup & execution
+    tpb = (32, 32)
+    bpg = (g_check_freqs.shape[0] // tpb[0] + 1, g_check_freqs.shape[1] // tpb[1] + 1)
+    get_harmonic_groups_coordinator[bpg, tpb](g_check_freqs, g_log_spec, g_spec_freq, g_peaks, g_out, g_value,
+                                              int64(cfg.harmonic_groups['min_group_size']),
+                                              float64(cfg.harmonic_groups['max_freq_tol']),
+                                              float64(cfg.harmonic_groups['mains_freq']),
+                                              float64(cfg.harmonic_groups['mains_freq_tol']))
 
-        tpb = (32, 32)
-        bpg = (g_check_freqs.shape[0] // tpb[0] + 1, g_check_freqs.shape[1] // tpb[1] + 1)
-        get_harmonic_groups_coordinator[bpg, tpb, stream_hg](g_check_freqs, g_log_spec, g_spec_freq, g_peaks, out, value,
-                                                  int64(cfg.harmonic_groups['min_group_size']),
-                                                  float64(cfg.harmonic_groups['max_freq_tol']),
-                                                  float64(cfg.harmonic_groups['mains_freq']),
-                                                  float64(cfg.harmonic_groups['mains_freq_tol']))
-
-        out.copy_to_host(out_cpu)
-        value.copy_to_host(value_cpu)
-        stream_hg.synchronize()
+    # copy GPU -> CPU
+    g_out.copy_to_host(out)
+    g_value.copy_to_host(value)
 
     if verbose >= 1: print(f'get harmonic groups: {time.time() - t0:.4f}s')
 
+    ##################################################################################
     ### assign harmonic groups ###
-    harmonic_helper = np.cumsum(out_cpu>0, axis= 2)
-    assigned_hg = np.zeros_like(peaks)
-    # fund_list = []
-    for t in range(out_cpu.shape[0]):
+    harmonic_helper = np.cumsum(out>0, axis= 2)
+    assigned_hg = cuda.pinned_array_like(peaks)
+
+    for t in range(out.shape[0]):
         next_hg = 1
         assigned = np.zeros_like(peaks[t])
 
@@ -488,7 +489,7 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
         best_peak_idxs = peak_idxs[sorting_mask]
 
         search_freq_count = len(check_freqs[t][check_freqs[t] != 0])
-        power_array = value_cpu[t, :search_freq_count]
+        power_array = value[t, :search_freq_count]
         order = np.argsort(power_array)[::-1]
         # ToDo: Tolerance for missing harmonics ?! NO!!!
         order = order[harmonic_helper[t, order, cfg.harmonic_groups['min_group_size']-1] == cfg.harmonic_groups['min_group_size']]
@@ -496,9 +497,9 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
 
         for search_peak_idx in best_peak_idxs:
             for i in order:
-                if search_peak_idx in out_cpu[t, i, :cfg.harmonic_groups['min_group_size']]:
-                    non_zero_h = np.arange(out_cpu.shape[2])[out_cpu[t, i] != 0] + 1
-                    non_zero_idx = out_cpu[t, i][out_cpu[t, i] != 0]
+                if search_peak_idx in out[t, i, :cfg.harmonic_groups['min_group_size']]:
+                    non_zero_h = np.arange(out.shape[2])[out[t, i] != 0] + 1
+                    non_zero_idx = out[t, i][out[t, i] != 0]
                     if non_zero_h[0] != 1:
                         continue
                     # ToDo: papameter: max_double_use
@@ -511,9 +512,8 @@ def harmonic_group_pipeline(spec, spec_freq, cfg, verbose = 0):
                         assigned_hg[t, non_zero_idx] = next_hg
                         next_hg += 1
                         break
-    # print('6\n')
-    return assigned_hg, peaks, log_spec
 
+    return assigned_hg, peaks, log_spec
 
 
 def main():

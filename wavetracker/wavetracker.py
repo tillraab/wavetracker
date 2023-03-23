@@ -60,6 +60,8 @@ class Analysis_pipeline(object):
         self._sign_v = []
         self.ident_v = []
         self.times = []
+        # self._low_th = []
+        # self._high_th = []
         pass
 
     @property
@@ -79,23 +81,27 @@ class Analysis_pipeline(object):
             self.pipeline_GPU()
         else:
             self.pipeline_CPU()
-
+        if self.verbose >= 1: print('\n')
         if self.verbose >= 1: print(f'{"Tracking":^25}: -- freq_tolerance: {self.cfg.tracking["freq_tolerance"]} -- '
                                     f'max_dt: {self.cfg.tracking["max_dt"]}')
 
         self.times = self.Spec.times
-        # self.ident_v = freq_tracking_v6(self.fund_v, self.idx_v, self.sign_v, self.times,
-        #                                 **self.cfg.harmonic_groups, **self.cfg.tracking)
+
+        self.ident_v = freq_tracking_v6(self.fund_v, self.idx_v, self.sign_v, self.times, verbose=self.verbose,
+                                        **self.cfg.harmonic_groups, **self.cfg.tracking)
 
 
     def extract_snippet_signals(self):
         if self.gpu_use:
+            # ToDo: only for first itteration get the thresholds
             assigned_hg, peaks, log_spec = harmonic_group_pipeline(self.Spec.sum_spec, self.Spec.spec_freqs, self.cfg)
             tmp_fundamentals = get_fundamentals(assigned_hg, self.Spec.spec_freqs)
+            # self._low_th.extend(low_th)
+            # self._high_th.extend(high_th)
 
         else:
             partial_harmonic_groups = partial(harmonic_groups, self.Spec.spec_freqs, **self.cfg.harmonic_groups)
-            a = partial_harmonic_groups(self.Spec.sum_spec[:, 0]) # TEST
+            # a = partial_harmonic_groups(self.Spec.sum_spec[:, 0]) # TEST
 
             pool = multiprocessing.Pool(self.core_count - 1)
             a = pool.map(partial_harmonic_groups, self.Spec.sum_spec.transpose())
@@ -129,8 +135,6 @@ class Analysis_pipeline(object):
 
         iter_counter = 0
 
-        # embed()
-        # quit()
         for enu, snippet_data in enumerate(self.dataset):
 
             # print(f'1) Memory usage on GPU: {tf.config.experimental.get_memory_info("GPU:0")["current"]/1e6}MB')
@@ -142,56 +146,9 @@ class Analysis_pipeline(object):
             t0_spec = time.time()
             self.Spec.snippet_spectrogram(snippet_data, snipptet_t0=snippet_t0)
             t1_spec = time.time()
-            #
-            # embed()
-            # quit()
-            # import scipy.signal as sig
-            # n = self.Spec.sum_spec.shape[0]
-            # i0, i1 = n//2, n*3//4
-            # psd_data_seg = decibel(self.Spec.sum_spec.T[0, i0:i1])
-            # psd_detrend = sig.detrend(psd_data_seg, type='linear') + np.mean(psd_data_seg)
-            #
-            # psd_detrend_manual = np.copy(psd_data_seg)
-            # di = int((i1-i0) / 100)
-            # for i in range(i0, i1, di):
-            #     psd_detrend_manual[i-i0:i-i0+di] = psd_data_seg[i-i0:i-i0+di] - np.mean(psd_data_seg[i-i0:i-i0+di])
-            # psd_detrend_manual += np.mean(psd_data_seg)
-            #
-            # maxd = np.max(psd_detrend_manual)
-            # mind = np.min(psd_detrend_manual)
-            # contrast = np.abs((maxd - mind) / (maxd + mind))
-            # hist = np.zeros(100)
-            # bins = np.zeros(101)
-            # hist_height = 1.0/math.sqrt(math.e)
-            # for i in range(100):
-            #     r = maxd-mind
-            #     v0 = mind + r/100 * i
-            #     v1 = mind + r / 100 * (i+1)
-            #     hist[i] = len(psd_detrend_manual[(psd_detrend_manual >= v0) & (psd_detrend_manual < v1)])
-            #     bins[i] = v0
-            #     print(v0, v1)
-            # bins[-1] = v1
-            #
-            # inx = hist > np.max(hist) * hist_height
-            # lower = bins[0:-1][inx][0]
-            # upper = bins[1:][inx][-1]
-            # center = 0.5 * (lower + upper)
-            # std = 0.5 * (upper - lower)
-            #
-            # low_th = std * 5.
-            # high_th = std * 7
-            #
-            # fig, ax = plt.subplots(2, 1)
-            # ax[0].plot(self.Spec.spec_freqs[i0:i1], psd_data_seg)
-            # ax[1].plot(self.Spec.spec_freqs[i0:i1], psd_detrend, color='k')
-            # ax[1].plot(self.Spec.spec_freqs[i0:i1], psd_detrend_manual, '--', color='r')
-            # plt.show()
-            # print(f'2) Memory usage on GPU: {tf.config.experimental.get_memory_info("GPU:0")["current"] / 1e6}MB')
-
 
             t0_hg = time.time()
             self.extract_snippet_signals()
-            # print(f'3) Memory usage on GPU: {tf.config.experimental.get_memory_info("GPU:0")["current"] / 1e6}MB')
             t1_hg = time.time()
 
             iter_counter += 1
@@ -200,14 +157,9 @@ class Analysis_pipeline(object):
                                         f'-- Spectrogram: {t1_spec - t0_spec:.2f}s '
                                         f'-- Harmonic group: {t1_hg - t0_hg:.2f}s '
                                         f'--> {t1_snip-t0_snip:.2f}s', end="\r")
-            # if self.verbose >= 3: print(f'{" ":^25}  Progress {iter_counter / iterations:3.1%} '
-            #                             f'-- Spectrogram: {t1_spec - t0_spec:.2f}s '
-            #                             f'-- Harmonic group: {t1_hg - t0_hg:.2f}s '
-            #                             f'--> {t1_snip-t0_snip:.2f}s, {enu}')
             pbar.update(1)
             if enu == iterations -1:
                 break
-
         pbar.close()
 
 
@@ -288,6 +240,7 @@ def main():
         Analysis.run()
 
         ##########################################
+
         fig, ax = plt.subplots(figsize=(20/2.54, 12/2.54))
         ax.scatter(Analysis.times[Analysis.idx_v], Analysis.fund_v, color='grey', alpha = 0.5)
         for id in np.unique(Analysis.ident_v[~np.isnan(Analysis.ident_v)]):

@@ -16,8 +16,8 @@ spectrogram:
   overlap_frac: 0.9
 
 harmonic_groups:
-  low_threshold: 10.
-  high_threshold: 15.
+  low_threshold: 0
+  high_threshold: 0
   # low_thresh_factor: 6.0
   low_thresh_factor: 4.0
   # high_thresh_factor: 10.0

@@ -5,6 +5,7 @@ from plottools.tag import tag
 colors_params(colors_muted, colors_tableau)
 import os
 import sys
+import time
 from IPython import embed
 from tqdm import tqdm
 from PyQt5.QtCore import *
@@ -48,7 +49,7 @@ def reshape_old_data_format(times, fundamentals, signatures, max_dt):
 
 
 def freq_tracking_v6(fund_v, idx_v, sign_v, times, freq_tolerance= 2.5, channels=None, max_dt=10.,
-                     min_freq=200, max_freq=1200, emit = False, **kwargs):
+                     min_freq=200, max_freq=1200, emit = False, verbose=0, **kwargs):
     """
     Sorting algorithm which sorts fundamental EOD frequnecies detected in consecutive powespectra of single or
     multielectrode recordings using frequency difference and frequnency-power amplitude difference on the electodes.
@@ -487,19 +488,26 @@ def freq_tracking_v6(fund_v, idx_v, sign_v, times, freq_tolerance= 2.5, channels
 
     next_identity = 0
 
-
     # for i in tqdm(np.arange(np.max(idx_v)+1), desc='tracking'):
+    t0 = time.time()
+    min_idx, max_idx = np.min(idx_v), np.max(idx_v)
+    last_start_idx = min_idx
     for start_idx in tqdm(np.arange(np.min(idx_v), np.max(idx_v)+1), desc='tracking'):
+        if verbose == 3:
+            if time.time() - t0 > 5:
+                print(f'{" ":^25}  Progress {(start_idx-min_idx) / (max_idx-min_idx):3.1%} '
+                      f'({start_idx-min_idx:.0f}/{max_idx-min_idx:.0f})'
+                      f'-> {start_idx-last_start_idx} itt/5s', end="\r")
+                t0=time.time()
+                last_start_idx = start_idx
         # if emit == True:
         #     Emit.progress.emit(i / len(fundamentals) * 100)
 
         if len(np.hstack(i0_m)) == 0 or len(np.hstack(i1_m)) == 0:
             error_cube, i0_m, i1_m, cube_app_idx = create_error_cube(i0_m, i1_m, error_cube, cube_app_idx, min_freq, max_freq, update=True)
-            # start_idx += 1
             continue
 
         if (abs_start_idx - start_idx) % idx_comp_range == 0:  # next total sorting step
-
             tmp_ident_v, errors_to_v = get_tmp_identities(i0_m, i1_m, error_cube, fund_v, idx_v, start_idx, idx_comp_range)
 
             if abs_start_idx - start_idx == 0: # initial assignment of tmp_identities
