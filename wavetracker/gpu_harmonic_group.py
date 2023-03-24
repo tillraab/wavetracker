@@ -351,15 +351,14 @@ def get_fundamentals(assigned_hg, spec_freq):
 
 
 # def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
-def harmonic_group_pipeline(spec, spec_freq_arr, cfg, verbose = 0):
+def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
     ### logaritmic spec ###
     if verbose >= 1: t0 = time.time()
-    embed()
-    quit()
+
     # CPU arrays (pinned)
     if verbose >= 4: t0_0 = time.time()
-    # spec = cuda.pinned_array((spec_arr.shape[1], spec_arr.shape[0]), dtype=np.float32)
-    # spec[:, :] = spec_arr.transpose()[:,:]
+    spec = cuda.pinned_array((spec_arr.shape[1], spec_arr.shape[0]), dtype=np.float32)
+    spec[:, :] = spec_arr.transpose()[:,:]
     log_spec = cuda.pinned_array_like(spec)
     if verbose >= 4: t0_1 = time.time()
 

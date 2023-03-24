@@ -367,8 +367,6 @@ class Spectrogram(object):
             self.spec, self.spec_freqs, spec_times = tensorflow_spec(tf.transpose(data_snippet), samplerate=self.samplerate,
                                                              verbose=self.verbose, step=self.step, nfft = self.nfft,
                                                              **self.kwargs)
-            embed()
-            quit()
             self.spec = np.swapaxes(self.spec, 1, 2)
             self.sum_spec = np.sum(self.spec, axis=0)
             # self.spec_times = spec_times + self.itter_count * self.snippet_size / self.samplerate
