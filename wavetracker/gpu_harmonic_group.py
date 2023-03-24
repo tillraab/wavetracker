@@ -395,10 +395,10 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
 
 
     # CPU arrays (pinned)
-    # log_spec_detrend = cuda.pinned_array((log_spec.shape[0], i1-i0))
-    # hist = cuda.pinned_array(((log_spec.shape[0], 100)))
+    log_spec_detrend = cuda.pinned_array((log_spec.shape[0], i1-i0))
+    hist = cuda.pinned_array(((log_spec.shape[0], 100)))
     std = cuda.pinned_array((log_spec.shape[0], ))
-    # hist_th = cuda.pinned_array((g_log_spec.shape[0],))
+    hist_th = cuda.pinned_array((g_log_spec.shape[0],))
 
     # GPU arrays
     g_log_spec_detrend = cuda.device_array((log_spec.shape[0], i1 - i0))
@@ -424,7 +424,7 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
     if verbose >= 4: t0 = time.time()
     # CPU arrays (pinned)
     peaks = cuda.pinned_array_like(log_spec)
-    # troughs = cuda.pinned_array_like(log_spec)
+    troughs = cuda.pinned_array_like(log_spec)
 
     spec_freq = cuda.pinned_array_like(spec_freq_arr)
     spec_freq[:] = spec_freq_arr[:]
