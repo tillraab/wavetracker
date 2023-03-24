@@ -94,7 +94,7 @@ class Analysis_pipeline(object):
     def extract_snippet_signals(self):
         if self.gpu_use:
             # ToDo: only for first itteration get the thresholds
-            assigned_hg, peaks, log_spec = harmonic_group_pipeline(self.Spec.sum_spec, self.Spec.spec_freqs, self.cfg)
+            assigned_hg, peaks, log_spec = harmonic_group_pipeline(self.Spec.sum_spec, self.Spec.spec_freqs, self.cfg, verbose=self.verbose)
             tmp_fundamentals = get_fundamentals(assigned_hg, self.Spec.spec_freqs)
             # self._low_th.extend(low_th)
             # self._high_th.extend(high_th)
