@@ -420,7 +420,6 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
         # g_hist.copy_to_host(hist)
         # g_hist_th.copy_to_host(hist_th)
         g_std.copy_to_host(std)
-        embed()
         low_th[:] = (std * cfg.harmonic_groups['low_thresh_factor'])[:]
         high_th[:] = (std * cfg.harmonic_groups['high_thresh_factor'])[:]
 
@@ -428,8 +427,6 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
         cfg.harmonic_groups['high_threshold'] = np.mean(std) * cfg.harmonic_groups['high_thresh_factor']
         if verbose >= 4: print(f'threshold estimate transform: {time.time() - t0:.4f}s')
     else:
-        embed()
-        quit()
         low_th[:] = cfg.harmonic_groups['low_threshold']
         high_th[:] = cfg.harmonic_groups['high_threshold']
 
