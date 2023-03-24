@@ -44,16 +44,21 @@ def tensorflow_spec(data, samplerate, nfft, step, verbose = 1, **kwargs):
         # if verbose >= 3: print(f'tensor transpose: {time.time() - t0}'); t0 = time.time()
 
         # Compute the spectrogram using a short-time Fourier transform
+        t0 = time.time()
         stft = tf.signal.stft(data, frame_length=nfft, frame_step=step, window_fn=tf.signal.hann_window)
+        print(f'Spec calculus took: {time.time()-t0:.4f}s')
         # if verbose >= 3: print(f'stft: {time.time() - t0}'); t0 = time.time()
         spec = tf.abs(stft)
         # if verbose >= 3: print(f'abs: {time.time() - t0}'); t0 = time.time()
 
+        t0 = time.time()
         spectra = spec.numpy()
+        print(f'transfere to numpy took: {time.time()-t0:.4f}s\n')
         # if verbose == 1: print(f'result: {time.time() - t0} \n')
 
     freqs = np.fft.fftfreq(nfft, 1 / samplerate)[:int(nfft / 2) + 1]
     freqs[-1] = samplerate / 2
+    # ToDo: this is not completely correct
     times = np.linspace(0, int(tf.shape(data)[1]) / samplerate, int(spec.shape[1]), endpoint=False)
 
     return conversion_to_old_scale(spectra), freqs, times
