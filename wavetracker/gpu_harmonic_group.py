@@ -552,6 +552,7 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
                         next_hg += 1
                         break
     if verbose >= 4: print(f'Harmonic group assignment: {time.time() - tn_0:.4f}s')
+    cuda.current_context().deallocations.clear()
     return assigned_hg, peaks, log_spec
 
 
