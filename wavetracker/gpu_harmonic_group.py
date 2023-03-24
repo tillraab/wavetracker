@@ -161,8 +161,8 @@ def threshold_estimate_coordinator(log_spec, log_spec_detrend, hist, bins, hist_
                 upper = bins[i, j+1]
                 if lower == 0:
                     lower = bins[i, j]
-        cuda.syncthreads()
         std[i] = 0.5 * (upper-lower)
+    cuda.syncthreads()
         # print(upper-lower)
 ####################################################################
 # 2)
@@ -334,7 +334,7 @@ def get_harmonic_groups_coordinator(g_check_freqs, g_log_spec, spec_freq, peaks,
     if i < g_check_freqs.shape[0] and j < g_check_freqs.shape[1] and g_check_freqs[i, j] != 0:
         value[i, j] = get_group(g_check_freqs[i, j], g_log_spec[i], spec_freq, peaks[i], out[i, j, :],
                                 min_group_size, max_freq_tol, mains_freq, mains_freq_tol)
-        cuda.syncthreads()
+    cuda.syncthreads()
 
 ###############################################################################
 
