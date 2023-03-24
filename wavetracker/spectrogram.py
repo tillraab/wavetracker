@@ -44,9 +44,7 @@ def tensorflow_spec(data, samplerate, nfft, step, verbose = 1, **kwargs):
         # if verbose >= 3: print(f'tensor transpose: {time.time() - t0}'); t0 = time.time()
 
         # Compute the spectrogram using a short-time Fourier transform
-        t0 = time.time()
         stft = tf.signal.stft(data, frame_length=nfft, frame_step=step, window_fn=tf.signal.hann_window)
-        print(f'Spec calculus took: {time.time()-t0:.4f}s')
         # if verbose >= 3: print(f'stft: {time.time() - t0}'); t0 = time.time()
         spectra = tf.abs(stft)
         # if verbose >= 3: print(f'abs: {time.time() - t0}'); t0 = time.time()
