@@ -153,7 +153,7 @@ class Analysis_pipeline(object):
 
             iter_counter += 1
             t1_snip = time.time()
-            if self.verbose >= 3: print(f'{" ":^25}  Progress {iter_counter / iterations:3.1%} '
+            if self.verbose == 3: print(f'{" ":^25}  Progress {iter_counter / iterations:3.1%} '
                                         f'-- Spectrogram: {t1_spec - t0_spec:.2f}s '
                                         f'-- Harmonic group: {t1_hg - t0_hg:.2f}s '
                                         f'--> {t1_snip-t0_snip:.2f}s', end="\r")
