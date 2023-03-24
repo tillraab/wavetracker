@@ -494,7 +494,7 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
 
     ##################################################################################
     ### assign harmonic groups ###
-    tn_0 = time.time()
+    if verbose >= 4: tn_0 = time.time()
     harmonic_helper = np.cumsum(out>0, axis= 2)
     assigned_hg = cuda.pinned_array_like(peaks)
 
@@ -530,7 +530,7 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
                         assigned_hg[t, non_zero_idx] = next_hg
                         next_hg += 1
                         break
-    print(f'Harmonic group assignment: {time.time() - tn_0:.4f}s')
+    if verbose >= 4: print(f'Harmonic group assignment: {time.time() - tn_0:.4f}s')
     return assigned_hg, peaks, log_spec
 
 
