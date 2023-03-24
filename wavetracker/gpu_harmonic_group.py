@@ -380,7 +380,7 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
     if verbose >= 4: t0_6 = time.time()
     g_log_spec.copy_to_host(log_spec)
     if verbose >= 4: t0_7 = time.time()
-    if verbose >= 4: print(f'power log transform: {time.time() - t0:.4f}s')
+    if verbose >= 4: print(f'\npower log transform: {time.time() - t0:.4f}s')
     task = 'log_spec'
     if verbose >= 4: print(f'{task} Pinned CPU-arrays: {t0_1 - t0_0:.4f}s --'
                            f'GPU-arrays: {t0_3 - t0_2:.4f}s --'
@@ -417,7 +417,7 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
     # g_hist.copy_to_host(hist)
     # g_hist_th.copy_to_host(hist_th)
     g_std.copy_to_host(std)
-    if verbose >= 4: print(f'power log transform: {time.time() - t0:.4f}s')
+    if verbose >= 4: print(f'threshold estimate transform: {time.time() - t0:.4f}s')
 
     ##################################################################################
     ### peak detection ###
