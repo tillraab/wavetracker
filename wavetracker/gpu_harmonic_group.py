@@ -273,12 +273,12 @@ def detect_peaks_fixed(data, peaks, trough, spec_freq, low_threshold, high_thres
     else:
         pass
 
-@cuda.jit('void(f4[:,:], f4[:,:], f4[:,:], f8[:], f8[:], f8[:], f8, f8, f8, f8, f8)')
+@cuda.jit('void(f4[:,:], f4[:,:], f4[:,:], f8[:], f8, f8, f8, f8, f8, f8, f8)')
 def peak_detect_coordinater(spec, peaks, troughs, spec_freq, low_threshold, high_threshold, min_freq, max_freq,
                             mains_freq, mains_freq_tol, min_good_peak_power):
     i = cuda.grid(1)
     if i < spec.shape[0]:
-        detect_peaks_fixed(spec[i], peaks[i], troughs[i], spec_freq, low_threshold[i], high_threshold[i], min_freq, max_freq,
+        detect_peaks_fixed(spec[i], peaks[i], troughs[i], spec_freq, low_threshold, high_threshold, min_freq, max_freq,
                             mains_freq, mains_freq_tol, min_good_peak_power)
         # detect_peaks_fixed(spec[i], peaks[i], low_th)
     # tester(spec[i], peaks[i], troughs[i])
@@ -388,8 +388,8 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
                            f'GPU-CPU transfere: {t0_7 - t0_6:.4f}s')
 
     ### threshold estimate for peak detection ###
-    low_th = cuda.pinned_array((log_spec.shape[0],))
-    high_th = cuda.pinned_array((log_spec.shape[0],))
+    # low_th = cuda.pinned_array((log_spec.shape[0],))
+    # high_th = cuda.pinned_array((log_spec.shape[0],))
     if cfg.harmonic_groups['low_threshold'] == 0 or cfg.harmonic_groups['high_threshold'] == 0:
         if verbose >= 4: t0 = time.time()
         # helper variables
@@ -416,19 +416,19 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
         threshold_estimate_coordinator[bpg, tpb](g_log_spec, g_log_spec_detrend, g_hist, g_bins, g_hist_th, g_std)
 
         # copy GPU -> CPU
-        # g_log_spec_detrend.copy_to_host(log_spec_detrend)
-        # g_hist.copy_to_host(hist)
-        # g_hist_th.copy_to_host(hist_th)
+        g_log_spec_detrend.copy_to_host(log_spec_detrend)
+        g_hist.copy_to_host(hist)
+        g_hist_th.copy_to_host(hist_th)
         g_std.copy_to_host(std)
-        low_th[:] = (std * cfg.harmonic_groups['low_thresh_factor'])[:]
-        high_th[:] = (std * cfg.harmonic_groups['high_thresh_factor'])[:]
+        # low_th[:] = (std * cfg.harmonic_groups['low_thresh_factor'])[:]
+        # high_th[:] = (std * cfg.harmonic_groups['high_thresh_factor'])[:]
 
         cfg.harmonic_groups['low_threshold'] = np.mean(std) * cfg.harmonic_groups['low_thresh_factor']
         cfg.harmonic_groups['high_threshold'] = np.mean(std) * cfg.harmonic_groups['high_thresh_factor']
         if verbose >= 4: print(f'threshold estimate transform: {time.time() - t0:.4f}s')
-    else:
-        low_th[:] = cfg.harmonic_groups['low_threshold']
-        high_th[:] = cfg.harmonic_groups['high_threshold']
+    # else:
+    #     low_th[:] = cfg.harmonic_groups['low_threshold']
+    #     high_th[:] = cfg.harmonic_groups['high_threshold']
 
 
     ##################################################################################
@@ -446,13 +446,15 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
     g_peaks = cuda.device_array_like(g_log_spec)
     g_troughs = cuda.device_array_like(g_log_spec)
     g_spec_freq = cuda.to_device(spec_freq)
-    g_low_th = cuda.to_device(low_th)
-    g_high_th = cuda.to_device(high_th)
+    # g_low_th = cuda.to_device(low_th)
+    # g_high_th = cuda.to_device(high_th)
 
     # kernel setup & execution
     tpb = 1024
     bpg = g_log_spec.shape[0]
-    peak_detect_coordinater[bpg, tpb](g_log_spec, g_peaks, g_troughs, g_spec_freq, g_low_th, g_high_th,
+    peak_detect_coordinater[bpg, tpb](g_log_spec, g_peaks, g_troughs, g_spec_freq,
+                                      float64(cfg.harmonic_groups['low_threshold']),
+                                      float64(cfg.harmonic_groups['high_threshold']),
                                       float64(cfg.harmonic_groups['min_freq']),
                                       float64(cfg.harmonic_groups['max_freq']),
                                       float64(cfg.harmonic_groups['mains_freq']),
@@ -461,7 +463,7 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
 
     # copy GPU -> CPU
     g_peaks.copy_to_host(peaks)
-    # g_troughs.copy_to_host(troughs)
+    g_troughs.copy_to_host(troughs)
     if verbose >= 4: print(f'peak_detect: {time.time() - t0:.4f}s')
 
     ##################################################################################
