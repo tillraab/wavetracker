@@ -495,8 +495,7 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
     # kernel setup & execution
     tpb = (32, 32)
     bpg = (g_check_freqs.shape[0] // tpb[0] + 1, g_check_freqs.shape[1] // tpb[1] + 1)
-    embed()
-    quit()
+
     get_harmonic_groups_coordinator[bpg, tpb](g_check_freqs, g_log_spec, g_spec_freq, g_peaks, g_out, g_value,
                                               int64(cfg.harmonic_groups['min_group_size']),
                                               float64(cfg.harmonic_groups['max_freq_tol']),
@@ -504,7 +503,12 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
                                               float64(cfg.harmonic_groups['mains_freq_tol']))
 
     # copy GPU -> CPU
-    g_out.copy_to_host(out)
+    try:
+        g_out.copy_to_host(out)
+    except:
+        embed()
+        quit()
+        # aaa = np.repeat(aa[np.newaxis,:,:], <repetitions>, axis=0)
     g_value.copy_to_host(value)
 
     if verbose >= 4: print(f'get harmonic groups: {time.time() - t0:.4f}s')
