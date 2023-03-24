@@ -331,11 +331,10 @@ def get_harmonic_groups_coordinator(g_check_freqs, g_log_spec, spec_freq, peaks,
                                     min_group_size, max_freq_tol, mains_freq, mains_freq_tol):
     i, j = cuda.grid(2)
     # if i < 1 and j < 1:
-    if i < g_check_freqs.shape[0] and j < g_check_freqs.shape[1]:
-        if g_check_freqs[i, j] != 0:
-            value[i, j] = get_group(g_check_freqs[i, j], g_log_spec[i], spec_freq, peaks[i], out[i, j, :],
-                                    min_group_size, max_freq_tol, mains_freq, mains_freq_tol)
-            cuda.syncthreads()
+    if i < g_check_freqs.shape[0] and j < g_check_freqs.shape[1] and g_check_freqs[i, j] != 0:
+        value[i, j] = get_group(g_check_freqs[i, j], g_log_spec[i], spec_freq, peaks[i], out[i, j, :],
+                                min_group_size, max_freq_tol, mains_freq, mains_freq_tol)
+        cuda.syncthreads()
 
 ###############################################################################
 
