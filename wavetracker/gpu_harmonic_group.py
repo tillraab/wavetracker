@@ -94,7 +94,7 @@ def jit_decibel(power, db_power):
     min_power = 1e-20
 
     i, j = cuda.grid(2)
-    if (i > power.shape[0]) or (j > power.shape[1]):
+    if (i >= power.shape[0]) or (j >= power.shape[1]):
         return
     if power[i, j] <= min_power:
         db_power[i, j] = -math.inf
@@ -149,20 +149,21 @@ def threshold_estimate(log_spec, log_spec_detrend, hist, bins):
 @cuda.jit
 def threshold_estimate_coordinator(log_spec, log_spec_detrend, hist, bins, hist_th, std):
     i = cuda.grid(1)
-    if i < log_spec.shape[0]:
+    if i >= log_spec.shape[0]:
+        return
     # if i < 1:
-        hist_th[i] = threshold_estimate(log_spec[i], log_spec_detrend[i], hist[i], bins[i])
-        cuda.syncthreads()
+    hist_th[i] = threshold_estimate(log_spec[i], log_spec_detrend[i], hist[i], bins[i])
+    cuda.syncthreads()
 
-        lower = 0
-        upper = 0
-        for j in range(len(hist[i])):
-            if hist[i][j] > hist_th[i]:
-                upper = bins[i, j+1]
-                if lower == 0:
-                    lower = bins[i, j]
-        std[i] = 0.5 * (upper-lower)
-        cuda.syncthreads()
+    lower = 0
+    upper = 0
+    for j in range(len(hist[i])):
+        if hist[i][j] > hist_th[i]:
+            upper = bins[i, j+1]
+            if lower == 0:
+                lower = bins[i, j]
+    std[i] = 0.5 * (upper-lower)
+    cuda.syncthreads()
         # print(upper-lower)
 ####################################################################
 # 2)
@@ -277,12 +278,13 @@ def detect_peaks_fixed(data, peaks, trough, spec_freq, low_threshold, high_thres
 def peak_detect_coordinater(spec, peaks, troughs, spec_freq, low_threshold, high_threshold, min_freq, max_freq,
                             mains_freq, mains_freq_tol, min_good_peak_power):
     i = cuda.grid(1)
-    if i < spec.shape[0]:
-        detect_peaks_fixed(spec[i], peaks[i], troughs[i], spec_freq, low_threshold, high_threshold, min_freq, max_freq,
-                            mains_freq, mains_freq_tol, min_good_peak_power)
-        # detect_peaks_fixed(spec[i], peaks[i], low_th)
-    # tester(spec[i], peaks[i], troughs[i])
-        cuda.syncthreads()
+    if i >= spec.shape[0]:
+        return
+    detect_peaks_fixed(spec[i], peaks[i], troughs[i], spec_freq, low_threshold, high_threshold, min_freq, max_freq,
+                        mains_freq, mains_freq_tol, min_good_peak_power)
+    # detect_peaks_fixed(spec[i], peaks[i], low_th)
+# tester(spec[i], peaks[i], troughs[i])
+    cuda.syncthreads()
 
 ########################################################################################
 
@@ -331,10 +333,13 @@ def get_harmonic_groups_coordinator(g_check_freqs, g_log_spec, spec_freq, peaks,
                                     min_group_size, max_freq_tol, mains_freq, mains_freq_tol):
     i, j = cuda.grid(2)
     # if i < 1 and j < 1:
-    if i < g_check_freqs.shape[0] and j < g_check_freqs.shape[1] and g_check_freqs[i, j] != 0:
-        value[i, j] = get_group(g_check_freqs[i, j], g_log_spec[i], spec_freq, peaks[i], out[i, j, :],
-                                min_group_size, max_freq_tol, mains_freq, mains_freq_tol)
-        cuda.syncthreads()
+    if i >= g_check_freqs.shape[0] or j >= g_check_freqs.shape[1]:
+        return
+    if g_check_freqs[i, j] == 0:
+        return
+    value[i, j] = get_group(g_check_freqs[i, j], g_log_spec[i], spec_freq, peaks[i], out[i, j, :],
+                            min_group_size, max_freq_tol, mains_freq, mains_freq_tol)
+    cuda.syncthreads()
 
 ###############################################################################
 
