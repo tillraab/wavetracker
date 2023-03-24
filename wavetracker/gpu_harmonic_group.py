@@ -478,7 +478,7 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
         for d in range(cfg.harmonic_groups['max_divisor']):
             check_freqs[i, d*len(fs):(d+1)*len(fs)] = fs/(d+1)
 
-    out = cuda.pinned_array(shape=(check_freqs.shape[0], check_freqs.shape[1], max_group_size), dtype=int)
+    out = cuda.pinned_array(shape=(check_freqs.shape[0], check_freqs.shape[1], max_group_size))
     value = cuda.pinned_array(shape=(check_freqs.shape[0], check_freqs.shape[1]), dtype=float)
 
     # GPU arrays
