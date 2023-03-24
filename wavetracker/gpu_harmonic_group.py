@@ -355,22 +355,36 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
     if verbose >= 1: t0 = time.time()
 
     # CPU arrays (pinned)
+    t0_0 = time.time()
     spec = cuda.pinned_array((spec_arr.shape[1], spec_arr.shape[0]), dtype=np.float32)
     spec[:, :] = spec_arr.transpose()[:,:]
     log_spec = cuda.pinned_array_like(spec)
+    t0_1 = time.time()
 
     # GPU arrays
+    t0_2 = time.time()
     g_spec = cuda.to_device(spec)
     g_log_spec = cuda.device_array_like(g_spec)
+    t0_3 = time.time()
+
 
     # kernel setup & execution
+    t0_4 = time.time()
     blockdim = (32, 32)
     griddim = (g_spec.shape[0] // blockdim[0] + 1, g_spec.shape[1] // blockdim[1] + 1)
     jit_decibel[griddim, blockdim](g_spec, g_log_spec)
+    t0_5 = time.time()
 
     # copy GPU -> CPU
+    t0_6 = time.time()
     g_log_spec.copy_to_host(log_spec)
+    t0_7 = time.time()
     if verbose >= 1: print(f'power log transform: {time.time() - t0:.4f}s')
+    task = 'log_spec'
+    print(f'{task} Pinned CPU-arrays: {t0_1 - t0_0:.4f}s --'
+          f'GPU-arrays: {t0_3 - t0_2:.4f}s --'
+          f'Kernel: {t0_5 - t0_4:.4f}s --'
+          f'GPU-CPU transfere: {t0_7 - t0_6:.4f}s')
 
     ### threshold estimate for peak detection ###
     if verbose >= 1: t0 = time.time()
@@ -380,10 +394,12 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
 
 
     # CPU arrays (pinned)
+    t1_0 = time.time()
     log_spec_detrend = cuda.pinned_array((log_spec.shape[0], i1-i0))
     hist = cuda.pinned_array(((log_spec.shape[0], 100)))
     std = cuda.pinned_array((log_spec.shape[0], ))
     hist_th = cuda.pinned_array((g_log_spec.shape[0],))
+    t1_1 = time.time()
 
     # GPU arrays
     g_log_spec_detrend = cuda.device_array((log_spec.shape[0], i1 - i0))
