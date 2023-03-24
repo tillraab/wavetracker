@@ -388,36 +388,51 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
                            f'GPU-CPU transfere: {t0_7 - t0_6:.4f}s')
 
     ### threshold estimate for peak detection ###
-    if verbose >= 4: t0 = time.time()
-    # helper variables
-    i0, i1 = log_spec.shape[1]//2, log_spec.shape[1]*3//4
-    #ToDo: fix that this is a potential of 2 (e.g. i1-i0 = 2**12); detrend with snippets of 128 (2**7)
+    low_th = cuda.pinned_array((log_spec.shape[0],))
+    high_th = cuda.pinned_array((log_spec.shape[0],))
+    if cfg.harmonic_groups['low_threshold'] == 0 or cfg.harmonic_groups['high_threshold'] == 0:
+        if verbose >= 4: t0 = time.time()
+        # helper variables
+        i0, i1 = log_spec.shape[1]//2, log_spec.shape[1]*3//4
+        #ToDo: fix that this is a potential of 2 (e.g. i1-i0 = 2**12); detrend with snippets of 128 (2**7)
 
 
-    # CPU arrays (pinned)
-    log_spec_detrend = cuda.pinned_array((log_spec.shape[0], i1-i0))
-    hist = cuda.pinned_array(((log_spec.shape[0], 100)))
-    std = cuda.pinned_array((log_spec.shape[0], ))
-    hist_th = cuda.pinned_array((g_log_spec.shape[0],))
+        # CPU arrays (pinned)
+        log_spec_detrend = cuda.pinned_array((log_spec.shape[0], i1-i0))
+        hist = cuda.pinned_array(((log_spec.shape[0], 100)))
+        std = cuda.pinned_array((log_spec.shape[0], ))
+        hist_th = cuda.pinned_array((g_log_spec.shape[0],))
 
-    # GPU arrays
-    g_log_spec_detrend = cuda.device_array((log_spec.shape[0], i1 - i0))
-    g_hist = cuda.device_array((g_log_spec.shape[0], 100))
-    g_bins = cuda.device_array((g_log_spec.shape[0], 101))
-    g_std = cuda.device_array((g_log_spec.shape[0],))
-    g_hist_th = cuda.device_array((g_log_spec.shape[0],))
+        # GPU arrays
+        g_log_spec_detrend = cuda.device_array((log_spec.shape[0], i1 - i0))
+        g_hist = cuda.device_array((g_log_spec.shape[0], 100))
+        g_bins = cuda.device_array((g_log_spec.shape[0], 101))
+        g_std = cuda.device_array((g_log_spec.shape[0],))
+        g_hist_th = cuda.device_array((g_log_spec.shape[0],))
 
-    # kernel setup & execution
-    tpb = 1024
-    bpg = g_log_spec.shape[0]
-    threshold_estimate_coordinator[bpg, tpb](g_log_spec, g_log_spec_detrend, g_hist, g_bins, g_hist_th, g_std)
+        # kernel setup & execution
+        tpb = 1024
+        bpg = g_log_spec.shape[0]
+        threshold_estimate_coordinator[bpg, tpb](g_log_spec, g_log_spec_detrend, g_hist, g_bins, g_hist_th, g_std)
 
-    # copy GPU -> CPU
-    # g_log_spec_detrend.copy_to_host(log_spec_detrend)
-    # g_hist.copy_to_host(hist)
-    # g_hist_th.copy_to_host(hist_th)
-    g_std.copy_to_host(std)
-    if verbose >= 4: print(f'threshold estimate transform: {time.time() - t0:.4f}s')
+        # copy GPU -> CPU
+        # g_log_spec_detrend.copy_to_host(log_spec_detrend)
+        # g_hist.copy_to_host(hist)
+        # g_hist_th.copy_to_host(hist_th)
+        g_std.copy_to_host(std)
+        embed()
+        low_th[:] = (std * cfg.harmonic_groups['low_thresh_factor'])[:]
+        high_th[:] = (std * cfg.harmonic_groups['high_thresh_factor'])[:]
+
+        cfg.harmonic_groups['low_threshold'] = np.mean(std) * cfg.harmonic_groups['low_thresh_factor']
+        cfg.harmonic_groups['high_threshold'] = np.mean(std) * cfg.harmonic_groups['high_thresh_factor']
+        if verbose >= 4: print(f'threshold estimate transform: {time.time() - t0:.4f}s')
+    else:
+        embed()
+        quit()
+        low_th[:] = cfg.harmonic_groups['low_threshold']
+        high_th[:] = cfg.harmonic_groups['high_threshold']
+
 
     ##################################################################################
     ### peak detection ###
@@ -428,10 +443,7 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
 
     spec_freq = cuda.pinned_array_like(spec_freq_arr)
     spec_freq[:] = spec_freq_arr[:]
-    low_th = cuda.pinned_array_like(std)
-    low_th[:] = (std * cfg.harmonic_groups['low_thresh_factor'])[:]
-    high_th = cuda.pinned_array_like(std)
-    high_th[:] = (std * cfg.harmonic_groups['high_thresh_factor'])[:]
+
 
     # GPU arrays
     g_peaks = cuda.device_array_like(g_log_spec)
