@@ -51,11 +51,11 @@ def tensorflow_spec(data, samplerate, nfft, step, verbose = 1, **kwargs):
         spec = tf.abs(stft)
         # if verbose >= 3: print(f'abs: {time.time() - t0}'); t0 = time.time()
 
-        t0 = time.time()
-        embed()
-        quit()
-        spectra = spec.numpy()
-        print(f'transfere to numpy took: {time.time()-t0:.4f}s\n')
+        # t0 = time.time()
+        # embed()
+        # quit()
+        # spectra = spec.numpy()
+        # print(f'transfere to numpy took: {time.time()-t0:.4f}s\n')
         # if verbose == 1: print(f'result: {time.time() - t0} \n')
 
     freqs = np.fft.fftfreq(nfft, 1 / samplerate)[:int(nfft / 2) + 1]
