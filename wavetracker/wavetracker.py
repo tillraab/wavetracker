@@ -255,6 +255,7 @@ def main():
     for dirpath, dirnames, filenames in os.walk(args.folder, topdown=True):
         for filename in [f for f in filenames if f.endswith(".raw")]:
             analysis_folders.append(dirpath)
+    analysis_folders = sorted(analysis_folders)
 
     if args.verbose >= 1: print(f'{"Files found to analyze":^25}: {len(analysis_folders)}')
 
