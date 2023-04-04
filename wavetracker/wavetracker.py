@@ -280,13 +280,13 @@ def main():
 
         ##########################################
 
-        fig, ax = plt.subplots(figsize=(20/2.54, 12/2.54))
-        ax.scatter(Analysis.times[Analysis.idx_v], Analysis.fund_v, color='grey', alpha = 0.5)
-        for id in np.unique(Analysis.ident_v[~np.isnan(Analysis.ident_v)]):
-            c = np.random.rand(3)
-            ax.plot(Analysis.times[Analysis.idx_v[Analysis.ident_v == id]], Analysis.fund_v[Analysis.ident_v == id],
-                    marker='.', color=c)
-        plt.show()
+        # fig, ax = plt.subplots(figsize=(20/2.54, 12/2.54))
+        # ax.scatter(Analysis.times[Analysis.idx_v], Analysis.fund_v, color='grey', alpha = 0.5)
+        # for id in np.unique(Analysis.ident_v[~np.isnan(Analysis.ident_v)]):
+        #     c = np.random.rand(3)
+        #     ax.plot(Analysis.times[Analysis.idx_v[Analysis.ident_v == id]], Analysis.fund_v[Analysis.ident_v == id],
+        #             marker='.', color=c)
+        # plt.show()
     #########################################
     embed()
     quit()
