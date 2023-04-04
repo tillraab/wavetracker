@@ -396,7 +396,7 @@ def freq_tracking_v6(fund_v, idx_v, sign_v, times, freq_tolerance= 2.5, channels
         min_i0 = np.min(np.hstack(i0_m))
         max_i1 = np.max(np.hstack(i1_m))
 
-        p_ident_v = ident_v[min_i0:max_i1 + 1]
+        p_ident_v = ident_v[min_i0:max_i1 + 1] # this is a pointer: changes in p_ident_v changes also ident_v
         p_tmp_ident_v = tmp_ident_v[min_i0:max_i1 + 1]
         p_idx_v = idx_v[min_i0:max_i1 + 1]
         p_fund_v = fund_v[min_i0:max_i1 + 1]

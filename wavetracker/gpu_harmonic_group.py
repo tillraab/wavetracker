@@ -415,7 +415,7 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
         g_hist_th = cuda.device_array((g_log_spec.shape[0],))
 
         # kernel setup & execution
-        tpb = 1024
+        tpb = 1
         bpg = g_log_spec.shape[0]
         threshold_estimate_coordinator[bpg, tpb](g_log_spec, g_log_spec_detrend, g_hist, g_bins, g_hist_th, g_std)
 
@@ -454,7 +454,8 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
     # g_high_th = cuda.to_device(high_th)
 
     # kernel setup & execution
-    tpb = 1024
+    # tpb = 1024
+    tpb = 1
     bpg = g_log_spec.shape[0]
     peak_detect_coordinater[bpg, tpb](g_log_spec, g_peaks, g_troughs, g_spec_freq,
                                       float64(cfg.harmonic_groups['low_threshold']),
@@ -491,26 +492,21 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
     g_check_freqs = cuda.to_device(check_freqs)
     g_out = cuda.device_array(shape=(check_freqs.shape[0], check_freqs.shape[1], max_group_size), dtype=int)
     g_value = cuda.device_array(shape=(check_freqs.shape[0], check_freqs.shape[1]), dtype=float)
-
+    #
     # kernel setup & execution
-    tpb = (32, 32)
-    tpb = (1024, 1)
+    tpb = (1, 1)
     bpg = (g_check_freqs.shape[0] // tpb[0] + 1, g_check_freqs.shape[1] // tpb[1] + 1)
 
-    get_harmonic_groups_coordinator[bpg, tpb](g_check_freqs, g_log_spec, g_spec_freq, g_peaks, g_out, g_value,
+    get_harmonic_groups_coordinator[bpg, tpb](g_check_freqs, log_spec, g_spec_freq, g_peaks, g_out, g_value,
                                               int64(cfg.harmonic_groups['min_group_size']),
                                               float64(cfg.harmonic_groups['max_freq_tol']),
                                               float64(cfg.harmonic_groups['mains_freq']),
                                               float64(cfg.harmonic_groups['mains_freq_tol']))
 
     # copy GPU -> CPU
-    try:
-        g_out.copy_to_host(out)
-    except:
-        embed()
-        quit()
-        # aaa = np.repeat(aa[np.newaxis,:,:], <repetitions>, axis=0)
+    g_out.copy_to_host(out)
     g_value.copy_to_host(value)
+
 
     if verbose >= 4: print(f'get harmonic groups: {time.time() - t0:.4f}s')
 

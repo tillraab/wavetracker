@@ -36,8 +36,6 @@ class Analysis_pipeline(object):
         save_path = list(folder.split(os.sep))
         save_path.insert(-1, 'derived_data')
         self.save_path = os.sep.join(save_path)
-        if not os.path.exists(self.save_path):
-            os.makedirs(self.save_path)
 
         self.data = data
         self.samplerate = samplerate
@@ -54,15 +52,39 @@ class Analysis_pipeline(object):
         self.Spec = Spectrogram(self.folder, self.samplerate, self.data_shape, verbose=verbose,
                                 gpu_use=gpu_use, **cfg.raw, **cfg.spectrogram)
 
-        # out
-        self._fund_v = []
-        self._idx_v = []
-        self._sign_v = []
-        self.ident_v = []
-        self.times = []
-        # self._low_th = []
-        # self._high_th = []
-        pass
+        self._get_signals = True
+        self.do_tracking = True
+
+        # load
+        if os.path.exists(os.path.join(self.save_path, 'fund_v.npy')):
+            self._fund_v = np.load(os.path.join(self.save_path, 'fund_v.npy'), allow_pickle=True)
+            self._idx_v = np.load(os.path.join(self.save_path, 'idx_v.npy'), allow_pickle=True)
+            self._sign_v = np.load(os.path.join(self.save_path, 'sign_v.npy'), allow_pickle=True)
+            self.ident_v = np.load(os.path.join(self.save_path, 'ident_v.npy'), allow_pickle=True)
+            self.times = np.load(os.path.join(self.save_path, 'times.npy'), allow_pickle=True)
+            self.get_signals = False
+            if len(self.ident_v[~np.isnan(self.ident_v)]) > 0:
+                self.do_tracking = False
+        else:
+            self._fund_v = []
+            self._idx_v = []
+            self._sign_v = []
+            self.ident_v = []
+            self.times = []
+
+    @property
+    def get_signals(self):
+        return bool(self._get_signals)
+
+    @get_signals.setter
+    def get_signals(self, get_sigs):
+        if get_sigs:
+            self._fund_v = []
+            self._idx_v = []
+            self._sign_v = []
+            self.ident_v = []
+            self.times = []
+        self._get_signals = bool(get_sigs)
 
     @property
     def fund_v(self):
@@ -77,19 +99,37 @@ class Analysis_pipeline(object):
         return np.array(self._sign_v)
 
     def run(self):
-        if self.gpu_use:
-            self.pipeline_GPU()
-        else:
-            self.pipeline_CPU()
-        if self.verbose >= 1: print('\n')
-        if self.verbose >= 1: print(f'{"Tracking":^25}: -- freq_tolerance: {self.cfg.tracking["freq_tolerance"]} -- '
+        if self.verbose >= 1: print(f'{"Spectrogram (GPU)":^25}: '
+                                    f'-- fine spec: {self.Spec.get_fine_spec} '
+                                    f'-- plotable spec: {self.Spec.get_sparse_spec} '
+                                    f'-- signal extract: {self._get_signals} '
+                                    f'-- snippet size: {self.Spec.snippet_size / self.samplerate:.2f}s')
+        if self._get_signals or self.Spec.get_fine_spec or self.Spec.get_sparse_spec:
+            if self.gpu_use:
+                self.pipeline_GPU()
+            else:
+                self.pipeline_CPU()
+            self.times = self.Spec.times
+            self.save()
+
+        if self.verbose >= 1: print(f'\n{"Tracking":^25}: -- freq_tolerance: {self.cfg.tracking["freq_tolerance"]} -- '
                                     f'max_dt: {self.cfg.tracking["max_dt"]}')
+        if self.do_tracking:
+            self.ident_v = freq_tracking_v6(self.fund_v, self.idx_v, self.sign_v, self.times, verbose=self.verbose,
+                                            **self.cfg.harmonic_groups, **self.cfg.tracking)
+            self.save()
 
-        self.times = self.Spec.times
+    def save(self):
+        if not os.path.exists(self.save_path):
+            os.makedirs(self.save_path)
 
-        self.ident_v = freq_tracking_v6(self.fund_v, self.idx_v, self.sign_v, self.times, verbose=self.verbose,
-                                        **self.cfg.harmonic_groups, **self.cfg.tracking)
+        np.save(os.path.join(self.save_path, 'fund_v.npy'), self.fund_v)
+        np.save(os.path.join(self.save_path, 'ident_v.npy'), self.ident_v)
+        np.save(os.path.join(self.save_path, 'idx_v.npy'), self.idx_v)
+        np.save(os.path.join(self.save_path, 'times.npy'), self.times)
+        np.save(os.path.join(self.save_path, 'sign_v.npy'), self.sign_v)
 
+        self.Spec.save()
 
     def extract_snippet_signals(self):
         if self.gpu_use:
@@ -124,12 +164,9 @@ class Analysis_pipeline(object):
         self._fund_v.extend(tmp_fund_v)
         self._idx_v.extend(tmp_idx_v + idx_0)
         self._sign_v.extend(tmp_sign_v)
+        self.ident_v = np.full(len(self._idx_v), np.nan)
 
     def pipeline_GPU(self):
-        if self.verbose >= 1: print(f'{"Spectrogram (GPU)":^25}: -- fine spec: '
-                                    f'{self.Spec.get_fine_spec} -- plotable spec: {self.Spec.get_sparse_spec}'
-                                    f' -- snippet size: {self.Spec.snippet_size / self.samplerate:.2f}s')
-
         iterations = int(np.floor(self.data_shape[0] / self.Spec.snippet_size))
         pbar = tqdm(total=iterations)
 
@@ -147,8 +184,9 @@ class Analysis_pipeline(object):
             self.Spec.snippet_spectrogram(snippet_data, snipptet_t0=snippet_t0)
             t1_spec = time.time()
 
+
             t0_hg = time.time()
-            self.extract_snippet_signals()
+            if self._get_signals: self.extract_snippet_signals()
             t1_hg = time.time()
 
             iter_counter += 1
@@ -162,11 +200,7 @@ class Analysis_pipeline(object):
                 break
         pbar.close()
 
-
     def pipeline_CPU(self):
-        if self.verbose >= 1: print(f'{"Spectrogram (CPU)":^25}: -- fine spec: '
-                                    f'{self.Spec.get_fine_spec} -- plotable spec: {self.Spec.get_sparse_spec}'
-                                    f' -- snippet size: {(self.Spec.snippet_size - self.Spec.noverlap) / self.samplerate:.2f}s')
         counter = 0
         iterations = self.data.shape[0] // (self.Spec.snippet_size - self.Spec.noverlap)
         for i0 in tqdm(np.arange(0, self.data.shape[0], self.Spec.snippet_size - self.Spec.noverlap), desc="File analysis."):
@@ -229,15 +263,19 @@ def main():
         data, samplerate, channels, dataset, data_shape = open_raw_data(folder=folder, verbose=args.verbose,
                                                                         **cfg.spectrogram)
 
+
+
         Analysis = Analysis_pipeline(data, samplerate, channels, dataset, data_shape, cfg, folder, args.verbose,
                                      gpu_use=not args.cpu and available_GPU)
 
         if args.renew:
-            Analysis.Spec.get_sparse_spec, Analysis.Spec.get_fine_spec = True, True
+            Analysis.Spec.get_sparse_spec, Analysis.Spec.get_fine_spec, Analysis.get_signals = True, True, True
 
         if args.nosave:
             Analysis.Spec.get_sparse_spec, Analysis.Spec.get_fine_spec = False, False
+
         Analysis.run()
+
 
         ##########################################
 

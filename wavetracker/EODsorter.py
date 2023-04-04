@@ -1123,7 +1123,7 @@ class MainWindow(QMainWindow):
     def Msave_plt(self):
         dir_name='wavetracker-plots'           # dir name
         dir_path=os.path.join('../'+dir_name)  # relative dir path
-        img_format='.png'
+        img_format='.pdf'
         recdate=int(self.rec_datetime.strftime("%Y%m%d%H%M%S"))
         plottime=str(int(self.Plot.xlim[0]))+'-'+str(int(self.Plot.xlim[1]))
         plotfreq=str(int(self.Plot.ylim[0]))+'-'+str(int(self.Plot.ylim[1])) 
@@ -1150,6 +1150,12 @@ class MainWindow(QMainWindow):
             print(color.GREEN+'Existing plot directory found in %s' %abs_dir_path + color.END) # print existing dir location
 
         try: # try saving image
+            # for handle in self.Plot.trace_handles:
+            #     handle[0].remove()
+            # self.Plot.figure.set_size_inches(10/2.54, 10/2.54)
+            # plt.subplots_adjust(left=0.2, right=0.95, bottom=0.15, top=0.95)
+            # self.Plot.ax.set_yticklabels(self.Plot.ax.get_yticklabels(), fontsize=12)
+            # self.Plot.ax.set_xticklabels(self.Plot.ax.get_xticklabels(), fontsize=12)
             self.Plot.figure.savefig(img_path) # save plot
         except (IOError, OSError) as e: # print error message if fails
             print(color.RED+color.BOLD+'Failed saving image!'+color.END)
