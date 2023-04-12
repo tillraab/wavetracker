@@ -357,39 +357,26 @@ def get_fundamentals(assigned_hg, spec_freq):
 # def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
 def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
     ### logaritmic spec ###
-    if verbose >= 4: t0 = time.time()
 
     # CPU arrays (pinned)
-    if verbose >= 4: t0_0 = time.time()
     spec = cuda.pinned_array((spec_arr.shape[1], spec_arr.shape[0]), dtype=np.float32)
     spec[:, :] = spec_arr.transpose()[:,:]
     log_spec = cuda.pinned_array_like(spec)
-    if verbose >= 4: t0_1 = time.time()
+    log_spec = np.zeros_like(log_spec)
 
     # GPU arrays
-    if verbose >= 4: t0_2 = time.time()
     g_spec = cuda.to_device(spec)
     g_log_spec = cuda.device_array_like(g_spec)
-    if verbose >= 4: t0_3 = time.time()
 
 
     # kernel setup & execution
-    if verbose >= 4: t0_4 = time.time()
     blockdim = (32, 32)
     griddim = (g_spec.shape[0] // blockdim[0] + 1, g_spec.shape[1] // blockdim[1] + 1)
     jit_decibel[griddim, blockdim](g_spec, g_log_spec)
-    if verbose >= 4: t0_5 = time.time()
 
     # copy GPU -> CPU
-    if verbose >= 4: t0_6 = time.time()
+    del g_spec
     g_log_spec.copy_to_host(log_spec)
-    if verbose >= 4: t0_7 = time.time()
-    if verbose >= 4: print(f'\npower log transform: {time.time() - t0:.4f}s')
-    task = 'log_spec'
-    if verbose >= 4: print(f'{task} Pinned CPU-arrays: {t0_1 - t0_0:.4f}s --'
-                           f'GPU-arrays: {t0_3 - t0_2:.4f}s --'
-                           f'Kernel: {t0_5 - t0_4:.4f}s --'
-                           f'GPU-CPU transfere: {t0_7 - t0_6:.4f}s')
 
     ### threshold estimate for peak detection ###
     # low_th = cuda.pinned_array((log_spec.shape[0],))
@@ -403,9 +390,13 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
 
         # CPU arrays (pinned)
         log_spec_detrend = cuda.pinned_array((log_spec.shape[0], i1-i0))
+        log_spec_detrend = np.zeros_like(log_spec_detrend)
         hist = cuda.pinned_array(((log_spec.shape[0], 100)))
+        hist = np.zeros_like(hist)
         std = cuda.pinned_array((log_spec.shape[0], ))
+        std = np.zeros_like(std)
         hist_th = cuda.pinned_array((g_log_spec.shape[0],))
+        hist_th = np.zeros_like(hist_th)
 
         # GPU arrays
         g_log_spec_detrend = cuda.device_array((log_spec.shape[0], i1 - i0))
@@ -424,6 +415,12 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
         g_hist.copy_to_host(hist)
         g_hist_th.copy_to_host(hist_th)
         g_std.copy_to_host(std)
+
+        del g_log_spec_detrend
+        del g_hist
+        del g_bins
+        del g_hist_th
+        del g_std
         # low_th[:] = (std * cfg.harmonic_groups['low_thresh_factor'])[:]
         # high_th[:] = (std * cfg.harmonic_groups['high_thresh_factor'])[:]
 
@@ -440,7 +437,9 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
     if verbose >= 4: t0 = time.time()
     # CPU arrays (pinned)
     peaks = cuda.pinned_array_like(log_spec)
+    peaks = np.zeros_like(peaks)
     troughs = cuda.pinned_array_like(log_spec)
+    troughs = np.zeros_like(troughs)
 
     spec_freq = cuda.pinned_array_like(spec_freq_arr)
     spec_freq[:] = spec_freq_arr[:]
@@ -469,6 +468,12 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
     # copy GPU -> CPU
     g_peaks.copy_to_host(peaks)
     g_troughs.copy_to_host(troughs)
+
+    del g_log_spec
+    del g_peaks
+    del g_troughs
+    del g_spec_freq
+
     if verbose >= 4: print(f'peak_detect: {time.time() - t0:.4f}s')
 
     ##################################################################################
@@ -479,6 +484,8 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
 
     # CPU arrays (pinned)
     check_freqs = cuda.pinned_array(shape=(peaks.shape[0], cfg.harmonic_groups['max_divisor']*int(np.max(np.sum(peaks == 2, axis=1)))))
+    check_freqs[:, :] = np.zeros_like(check_freqs)
+    # embed()
     for i in range(len(peaks)):
         fs = spec_freq[peaks[i] == 2]
         fs = fs[(fs < cfg.harmonic_groups['max_freq']) & (fs > cfg.harmonic_groups['min_freq'])]
@@ -486,7 +493,9 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
             check_freqs[i, d*len(fs):(d+1)*len(fs)] = fs/(d+1)
 
     out = cuda.pinned_array(shape=(check_freqs.shape[0], check_freqs.shape[1], max_group_size), dtype=int)
+    out[:, :, :] = np.zeros_like(out)
     value = cuda.pinned_array(shape=(check_freqs.shape[0], check_freqs.shape[1]), dtype=float)
+    value[:, :] = np.zeros_like(value)
 
     # GPU arrays
     g_check_freqs = cuda.to_device(check_freqs)
@@ -497,15 +506,22 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
     tpb = (1, 1)
     bpg = (g_check_freqs.shape[0] // tpb[0] + 1, g_check_freqs.shape[1] // tpb[1] + 1)
 
-    get_harmonic_groups_coordinator[bpg, tpb](g_check_freqs, log_spec, g_spec_freq, g_peaks, g_out, g_value,
-                                              int64(cfg.harmonic_groups['min_group_size']),
-                                              float64(cfg.harmonic_groups['max_freq_tol']),
-                                              float64(cfg.harmonic_groups['mains_freq']),
-                                              float64(cfg.harmonic_groups['mains_freq_tol']))
-
+    # print(g_check_freqs.shape)
+    try:
+        get_harmonic_groups_coordinator[bpg, tpb](g_check_freqs, log_spec, spec_freq, peaks, g_out, g_value,
+                                                  int64(cfg.harmonic_groups['min_group_size']),
+                                                  float64(cfg.harmonic_groups['max_freq_tol']),
+                                                  float64(cfg.harmonic_groups['mains_freq']),
+                                                  float64(cfg.harmonic_groups['mains_freq_tol']))
+    except:
+        embed()
+        quit()
     # copy GPU -> CPU
     g_out.copy_to_host(out)
     g_value.copy_to_host(value)
+    del g_check_freqs
+    del g_out
+    del g_value
 
 
     if verbose >= 4: print(f'get harmonic groups: {time.time() - t0:.4f}s')
@@ -515,6 +531,7 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
     if verbose >= 4: tn_0 = time.time()
     harmonic_helper = np.cumsum(out>0, axis= 2)
     assigned_hg = cuda.pinned_array_like(peaks)
+    assigned_hg[:, :] = np.zeros_like(assigned_hg)
 
     for t in range(out.shape[0]):
         next_hg = 1

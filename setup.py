@@ -27,7 +27,7 @@ install_req = ["PyQt5",
                'ruamel.yaml',
                'tqdm']
 
-data_files = [("icons", glob.glob(os.path.join("gui_sym", "*.png"))),
+data_files = [("icons", glob.glob(os.path.join("wavetracker/gui_sym", "*.png"))),
               (".", ["LICENSE"])
               ]
 

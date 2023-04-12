@@ -109,8 +109,13 @@ class Spectrogram(object):
         self._get_sparse_spec = False
         self.min_freq, self.max_freq = 0, 2000
         self.monitor_res = (1920, 1080)
+
         if not os.path.exists(os.path.join(self.save_path, 'sparse_spectra.npy')):
             self._get_sparse_spec = True
+            if os.path.ismount(os.sep.join(self.save_path.split(os.sep)[:-2])):
+                self.fine_spec_str = os.path.join(os.sep, 'home', os.getlogin(), 'analysis', save_path[-1], 'sparse_spectra.npy')
+                if not os.path.exists(os.path.split(self.fine_spec_str)[0]):
+                    os.makedirs(os.path.split(self.fine_spec_str)[0])
             self.sparse_spectra = None
             self.sparse_time_borders, self.sparse_freq_borders = None, None
             self.sparse_time, self.sparse_freq = None, None
@@ -124,7 +129,8 @@ class Spectrogram(object):
         self._get_fine_spec = False # ToDo: check if already existing in save folder
         self.fine_spec_str = os.path.join(self.save_path, 'fine_spec.npy')
         self.buffer_spectra = None
-        if not os.path.exists(os.path.join(self.save_path, 'fine_spec.npy')):
+
+        if not os.path.exists(os.path.join(self.save_path, 'fine_spec_shape.npy')):
             self._get_fine_spec = True
             self.fine_spec = None
             self.fine_spec_shape = None

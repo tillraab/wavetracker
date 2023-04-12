@@ -487,8 +487,9 @@ class MainWindow(QMainWindow):
         self.Act_exit.triggered.connect(self.close)
 
         # --- MenuBar - Edit --- #
+        package_dir = os.path.dirname(os.path.abspath(__file__))
 
-        self.Act_undo = QAction(QIcon('./gui_sym/undo.png'), '&Undo', self)
+        self.Act_undo = QAction(QIcon(os.path.join(package_dir, 'gui_sym', 'undo.png')), '&Undo', self)
         self.Act_undo.setStatusTip('Undo last sorting step')
         self.Act_undo.triggered.connect(self.undo)
 
@@ -499,75 +500,93 @@ class MainWindow(QMainWindow):
 
         ################## ToolBar ###################
 
-        self.Act_interactive_sel = QAction(QIcon('./gui_sym/sel.png'), 'Create new frequencies', self)
+        # self.Act_interactive_sel = QAction(QIcon('./gui_sym/sel.png'), 'Create new frequencies', self)
+        self.Act_interactive_sel = QAction(QIcon(os.path.join(package_dir, 'gui_sym', 'sel.png')), 'Create new frequencies', self)
         self.Act_interactive_sel.setStatusTip('create new freqs from fine spectrogram')
         self.Act_interactive_sel.setCheckable(True)
         self.Act_interactive_sel.setEnabled(False)
 
-        self.Act_interactive_con = QAction(QIcon('./gui_sym/con.png'), 'Connect', self)
+        # self.Act_interactive_con = QAction(QIcon('./gui_sym/con.png'), 'Connect', self)
+        self.Act_interactive_con = QAction(QIcon(os.path.join(package_dir, 'gui_sym', 'con.png')), 'Connect', self)
         self.Act_interactive_con.setStatusTip(r'connect two selected traces')
         self.Act_interactive_con.setCheckable(True)
         self.Act_interactive_con.setEnabled(False)
 
-        self.Act_interactive_GrCon = QAction(QIcon('./gui_sym/GrCon.png'), 'Group Connect', self)
+        # self.Act_interactive_GrCon = QAction(QIcon('./gui_sym/GrCon.png'), 'Group Connect', self)
+        self.Act_interactive_GrCon = QAction(QIcon(os.path.join(package_dir, 'gui_sym', 'GrCon.png')), 'Group Connect', self)
         self.Act_interactive_GrCon.setCheckable(True)
         self.Act_interactive_GrCon.setEnabled(False)
 
-        self.Act_interactive_newassign = QAction(QIcon('./gui_sym/newassign.png'), 'Re-assign', self)
+        # self.Act_interactive_newassign = QAction(QIcon('./gui_sym/newassign.png'), 'Re-assign', self)
+        self.Act_interactive_newassign = QAction(QIcon(os.path.join(package_dir, 'gui_sym', 'newassign.png')), 'Re-assign', self)
         self.Act_interactive_newassign.setCheckable(True)
         self.Act_interactive_newassign.setEnabled(False)
 
-        self.Act_interactive_del = QAction(QIcon('./gui_sym/del.png'), 'Delete Trace', self)
+        # self.Act_interactive_del = QAction(QIcon('./gui_sym/del.png'), 'Delete Trace', self)
+        self.Act_interactive_del = QAction(QIcon(os.path.join(package_dir, 'gui_sym', 'del.png')), 'Delete Trace', self)
         self.Act_interactive_del.setCheckable(True)
         self.Act_interactive_del.setEnabled(False)
 
-        self.Act_interactive_GrDel = QAction(QIcon('./gui_sym/GrDel.png'), 'Group Delete', self)
+        # self.Act_interactive_GrDel = QAction(QIcon('./gui_sym/GrDel.png'), 'Group Delete', self)
+        self.Act_interactive_GrDel = QAction(QIcon(os.path.join(package_dir, 'gui_sym', 'GrDel.png')), 'Group Delete', self)
         self.Act_interactive_GrDel.setCheckable(True)
         self.Act_interactive_GrDel.setEnabled(False)
 
-        self.Act_interactive_reset = QAction(QIcon('./gui_sym/reset.png'), 'Reset Variables', self)
+        # self.Act_interactive_reset = QAction(QIcon('./gui_sym/reset.png'), 'Reset Variables', self)
+        self.Act_interactive_reset = QAction(QIcon(os.path.join(package_dir, 'gui_sym', 'reset.png')), 'Reset Variables', self)
         self.Act_interactive_reset.setEnabled(False)
         self.Act_interactive_reset.triggered.connect(self.reset_variables)
 
-        self.Act_interactive_cut = QAction(QIcon('./gui_sym/cut.png'), 'Cut trace', self)
+        # self.Act_interactive_cut = QAction(QIcon('./gui_sym/cut.png'), 'Cut trace', self)
+        self.Act_interactive_cut = QAction(QIcon(os.path.join(package_dir, 'gui_sym', 'cut.png')), 'Cut trace', self)
         self.Act_interactive_cut.setCheckable(True)
         self.Act_interactive_cut.setEnabled(False)
 
-        self.Act_interactive_AutoSort = QAction(QIcon('./gui_sym/auto.png'), 'Auto Connect', self)
+        # self.Act_interactive_AutoSort = QAction(QIcon('./gui_sym/auto.png'), 'Auto Connect', self)
+        self.Act_interactive_AutoSort = QAction(QIcon(os.path.join(package_dir, 'gui_sym', 'auto.png')), 'Auto Connect', self)
         self.Act_interactive_AutoSort.setEnabled(False)
-        self.Act_interactive_ManualSort = QAction(QIcon('./gui_sym/manuel.png'), 'Manual Connect', self)
+        # self.Act_interactive_ManualSort = QAction(QIcon('./gui_sym/manuel.png'), 'Manual Connect', self)
+        self.Act_interactive_ManualSort = QAction(QIcon(os.path.join(package_dir, 'gui_sym', 'manuel.png')), 'Manual Connect', self)
         self.Act_interactive_ManualSort.setEnabled(False)
 
-        self.Act_interactive_zoom_out = QAction(QIcon('./gui_sym/zoomout.png'), 'Zoom -', self)
+        # self.Act_interactive_zoom_out = QAction(QIcon('./gui_sym/zoomout.png'), 'Zoom -', self)
+        self.Act_interactive_zoom_out = QAction(QIcon(os.path.join(package_dir, 'gui_sym', 'zoomout.png')), 'Zoom -', self)
         self.Act_interactive_zoom_out.triggered.connect(self.Mzoom_out)
         self.Act_interactive_zoom_out.setEnabled(False)
 
-        self.Act_interactive_zoom_in = QAction(QIcon('./gui_sym/zoomin.png'), 'zoom +', self)
+        # self.Act_interactive_zoom_in = QAction(QIcon('./gui_sym/zoomin.png'), 'zoom +', self)
+        self.Act_interactive_zoom_in = QAction(QIcon(os.path.join(package_dir, 'gui_sym', 'zoomin.png')), 'zoom +', self)
         self.Act_interactive_zoom_in.triggered.connect(self.Mzoom_in)
         self.Act_interactive_zoom_in.setEnabled(False)
 
-        self.Act_interactive_zoom_home = QAction(QIcon('./gui_sym/zoom_home.png'), 'zoom Home', self)
+        # self.Act_interactive_zoom_home = QAction(QIcon('./gui_sym/zoom_home.png'), 'zoom Home', self)
+        self.Act_interactive_zoom_home = QAction(QIcon(os.path.join(package_dir, 'gui_sym', 'zoom_home.png')), 'zoom Home', self)
         self.Act_interactive_zoom_home.triggered.connect(self.Mzoom_home)
         self.Act_interactive_zoom_home.setEnabled(False)
 
-        self.Act_save_plt = QAction(QIcon('./gui_sym/saveplot.png'), 'save current plot', self)
+        # self.Act_save_plt = QAction(QIcon('./gui_sym/saveplot.png'), 'save current plot', self)
+        self.Act_save_plt = QAction(QIcon(os.path.join(package_dir, 'gui_sym', 'saveplot.png')), 'save current plot', self)
         self.Act_save_plt.triggered.connect(self.Msave_plt)
         self.Act_save_plt.setEnabled(False)
 
-        self.Act_interactive_zoom = QAction(QIcon('./gui_sym/zoom.png'), 'Zoom select', self)
+        # self.Act_interactive_zoom = QAction(QIcon('./gui_sym/zoom.png'), 'Zoom select', self)
+        self.Act_interactive_zoom = QAction(QIcon(os.path.join(package_dir, 'gui_sym', 'zoom.png')), 'Zoom select', self)
         self.Act_interactive_zoom.setCheckable(True)
         self.Act_interactive_zoom.setEnabled(False)
         self.Act_interactive_zoom.setShortcut('O')
         # self.Act_interactive_zoom.toggled.connect(self.Mzoom)
 
-        self.Act_fine_spec = QAction(QIcon('./gui_sym/spec_fine.png'), 'Show fine Spectrogram', self)
+        # self.Act_fine_spec = QAction(QIcon('./gui_sym/spec_fine.png'), 'Show fine Spectrogram', self)
+        self.Act_fine_spec = QAction(QIcon(os.path.join(package_dir, 'gui_sym', 'spec_fine.png')), 'Show fine Spectrogram', self)
         self.Act_fine_spec.setEnabled(False)
         self.Act_fine_spec.triggered.connect(self.Mfine_spec)
-        self.Act_norm_spec = QAction(QIcon('./gui_sym/spec_roght.png'), 'Show rough Spectrogram', self)
+        # self.Act_norm_spec = QAction(QIcon('./gui_sym/spec_roght.png'), 'Show rough Spectrogram', self)
+        self.Act_norm_spec = QAction(QIcon(os.path.join(package_dir, 'gui_sym', 'spec_roght.png')), 'Show rough Spectrogram', self)
         self.Act_norm_spec.setEnabled(False)
         self.Act_norm_spec.triggered.connect(self.Mnorm_spec)
 
-        self.Act_arrowkeys = QAction(QIcon('./gui_sym/arrowkeys.png'), 'Activate arrorw keys', self)
+        # self.Act_arrowkeys = QAction(QIcon('./gui_sym/arrowkeys.png'), 'Activate arrorw keys', self)
+        self.Act_arrowkeys = QAction(QIcon(os.path.join(package_dir, 'gui_sym', 'arrowkeys.png')), 'Activate arrorw keys', self)
         self.Act_arrowkeys.setCheckable(True)
         self.Act_arrowkeys.setEnabled(False)
 
@@ -799,7 +818,9 @@ class MainWindow(QMainWindow):
         if self.folder == None:
             fd = QFileDialog()
             self.folder = fd.getExistingDirectory(self, 'Select Directory')
+            self.folder = os.path.abspath(self.folder)
         else:
+            self.folder = os.path.abspath(self.folder)
             pass
         # embed()
         # quit()
@@ -841,12 +862,19 @@ class MainWindow(QMainWindow):
             self.idx_v = np.load(os.path.join(self.folder, 'idx_v.npy'))
             self.ident_v = np.load(os.path.join(self.folder, 'ident_v.npy'))
             self.times = np.load(os.path.join(self.folder, 'times.npy'))
-            self.spectra = np.load(os.path.join(self.folder, 'spec.npy'))
-            self.start_time, self.end_time = np.load(os.path.join(self.folder, 'meta.npy'))
+            try:
+                self.spectra = np.load(os.path.join(self.folder, 'spec.npy'))
+            except:
+                self.spectra = np.load(os.path.join(self.folder, 'sparse_spectra.npy'))
+
+            try:
+                self.start_time, self.end_time = np.load(os.path.join(self.folder, 'meta.npy'))
+            except:
+                self.start_time, self.end_time = self.times[0], self.times[-1]
             self.cb_SCH_MCH.setCurrentIndex(1)
 
             self.got_multi_channel = True
-            # self.rec_datetime = get_datetime(self.folder)
+            self.rec_datetime = get_datetime(self.folder)
 
         if os.path.exists(os.path.join(self.folder, 'fill_spec.npy')):
             self.fill_freqs = np.load(os.path.join(self.folder, 'fill_freqs.npy'))
@@ -859,6 +887,21 @@ class MainWindow(QMainWindow):
             self.Plot.fill_times = np.load(os.path.join(self.folder, 'fill_times.npy'))
             self.Plot.fill_spec_shape = np.load(os.path.join(self.folder, 'fill_spec_shape.npy'))
             self.Plot.fill_spec = np.memmap(os.path.join(self.folder, 'fill_spec.npy'), dtype='float', mode='r',
+                                            shape=(self.fill_spec_shape[0], self.fill_spec_shape[1]), order = 'F')
+            self.Act_fine_spec.setEnabled(True)
+            self.Act_interactive_sel.setEnabled(True)
+
+        elif os.path.exists(os.path.join(self.folder, 'fine_spec.npy')):
+            self.fill_freqs = np.load(os.path.join(self.folder, 'fine_freqs.npy'))
+            self.fill_times = np.load(os.path.join(self.folder, 'fine_times.npy'))
+            self.fill_spec_shape = np.load(os.path.join(self.folder, 'fine_spec_shape.npy'))
+            self.fill_spec = np.memmap(os.path.join(self.folder, 'fine_spec.npy'), dtype='float', mode='r',
+                                       shape=(self.fill_spec_shape[0], self.fill_spec_shape[1]), order = 'F')
+
+            self.Plot.fill_freqs = np.load(os.path.join(self.folder, 'fine_freqs.npy'))
+            self.Plot.fill_times = np.load(os.path.join(self.folder, 'fine_times.npy'))
+            self.Plot.fill_spec_shape = np.load(os.path.join(self.folder, 'fine_spec_shape.npy'))
+            self.Plot.fill_spec = np.memmap(os.path.join(self.folder, 'fine_spec.npy'), dtype='float', mode='r',
                                             shape=(self.fill_spec_shape[0], self.fill_spec_shape[1]), order = 'F')
             self.Act_fine_spec.setEnabled(True)
             self.Act_interactive_sel.setEnabled(True)

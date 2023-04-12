@@ -288,8 +288,8 @@ def main():
         #             marker='.', color=c)
         # plt.show()
     #########################################
-    embed()
-    quit()
+    # embed()
+    # quit()
 
     sys.stdout.close()
 
