@@ -10,10 +10,12 @@ class Configuration(object):
 
     def __init__(self, folder: str = None,
                  file: str = None,
-                 verbose: int = 0
+                 verbose: int = 0,
+                 logger = None
                  ) -> None:
         if folder == None:
-            folder = '.'
+            # folder = os.path.dirname(os.path.abspath(__file__))
+            folder = os.path.dirname(os.path.abspath(__file__))
         self.file = file
         self.verbose = verbose
         if not file:
@@ -28,6 +30,7 @@ class Configuration(object):
         self.tracking = {}
 
         if self.verbose >= 1: print(f'{"Config file from":^25}: {os.path.realpath(self.file)}.')
+        if logger: logger.info(f'{"Config file from":^25}: {os.path.realpath(self.file)}.')
 
         self.yaml = ruamel.yaml.YAML()
         with open(self.file) as f:
@@ -47,7 +50,7 @@ class Configuration(object):
     def find_config(self, folder) -> None:
         folder = os.path.realpath(folder)
         folder = os.path.normpath(folder)
-        search_folders = [folder, os.sep.join(folder.split(os.sep)[:-1]), '.']
+        search_folders = [folder, os.sep.join(folder.split(os.sep)[:-1]), os.path.dirname(os.path.abspath(__file__))]
 
         found = False
         for search_folder in search_folders:

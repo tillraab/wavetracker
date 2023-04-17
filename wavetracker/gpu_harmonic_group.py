@@ -507,15 +507,12 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
     bpg = (g_check_freqs.shape[0] // tpb[0] + 1, g_check_freqs.shape[1] // tpb[1] + 1)
 
     # print(g_check_freqs.shape)
-    try:
-        get_harmonic_groups_coordinator[bpg, tpb](g_check_freqs, log_spec, spec_freq, peaks, g_out, g_value,
-                                                  int64(cfg.harmonic_groups['min_group_size']),
-                                                  float64(cfg.harmonic_groups['max_freq_tol']),
-                                                  float64(cfg.harmonic_groups['mains_freq']),
-                                                  float64(cfg.harmonic_groups['mains_freq_tol']))
-    except:
-        embed()
-        quit()
+    get_harmonic_groups_coordinator[bpg, tpb](g_check_freqs, log_spec, spec_freq, peaks, g_out, g_value,
+                                              int64(cfg.harmonic_groups['min_group_size']),
+                                              float64(cfg.harmonic_groups['max_freq_tol']),
+                                              float64(cfg.harmonic_groups['mains_freq']),
+                                              float64(cfg.harmonic_groups['mains_freq_tol']))
+
     # copy GPU -> CPU
     g_out.copy_to_host(out)
     g_value.copy_to_host(value)
@@ -553,6 +550,8 @@ def harmonic_group_pipeline(spec_arr, spec_freq_arr, cfg, verbose = 0):
                 if search_peak_idx in out[t, i, :cfg.harmonic_groups['min_group_size']]:
                     non_zero_h = np.arange(out.shape[2])[out[t, i] != 0] + 1
                     non_zero_idx = out[t, i][out[t, i] != 0]
+                    if log_spec[t, non_zero_idx[0]] < cfg.harmonic_groups['min_good_peak_power']:
+                        continue
                     if non_zero_h[0] != 1:
                         continue
                     # ToDo: papameter: max_double_use

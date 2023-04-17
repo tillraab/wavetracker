@@ -20,6 +20,7 @@ from .gpu_harmonic_group import harmonic_group_pipeline, get_fundamentals
 
 from thunderfish.harmonics import harmonic_groups, fundamental_freqs
 from thunderfish.powerspectrum import decibel
+import logging
 
 try:
     import tensorflow as tf
@@ -32,7 +33,8 @@ except:
 
 
 class Analysis_pipeline(object):
-    def __init__(self, data, samplerate, channels, dataset, data_shape, cfg, folder, verbose, gpu_use=False):
+    def __init__(self, data, samplerate, channels, dataset, data_shape, cfg, folder, verbose, logger=None, gpu_use=False):
+        folder = os.path.abspath(folder)
         save_path = list(folder.split(os.sep))
         save_path.insert(-1, 'derived_data')
         self.save_path = os.sep.join(save_path)
@@ -46,6 +48,7 @@ class Analysis_pipeline(object):
         self.folder = folder
 
         self.verbose = verbose
+        self.logger = logger
         self.gpu_use = gpu_use
         self.core_count = multiprocessing.cpu_count()
 
@@ -104,6 +107,11 @@ class Analysis_pipeline(object):
                                     f'-- plotable spec: {self.Spec.get_sparse_spec} '
                                     f'-- signal extract: {self._get_signals} '
                                     f'-- snippet size: {self.Spec.snippet_size / self.samplerate:.2f}s')
+        if self.logger: self.logger.info(f'{"Spectrogram (GPU)":^25}: '
+                                         f'-- fine spec: {self.Spec.get_fine_spec} '
+                                         f'-- plotable spec: {self.Spec.get_sparse_spec} '
+                                         f'-- signal extract: {self._get_signals} '
+                                         f'-- snippet size: {self.Spec.snippet_size / self.samplerate:.2f}s')
         if self._get_signals or self.Spec.get_fine_spec or self.Spec.get_sparse_spec:
             if self.gpu_use:
                 self.pipeline_GPU()
@@ -114,6 +122,8 @@ class Analysis_pipeline(object):
 
         if self.verbose >= 1: print(f'\n{"Tracking":^25}: -- freq_tolerance: {self.cfg.tracking["freq_tolerance"]} -- '
                                     f'max_dt: {self.cfg.tracking["max_dt"]}')
+        if self.logger: self.logger.info(f'\n{"Tracking":^25}: -- freq_tolerance: {self.cfg.tracking["freq_tolerance"]} -- '
+                                         f'max_dt: {self.cfg.tracking["max_dt"]}')
         if self.do_tracking:
             self.ident_v = freq_tracking_v6(self.fund_v, self.idx_v, self.sign_v, self.times, verbose=self.verbose,
                                             **self.cfg.harmonic_groups, **self.cfg.tracking)
@@ -237,18 +247,26 @@ def main():
     parser.add_argument('-l', '--logging', action='store_true', help='store sys.out in log.txt.')
     parser.add_argument('-n', '--nosave', action='store_true', help='dont save spectrograms')
     args = parser.parse_args()
-    args.folder = os.path.normpath(args.folder)
+    args.folder = os.path.abspath(args.folder)
+    # args.folder = os.path.normpath(args.folder)
 
-    if args.logging: sys.stdout = open('./log.txt', 'w')
+    logger = None
+    if args.logging:
+        logger = logging.getLogger(__name__)
+        logging.basicConfig(filename = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'log.log'),
+                            format='%(asctime)s %(message)s', datefmt='%Y-%m-%d %H:%M:%S',
+                            level=20, encoding='utf-8')
 
     if args.verbose >= 1: print(f'\n--- Running wavetracker.wavetracker ---')
+    if logger: logger.info(f'--- Running wavetracker.wavetracker ---')
 
     if args.verbose >= 1: print(f'{"Hardware used":^25}: {"GPU" if not (args.cpu and available_GPU) else "CPU"}')
+    if logger: logger.info(f'{"Hardware used":^25}: {"GPU" if not (args.cpu and available_GPU) else "CPU"}')
 
     if args.verbose != 2: tqdm.__init__ = partialmethod(tqdm.__init__, disable=True)
 
     # load wavetracker configuration
-    cfg = Configuration(args.config, verbose=args.verbose)
+    cfg = Configuration(args.config, verbose=args.verbose, logger=logger)
 
     # load data
     analysis_folders = []
@@ -258,15 +276,14 @@ def main():
     analysis_folders = sorted(analysis_folders)
 
     if args.verbose >= 1: print(f'{"Files found to analyze":^25}: {len(analysis_folders)}')
+    if logger: logger.info(f'{"Files found to analyze":^25}: {len(analysis_folders)}')
 
     for folder in analysis_folders:
 
-        data, samplerate, channels, dataset, data_shape = open_raw_data(folder=folder, verbose=args.verbose,
+        data, samplerate, channels, dataset, data_shape = open_raw_data(folder=folder, verbose=args.verbose, logger=logger,
                                                                         **cfg.spectrogram)
 
-
-
-        Analysis = Analysis_pipeline(data, samplerate, channels, dataset, data_shape, cfg, folder, args.verbose,
+        Analysis = Analysis_pipeline(data, samplerate, channels, dataset, data_shape, cfg, folder, args.verbose, logger=logger,
                                      gpu_use=not args.cpu and available_GPU)
 
         if args.renew:

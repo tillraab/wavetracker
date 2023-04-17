@@ -39,6 +39,7 @@ def open_raw_data(folder: str,
                   channel: int = -1,
                   snippet_size: int = 2**21,
                   verbose: int = 0,
+                  logger = None,
                   **kwargs: dict):
 
     filename = os.path.join(folder, 'traces-grid1.raw')
@@ -48,7 +49,9 @@ def open_raw_data(folder: str,
     shape = data.shape
 
     GPU_str = "(gpu found: TensorGenerator created)" if available_GPU else "(NO gpu: NO TensorGenerator created)"
-    if verbose >= 1: print(f'{"Loading data from":^25}: {folder}\n{" "*27 + GPU_str}')
+    if verbose >= 1: print(f'{"Loading data from":^25}: {os.path.abspath(folder)}\n{" "*27 + GPU_str}')
+    if logger: logger.info(f'{"Loading data from":^25}: {os.path.abspath(folder)}')
+    if logger: logger.info(f'{" "*27 + GPU_str}')
     dataset = None
     if available_GPU:
         dataset = tf.data.Dataset.from_generator(
