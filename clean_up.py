@@ -22,17 +22,12 @@ def gauss(t, shift, sigma, size, norm = False):
         return res
 
 
-def get_valid_ids(times, idx_v, ident_v, fund_v, valid_v, old_valid_ids, i0, stride, f_th, kde_th):
-    # fig = plt.figure(figsize=(30/2.54, 18/2.54))
-    # gs = gridspec.GridSpec(1, 2, left=0.1, bottom=0.1, right=0.95, top=0.95, width_ratios=[3, 1], hspace=0)
-    # ax = []
-    # ax.append(fig.add_subplot(gs[0, 0]))
-    # ax.append(fig.add_subplot(gs[0, 1], sharey = ax[0]))
+def get_valid_ids_by_freq_dist(times, idx_v, ident_v, fund_v, valid_v, old_valid_ids, i0, stride, f_th, kde_th):
+    plot=True if not kde_th else False
 
     window_t_mask = (times[idx_v] >= i0) & (times[idx_v] < i0 + stride)
 
     ff = fund_v[(~np.isnan(ident_v)) & (window_t_mask)]
-    # tt = times[idx_v[(~np.isnan(ident_v)) & (window_t_mask)]]
 
     convolve_f = np.arange(400, 1200, 0.1)
     g = gauss(convolve_f, ff, sigma=2*f_th, size=1, norm=True)
@@ -41,18 +36,24 @@ def get_valid_ids(times, idx_v, ident_v, fund_v, valid_v, old_valid_ids, i0, str
     if not kde_th:
         kde_th = np.max(g) * len(times[(times >= times[0]) & (times < times[0] + stride)]) * 0.05
 
-    # ax[1].plot(kde, convolve_f)
-    # ax[1].plot([th, th], [convolve_f[0], convolve_f[-1]], '--', color='k', lw=2)
+    if plot:
+        fig = plt.figure(figsize=(30/2.54, 18/2.54))
+        gs = gridspec.GridSpec(1, 2, left=0.1, bottom=0.1, right=0.95, top=0.95, width_ratios=[3, 1], hspace=0)
+        ax = []
+        ax.append(fig.add_subplot(gs[0, 0]))
+        ax.append(fig.add_subplot(gs[0, 1], sharey = ax[0]))
+        ax[1].plot(kde, convolve_f)
+        ax[1].plot([kde_th, kde_th], [convolve_f[0], convolve_f[-1]], '--', color='k', lw=2)
+        ax[0].set_ylim(np.min(ff)-10, np.max(ff)+10)
 
     valid_f = convolve_f[kde > kde_th]
-
     valid_ids = []
-    # for id in tqdm(np.unique(ident_v[~np.isnan(ident_v)])):
+
     for id in tqdm(np.unique(ident_v[(~np.isnan(ident_v)) & (window_t_mask)])):
         f = fund_v[(ident_v == id) & (window_t_mask)]
         if len(f) <= 1:
             continue
-        # t = times[idx_v[(ident_v == id) & (window_t_mask)]]
+
         valid = False
         if np.min(np.abs(valid_f - f[:, np.newaxis])) <= (convolve_f[1] - convolve_f[0]) / 2:
             valid = True
@@ -62,24 +63,25 @@ def get_valid_ids(times, idx_v, ident_v, fund_v, valid_v, old_valid_ids, i0, str
             pass
 
         if valid:
+            valid_ids.append([id, np.median(f), times[idx_v[(ident_v == id)]][0]])
             c = np.random.rand(3)
             a = 1
-            valid_ids.append([id, np.median(f), times[idx_v[(ident_v == id)]][0]])
-            # ax[0].text(t[0], f[0], f'{id:.0f}', ha='center', va='bottom')
             valid_v[ident_v == id] = 1
         else:
             c = 'grey'
             a = 0.2
+        if plot:
+            t = times[idx_v[(ident_v == id) & (window_t_mask)]]
+            ax[0].plot(t, f, color=c, alpha = a, marker='.')
+            if valid:
+                ax[0].text(t[0], f[0], f'{id:.0f}', ha='center', va='bottom')
 
-    #     ax[0].plot(t, f, color=c, alpha = a, marker='.')
-    #
-    # ax[0].set_ylim(np.min(ff)-10, np.max(ff)+10)
-    # plt.show()
     return kde_th, np.array(valid_ids)
 
 
-def connect_by_similarity(idx_v, ident_v, valid_ids, f_th):
-    # valid_ids = np.array(valid_ids)
+def connect_by_similarity(times, idx_v, ident_v, fund_v, valid_v, valid_ids, f_th, i0, stride):
+    window_t_mask = (times[idx_v] >= i0) & (times[idx_v] < i0 + stride)
+
     d_med_f = np.abs(valid_ids[:, 1] - valid_ids[:, 1][:, np.newaxis])
 
     idx0s, idx1s = np.unravel_index(np.argsort(d_med_f, axis=None), np.shape(d_med_f))
@@ -90,37 +92,65 @@ def connect_by_similarity(idx_v, ident_v, valid_ids, f_th):
     for enu, (idx0, idx1) in enumerate(zip(idx0s, idx1s)):
         if np.abs(valid_ids[idx0, 1] - valid_ids[idx1, 1]) > f_th:
             break
-        # print(f'{enu:.0f}: ids = {valid_ids[idx0, 0]:.0f} {valid_ids[idx1, 0]:.0f}; df = {np.abs(valid_ids[idx0, 1] - valid_ids[idx1, 1]):.1f}Hz')
         id0 = valid_ids[idx0, 0]
         id1 = valid_ids[idx1, 0]
+
         taken_idxs0 = idx_v[(ident_v == id0)]
         taken_idxs1 = idx_v[(ident_v == id1)]
-        double_idx = np.in1d(taken_idxs0, taken_idxs1)
-        combine = True
 
-        # if len(taken_idxs0)*0.01 > len(taken_idxs1):
-        #     combine = True
-        # elif len(taken_idxs1)*0.01 > len(taken_idxs0):
-        #     combine = True
-        # elif np.sum(double_idx) < len(taken_idxs1)*0.01 and np.sum(double_idx) < len(taken_idxs0)*0.01:
-        #     combine = True
-        # else:
-        #     pass
+        more_id = id0 if len(taken_idxs0) > len(taken_idxs1) else id1
+        less_id = id1 if more_id == id0 else id0
 
-        if double_idx.any():
-            combine = False
+        double_idx = np.intersect1d(taken_idxs0, taken_idxs1)
 
-        if not combine:
+        # ToDo: check frequency of jumping stuff... if mean increases -> dont
+        if len(double_idx) > len(taken_idxs1)*0.01 and len(double_idx) > len(taken_idxs0)*0.01:
             continue
 
-        if valid_ids[idx0, 1] < valid_ids[idx1, 1]:
-            # valid_ids[idx1, 0] = valid_ids[idx0, 0]
+        fund_v_m = fund_v[(ident_v == more_id) & (window_t_mask)]
+        fund_v_l = fund_v[(ident_v == less_id) & (window_t_mask)]
+
+        idx_v_m = idx_v[(ident_v == more_id) & (window_t_mask)]
+        idx_v_l = idx_v[(ident_v == less_id) & (window_t_mask)]
+
+        d_idx_v = np.intersect1d(idx_v_m, idx_v_l)
+
+        join_idx_v = np.concatenate(( idx_v_m, idx_v_l[~np.in1d(idx_v_l, d_idx_v)]))
+        help_v = np.ones_like(join_idx_v)
+        help_v[:len(idx_v_m)] = 0
+        join_fund_v = np.concatenate(( fund_v_m, fund_v_l[~np.in1d(idx_v_l, d_idx_v)]))
+
+        sorted = np.argsort(join_idx_v)
+        help_v = help_v[sorted]
+        join_fund_v = join_fund_v[sorted]
+        join_idx_v = join_idx_v[sorted]
+
+        # if len(d_idx_v) > 0 and len(idx_v_l[~np.in1d(idx_v_l, d_idx_v)]) > 1:
+        if True:
+            fig, ax = plt.subplots()
+            ax.plot(idx_v_l, fund_v_l, marker='.')
+            ax.plot(idx_v_m, fund_v_m, marker='.')
+            ax.plot(join_idx_v, join_fund_v-1, marker='.')
+
+            ax.plot(join_idx_v[:-1][np.diff(help_v) != 0], join_fund_v[:-1][np.diff(help_v) != 0]-1, 'ok')
+
+            plt.show()
+
+
+
+        if valid_ids[idx0, 2] < valid_ids[idx1, 2]:
             valid_ids[:, 0][valid_ids[:, 0] == id1] = id0
+
+            ident_v[(np.in1d(idx_v, np.array(double_idx))) & (ident_v == less_id)] = np.nan
+            valid_v[(np.in1d(idx_v, np.array(double_idx))) & (ident_v == less_id)] = 0
             ident_v[ident_v == id1] = id0
+
         else:
-            # valid_ids[idx0, 0] = valid_ids[idx1, 0]
             valid_ids[:, 0][valid_ids[:, 0] == id0] = id1
+            ident_v[(np.in1d(idx_v, np.array(double_idx))) & (ident_v == less_id)] = np.nan
+            valid_v[(np.in1d(idx_v, np.array(double_idx))) & (ident_v == less_id)] = 0
             ident_v[ident_v == id0] = id1
+
 
     previous_valid_ids = np.unique(valid_ids[:, 0])
 
@@ -221,6 +251,7 @@ def connect_with_overlap(fund_v, ident_v, valid_v, idx_v, times):
         taken_idxs0 = idx_v[(ident_v == id0)]
         taken_idxs1 = idx_v[(ident_v == id1)]
         double_idx = np.in1d(taken_idxs0, taken_idxs1)
+
         if np.sum(double_idx) > len(taken_idxs1)*0.01 and np.sum(double_idx) > len(taken_idxs0)*0.01:
             continue
 
@@ -261,19 +292,35 @@ def connect_with_overlap(fund_v, ident_v, valid_v, idx_v, times):
         taken_idxs0 = idx_v[(ident_v == id0)]
         taken_idxs1 = idx_v[(ident_v == id1)]
 
-        double_idx = np.in1d(taken_idxs0, taken_idxs1)
+        more_id = id0 if len(taken_idxs0) > len(taken_idxs1) else id1
+        less_id = id1 if more_id == id0 else id0
 
-        if np.sum(double_idx) < len(taken_idxs1)*0.01 or np.sum(double_idx) < len(taken_idxs0)*0.01:
-            if len(taken_idxs0) >= len(taken_idxs1):
-                ident_v[(ident_v == id1) & ~(ident_v == id0)] = id0
-                ident_v[ident_v == id1] = np.nan
-                connections_candidates[:, 0][connections_candidates[:, 0] == id1] = id0
-                connections_candidates[:, 1][connections_candidates[:, 1] == id1] = id0
-            else:
-                ident_v[(ident_v == id0) & ~(ident_v == id1)] = id1
-                ident_v[ident_v == id0] = np.nan
-                connections_candidates[:, 0][connections_candidates[:, 0] == id0] = id1
-                connections_candidates[:, 1][connections_candidates[:, 1] == id0] = id1
+        double_idx = np.intersect1d(taken_idxs0, taken_idxs1)
+
+        if len(double_idx) < len(taken_idxs1)*0.01 or len(double_idx) < len(taken_idxs0)*0.01:
+            ident_v[(np.in1d(idx_v, np.array(double_idx))) & (ident_v == less_id)] = np.nan
+            ident_v[ident_v == less_id] = more_id
+
+            connections_candidates[:, 0][connections_candidates[:, 0] == less_id] = more_id
+            connections_candidates[:, 1][connections_candidates[:, 1] == less_id] = more_id
+
+            #######################
+
+            # if len(taken_idxs0) >= len(taken_idxs1):
+            #     ident_v[(ident_v == id1) & ~(ident_v == id0)] = id0
+            #     ident_v[ident_v == id1] = np.nan
+            #
+            #     ident_v[(np.in1d(idx_v, np.array(double_idx))) & (ident_v == less_id)] = np.nan
+            #     valid_v[(np.in1d(idx_v, np.array(double_idx))) & (ident_v == less_id)] = 0
+            #     ident_v[ident_v == id1] = id0
+            #
+            #     connections_candidates[:, 0][connections_candidates[:, 0] == id1] = id0
+            #     connections_candidates[:, 1][connections_candidates[:, 1] == id1] = id0
+            # else:
+            #     ident_v[(ident_v == id0) & ~(ident_v == id1)] = id1
+            #     ident_v[ident_v == id0] = np.nan
+            #     connections_candidates[:, 0][connections_candidates[:, 0] == id0] = id1
+            #     connections_candidates[:, 1][connections_candidates[:, 1] == id0] = id1
 
     # embed()
     # quit()
@@ -315,7 +362,6 @@ def main(folder = None):
     valid_v = np.zeros_like(ident_v)
     stride = 10 * 60
     overlap = 0.1
-    kde_f_res = 0.1
     f_th = 2.5
     kde_th = None
     previous_valid_ids = np.array([])
@@ -323,9 +369,9 @@ def main(folder = None):
  #   for i0 in tqdm(np.arange(3*60*60, times[-1], int(stride*(1-overlap)))):
     for i0 in tqdm(np.arange(0, times[-1], int(stride*(1-overlap)))):
 
-        kde_th, valid_ids = get_valid_ids(times, idx_v, ident_v, fund_v, valid_v, previous_valid_ids, i0, stride, f_th, kde_th)
+        kde_th, valid_ids = get_valid_ids_by_freq_dist(times, idx_v, ident_v, fund_v, valid_v, previous_valid_ids, i0, stride, f_th, kde_th)
 
-        previous_valid_ids, ident_v = connect_by_similarity(idx_v, ident_v, valid_ids, f_th)
+        previous_valid_ids, ident_v = connect_by_similarity(times, idx_v, ident_v, fund_v, valid_v, valid_ids, f_th, i0, stride)
 
     if True:
         fig = plt.figure(figsize=(30/2.54, 18/2.54))
@@ -351,6 +397,7 @@ def main(folder = None):
         i = idx_v[ident_v == id]
         id_densities = 1 / np.diff(i)
         id_densities = np.concatenate((id_densities, np.array([np.median(id_densities)])))
+        print(id, len(i), np.max(id_densities), np.min(id_densities))
 
         density_v[ident_v == id] = id_densities
 
