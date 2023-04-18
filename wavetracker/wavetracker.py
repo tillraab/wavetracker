@@ -122,7 +122,7 @@ class Analysis_pipeline(object):
 
         if self.verbose >= 1: print(f'\n{"Tracking":^25}: -- freq_tolerance: {self.cfg.tracking["freq_tolerance"]} -- '
                                     f'max_dt: {self.cfg.tracking["max_dt"]}')
-        if self.logger: self.logger.info(f'\n{"Tracking":^25}: -- freq_tolerance: {self.cfg.tracking["freq_tolerance"]} -- '
+        if self.logger: self.logger.info(f'{"Tracking":^25}: -- freq_tolerance: {self.cfg.tracking["freq_tolerance"]} -- '
                                          f'max_dt: {self.cfg.tracking["max_dt"]}')
         if self.do_tracking:
             self.ident_v = freq_tracking_v6(self.fund_v, self.idx_v, self.sign_v, self.times, verbose=self.verbose,

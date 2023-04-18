@@ -35,7 +35,7 @@ def get_valid_ids(times, idx_v, ident_v, fund_v, valid_v, old_valid_ids, i0, str
     # tt = times[idx_v[(~np.isnan(ident_v)) & (window_t_mask)]]
 
     convolve_f = np.arange(400, 1200, 0.1)
-    g = gauss(convolve_f, ff, sigma=f_th, size=1, norm=True)
+    g = gauss(convolve_f, ff, sigma=2*f_th, size=1, norm=True)
     kde = np.sum(g, axis=0)
 
     if not kde_th:
@@ -47,11 +47,12 @@ def get_valid_ids(times, idx_v, ident_v, fund_v, valid_v, old_valid_ids, i0, str
     valid_f = convolve_f[kde > kde_th]
 
     valid_ids = []
-    for id in tqdm(np.unique(ident_v[~np.isnan(ident_v)])):
+    # for id in tqdm(np.unique(ident_v[~np.isnan(ident_v)])):
+    for id in tqdm(np.unique(ident_v[(~np.isnan(ident_v)) & (window_t_mask)])):
         f = fund_v[(ident_v == id) & (window_t_mask)]
         if len(f) <= 1:
             continue
-        t = times[idx_v[(ident_v == id) & (window_t_mask)]]
+        # t = times[idx_v[(ident_v == id) & (window_t_mask)]]
         valid = False
         if np.min(np.abs(valid_f - f[:, np.newaxis])) <= (convolve_f[1] - convolve_f[0]) / 2:
             valid = True
@@ -176,32 +177,46 @@ def connect_with_overlap(fund_v, ident_v, valid_v, idx_v, times):
         f0_span = [np.min(f0) - freq_tol, np.max(f0) + freq_tol]
         f1_span = [np.min(f1) - freq_tol, np.max(f1) + freq_tol]
 
+        # mean_f0 = np.mean(f0)
+        # std_f0 = np.std(f0)
+        #
+        # mean_f1 = np.mean(f1)
+        # std_f1 = np.std(f1)
+        #
+        # f0_span = [mean_f0 - std_f0, mean_f0 + std_f0]
+        # f1_span = [mean_f1 - std_f1, mean_f1 + std_f1]
+
+
         f_overlap = False
-        o_frac = 0
+        # o_frac = 0
         if f0_span[0] <= f1_span[0]:
             if f0_span[1] > f1_span[0]:
                 f_overlap = True
 
-                if f0_span[1] < f1_span[1]:
-                    o_0 = (f0_span[1] - f1_span[0]) / (f0_span[1] - f0_span[0])
-                    o_1 = (f0_span[1] - f1_span[0]) / (f1_span[1] - f1_span[0])
-                    o_frac = o_0 if o_0 > o_1 else o_1
-                else:
-                    o_frac = 1.
+                # if f0_span[1] < f1_span[1]:
+                #     o_0 = (f0_span[1] - f1_span[0]) / (f0_span[1] - f0_span[0])
+                #     o_1 = (f0_span[1] - f1_span[0]) / (f1_span[1] - f1_span[0])
+                #     o_frac = o_0 if o_0 > o_1 else o_1
+                # else:
+                #     o_frac = 1.
 
         if f1_span[0] <= f0_span[0]:
             if f1_span[1] > f0_span[0]:
                 f_overlap = True
 
-                if f1_span[1] < f0_span[1]:
-                    o_0 = (f1_span[1] - f0_span[0]) / (f0_span[1] - f0_span[0])
-                    o_1 = (f1_span[1] - f0_span[0]) / (f1_span[1] - f1_span[0])
-                    o_frac = o_0 if o_0 > o_1 else o_1
-                else:
-                    o_frac = 1.
+                # if f1_span[1] < f0_span[1]:
+                #     o_0 = (f1_span[1] - f0_span[0]) / (f0_span[1] - f0_span[0])
+                #     o_1 = (f1_span[1] - f0_span[0]) / (f1_span[1] - f1_span[0])
+                #     o_frac = o_0 if o_0 > o_1 else o_1
+                # else:
+                #     o_frac = 1.
 
         if not f_overlap:
             continue
+        #
+        # if o_frac <= 0.1:
+        #     continue
+
 
         taken_idxs0 = idx_v[(ident_v == id0)]
         taken_idxs1 = idx_v[(ident_v == id1)]
@@ -209,6 +224,13 @@ def connect_with_overlap(fund_v, ident_v, valid_v, idx_v, times):
         if np.sum(double_idx) > len(taken_idxs1)*0.01 and np.sum(double_idx) > len(taken_idxs0)*0.01:
             continue
 
+        freq_dists = np.abs(f0 - f1[:, np.newaxis])
+        mean_freq_dist = np.sum(freq_dists) / np.prod(freq_dists.shape)
+
+        min_dists = np.concatenate(( np.min(freq_dists, axis=0), np.min(freq_dists, axis=1) ))
+
+        if np.all(min_dists) < freq_tol or mean_freq_dist < freq_tol:
+            connections_candidates.append([id0, id1, mean_freq_dist])
 
         # fig, ax = plt.subplots()
         #
@@ -227,11 +249,12 @@ def connect_with_overlap(fund_v, ident_v, valid_v, idx_v, times):
 
 
         # connections_candidates.append([id0, id1, valid_ids[ii, 1] + valid_ids[jj, 1]])
-        connections_candidates.append([id0, id1, o_frac])
+        # connections_candidates.append([id0, id1, mean_freq_dist])
 
     connections_candidates = np.array(connections_candidates)
 
-    for pair_no in np.argsort(connections_candidates[:, 2])[::-1]:
+    # for pair_no in np.argsort(connections_candidates[:, 2])[::-1]:
+    for pair_no in np.argsort(connections_candidates[:, 2]):
         id0 = connections_candidates[pair_no, 0]
         id1 = connections_candidates[pair_no, 1]
 
@@ -242,11 +265,13 @@ def connect_with_overlap(fund_v, ident_v, valid_v, idx_v, times):
 
         if np.sum(double_idx) < len(taken_idxs1)*0.01 or np.sum(double_idx) < len(taken_idxs0)*0.01:
             if len(taken_idxs0) >= len(taken_idxs1):
-                ident_v[ident_v == id1] = id0
+                ident_v[(ident_v == id1) & ~(ident_v == id0)] = id0
+                ident_v[ident_v == id1] = np.nan
                 connections_candidates[:, 0][connections_candidates[:, 0] == id1] = id0
                 connections_candidates[:, 1][connections_candidates[:, 1] == id1] = id0
             else:
-                ident_v[ident_v == id0] = id1
+                ident_v[(ident_v == id0) & ~(ident_v == id1)] = id1
+                ident_v[ident_v == id0] = np.nan
                 connections_candidates[:, 0][connections_candidates[:, 0] == id0] = id1
                 connections_candidates[:, 1][connections_candidates[:, 1] == id0] = id1
 
@@ -291,7 +316,7 @@ def main(folder = None):
     stride = 10 * 60
     overlap = 0.1
     kde_f_res = 0.1
-    f_th = 5
+    f_th = 2.5
     kde_th = None
     previous_valid_ids = np.array([])
 
@@ -314,7 +339,7 @@ def main(folder = None):
             ax[0].text(times[i[0]], f[0], f'{id:.0f}', ha='center', va='bottom')
             ax[0].plot(times[idx_v[ident_v == id]], fund_v[ident_v == id], marker='.')
         ax[0].set_title('after snippet connections')
-        plt.show()
+        # plt.show()
 
     ##############################################################
     valid_power = np.max(sign_v[valid_v == 1], axis=1)
@@ -332,11 +357,11 @@ def main(folder = None):
     if True:
         fig, ax = plt.subplots()
         ax.plot(valid_power, density_v[valid_v == 1], '.')
-        plt.show()
+        # plt.show()
 
     ##############################################################
-    mean_p = []
     mean_d = []
+    mean_p = []
     for id in tqdm(np.unique(ident_v[(~np.isnan(ident_v)) & (valid_v == 1)])):
         i = idx_v[ident_v == id]
         d = len(i) / (i[-1] - i[0] + 1)
@@ -388,7 +413,7 @@ def main(folder = None):
 
         #ax.imshow(H, interpolation='nearest', origin='lower', extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]])
         ax.plot(mean_p, mean_d, 'k.', alpha=.8)
-        plt.show()
+        # plt.show()
 
     # density_th = np.percentile(density_v[valid_v == 1], 5)
     density_th = 0.1
