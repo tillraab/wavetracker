@@ -29,6 +29,7 @@ def get_valid_ids_by_freq_dist(times, idx_v, ident_v, fund_v, valid_v, old_valid
 
     ff = fund_v[(~np.isnan(ident_v)) & (window_t_mask)]
 
+    # ToDo: min_freq & max_freq + buffer
     convolve_f = np.arange(400, 1200, 0.1)
     g = gauss(convolve_f, ff, sigma=2*f_th, size=1, norm=True)
     kde = np.sum(g, axis=0)
@@ -49,7 +50,7 @@ def get_valid_ids_by_freq_dist(times, idx_v, ident_v, fund_v, valid_v, old_valid
     valid_f = convolve_f[kde > kde_th]
     valid_ids = []
 
-    for id in tqdm(np.unique(ident_v[(~np.isnan(ident_v)) & (window_t_mask)])):
+    for id in np.unique(ident_v[(~np.isnan(ident_v)) & (window_t_mask)]):
         f = fund_v[(ident_v == id) & (window_t_mask)]
         if len(f) <= 1:
             continue
@@ -79,15 +80,35 @@ def get_valid_ids_by_freq_dist(times, idx_v, ident_v, fund_v, valid_v, old_valid
     return kde_th, np.array(valid_ids)
 
 
-def connect_by_similarity(times, idx_v, ident_v, fund_v, valid_v, valid_ids, f_th, i0, stride):
+def connect_by_similarity(times, idx_v, ident_v, fund_v, sign_v, valid_v, valid_ids, f_th, i0, stride):
+
     window_t_mask = (times[idx_v] >= i0) & (times[idx_v] < i0 + stride)
 
     d_med_f = np.abs(valid_ids[:, 1] - valid_ids[:, 1][:, np.newaxis])
+
+    embed()
+    quit()
+
+    med_power_id = np.zeros(len(valid_ids))
+    for enu, id in enumerate(valid_ids[:, 0]):
+        med_power_id[enu] = np.median(np.max(sign_v[(ident_v == id) & (window_t_mask)], axis=1))
+
+    d_med_power_id = np.abs(med_power_id - med_power_id[:, np.newaxis])
 
     idx0s, idx1s = np.unravel_index(np.argsort(d_med_f, axis=None), np.shape(d_med_f))
     similar_mask = idx0s == idx1s
     idx0s = idx0s[~similar_mask]
     idx1s = idx1s[~similar_mask]
+    entities = np.sum(d_med_f[idx0s, idx1s] < f_th)
+
+    idxs = np.sort(np.array([idx0s[:entities], idx1s[:entities]]), axis=0)
+    idx0s, idx1s = idxs
+
+    power_sorter = np.argsort(np.max(med_power_id[idxs], axis=0))
+
+    idx0s = idx0s[power_sorter]
+    idx1s = idx1s[power_sorter]
+
 
     for enu, (idx0, idx1) in enumerate(zip(idx0s, idx1s)):
         if np.abs(valid_ids[idx0, 1] - valid_ids[idx1, 1]) > f_th:
@@ -103,7 +124,6 @@ def connect_by_similarity(times, idx_v, ident_v, fund_v, valid_v, valid_ids, f_t
 
         double_idx = np.intersect1d(taken_idxs0, taken_idxs1)
 
-        # ToDo: check frequency of jumping stuff... if mean increases -> dont
         if len(double_idx) > len(taken_idxs1)*0.01 and len(double_idx) > len(taken_idxs0)*0.01:
             continue
 
@@ -120,35 +140,60 @@ def connect_by_similarity(times, idx_v, ident_v, fund_v, valid_v, valid_ids, f_t
         help_v[:len(idx_v_m)] = 0
         join_fund_v = np.concatenate(( fund_v_m, fund_v_l[~np.in1d(idx_v_l, d_idx_v)]))
 
-        sorted = np.argsort(join_idx_v)
-        help_v = help_v[sorted]
-        join_fund_v = join_fund_v[sorted]
-        join_idx_v = join_idx_v[sorted]
+        sorter = np.argsort(join_idx_v)
+        help_v = help_v[sorter]
+        join_fund_v = join_fund_v[sorter]
+        join_idx_v = join_idx_v[sorter]
 
         # if len(d_idx_v) > 0 and len(idx_v_l[~np.in1d(idx_v_l, d_idx_v)]) > 1:
-        if True:
-            fig, ax = plt.subplots()
-            ax.plot(idx_v_l, fund_v_l, marker='.')
-            ax.plot(idx_v_m, fund_v_m, marker='.')
-            ax.plot(join_idx_v, join_fund_v-1, marker='.')
+        if np.any(np.abs(np.diff(join_fund_v)[np.diff(help_v != 0)]) > f_th):
+            continue
+            # fig, ax = plt.subplots()
+            # # plt.subplots_adjust(top=0.9)
+            # ax.plot(idx_v_l, fund_v_l, marker='.')
+            # ax.plot(idx_v_m, fund_v_m, marker='.')
+            # ax.plot(join_idx_v, join_fund_v-1, marker='.')
+            #
+            # ax.plot(join_idx_v[:-1][np.diff(help_v) != 0], join_fund_v[:-1][np.diff(help_v) != 0]-1, 'ok')
+            # # print(np.diff(join_fund_v)[np.diff(help_v != 0)])
+            #
+            # i_th0 = join_idx_v[:-1][np.diff(help_v) != 0][0] - dps * 2 * 60
+            # i_th1 = join_idx_v[1:][np.diff(help_v) != 0][-1] + dps * 2 * 60
+            #
+            # f_v_m = fund_v_m[(idx_v_m > i_th0) & (idx_v_m < i_th1)]
+            # f_v_l = fund_v_l[(idx_v_l > i_th0) & (idx_v_l < i_th1)]
+            # # freq_dists = np.abs(fund_v_m - fund_v_l[:, np.newaxis]).reshape(len(fund_v_m)*len(fund_v_l), )
+            # freq_dists = np.abs(f_v_m - f_v_l[:, np.newaxis]).reshape(len(f_v_m)*len(f_v_l), )
+            #
+            # ax.plot(i_th0 * np.ones(len(f_v_m)), f_v_m, 'k-')
+            # ax.plot(i_th1 * np.ones(len(f_v_m)), f_v_m, 'k-')
+            #
+            # ax.plot(i_th0 * np.ones(len(f_v_l)), f_v_l, 'k-')
+            # ax.plot(i_th1 * np.ones(len(f_v_l)), f_v_l, 'k-')
+            #
+            # # ToDo: restrict used frequencies
+            # if (pct_below_f_th:=len(freq_dists[freq_dists < f_th]) / len(freq_dists)) > 0.9:
+            #     ax.set_title(f'{pct_below_f_th:.2f}')
+            #                  # f'\nID0 {id0:.0f}: {len(ident_v[ident_v == id0]):.0f},{id_len[idx0]:.0f}, '
+            #                  # f'\nID1 {id1:.0f}: {len(ident_v[ident_v == id1]):.0f},{id_len[idx1]:.0f}')
+            #     plt.show()
+            #     pass
+            # else:
+            #     ax.set_title(f'{pct_below_f_th:.2f}')
+            #                  # f'\nID0 {id0:.0f}: {len(ident_v[ident_v == id0]):.0f},{id_len[idx0]:.0f}, '
+            #                  # f'\nID1 {id1:.0f}: {len(ident_v[ident_v == id1]):.0f},{id_len[idx1]:.0f}')
+            #     plt.show()
+            #     continue
 
-            ax.plot(join_idx_v[:-1][np.diff(help_v) != 0], join_fund_v[:-1][np.diff(help_v) != 0]-1, 'ok')
-
-            plt.show()
-
-
+        ident_v[(np.in1d(idx_v, np.array(double_idx))) & (ident_v == less_id)] = np.nan
+        valid_v[(np.in1d(idx_v, np.array(double_idx))) & (ident_v == less_id)] = 0
 
         if valid_ids[idx0, 2] < valid_ids[idx1, 2]:
             valid_ids[:, 0][valid_ids[:, 0] == id1] = id0
-
-            ident_v[(np.in1d(idx_v, np.array(double_idx))) & (ident_v == less_id)] = np.nan
-            valid_v[(np.in1d(idx_v, np.array(double_idx))) & (ident_v == less_id)] = 0
             ident_v[ident_v == id1] = id0
 
         else:
             valid_ids[:, 0][valid_ids[:, 0] == id0] = id1
-            ident_v[(np.in1d(idx_v, np.array(double_idx))) & (ident_v == less_id)] = np.nan
-            valid_v[(np.in1d(idx_v, np.array(double_idx))) & (ident_v == less_id)] = 0
             ident_v[ident_v == id0] = id1
 
 
@@ -207,45 +252,17 @@ def connect_with_overlap(fund_v, ident_v, valid_v, idx_v, times):
         f0_span = [np.min(f0) - freq_tol, np.max(f0) + freq_tol]
         f1_span = [np.min(f1) - freq_tol, np.max(f1) + freq_tol]
 
-        # mean_f0 = np.mean(f0)
-        # std_f0 = np.std(f0)
-        #
-        # mean_f1 = np.mean(f1)
-        # std_f1 = np.std(f1)
-        #
-        # f0_span = [mean_f0 - std_f0, mean_f0 + std_f0]
-        # f1_span = [mean_f1 - std_f1, mean_f1 + std_f1]
-
-
         f_overlap = False
-        # o_frac = 0
         if f0_span[0] <= f1_span[0]:
             if f0_span[1] > f1_span[0]:
                 f_overlap = True
-
-                # if f0_span[1] < f1_span[1]:
-                #     o_0 = (f0_span[1] - f1_span[0]) / (f0_span[1] - f0_span[0])
-                #     o_1 = (f0_span[1] - f1_span[0]) / (f1_span[1] - f1_span[0])
-                #     o_frac = o_0 if o_0 > o_1 else o_1
-                # else:
-                #     o_frac = 1.
 
         if f1_span[0] <= f0_span[0]:
             if f1_span[1] > f0_span[0]:
                 f_overlap = True
 
-                # if f1_span[1] < f0_span[1]:
-                #     o_0 = (f1_span[1] - f0_span[0]) / (f0_span[1] - f0_span[0])
-                #     o_1 = (f1_span[1] - f0_span[0]) / (f1_span[1] - f1_span[0])
-                #     o_frac = o_0 if o_0 > o_1 else o_1
-                # else:
-                #     o_frac = 1.
-
         if not f_overlap:
             continue
-        #
-        # if o_frac <= 0.1:
-        #     continue
 
 
         taken_idxs0 = idx_v[(ident_v == id0)]
@@ -304,39 +321,85 @@ def connect_with_overlap(fund_v, ident_v, valid_v, idx_v, times):
             connections_candidates[:, 0][connections_candidates[:, 0] == less_id] = more_id
             connections_candidates[:, 1][connections_candidates[:, 1] == less_id] = more_id
 
-            #######################
-
-            # if len(taken_idxs0) >= len(taken_idxs1):
-            #     ident_v[(ident_v == id1) & ~(ident_v == id0)] = id0
-            #     ident_v[ident_v == id1] = np.nan
-            #
-            #     ident_v[(np.in1d(idx_v, np.array(double_idx))) & (ident_v == less_id)] = np.nan
-            #     valid_v[(np.in1d(idx_v, np.array(double_idx))) & (ident_v == less_id)] = 0
-            #     ident_v[ident_v == id1] = id0
-            #
-            #     connections_candidates[:, 0][connections_candidates[:, 0] == id1] = id0
-            #     connections_candidates[:, 1][connections_candidates[:, 1] == id1] = id0
-            # else:
-            #     ident_v[(ident_v == id0) & ~(ident_v == id1)] = id1
-            #     ident_v[ident_v == id0] = np.nan
-            #     connections_candidates[:, 0][connections_candidates[:, 0] == id0] = id1
-            #     connections_candidates[:, 1][connections_candidates[:, 1] == id0] = id1
-
-    # embed()
-    # quit()
-
-        # if len(taken_idxs0) >= len(taken_idxs1):
-        #     ident_v[ident_v == id1] = id0
-        #     valid_ids[:, 0][valid_ids[:, 0] == id1] = id0
-        # else:
-        #     ident_v[ident_v == id0] = id1
-        #     valid_ids[:, 0][valid_ids[:, 0] == id0] = id1
-        #
     return ident_v
 
+def power_density_filter(valid_v, sign_v, ident_v, idx_v):
+    ##############################################################
+    valid_power = np.max(sign_v[valid_v == 1], axis=1)
+    density_v = np.zeros_like(valid_v)
 
+    for id in tqdm(np.unique(ident_v[(~np.isnan(ident_v)) & (valid_v == 1)])):
+        i = idx_v[ident_v == id]
+        id_densities = 1 / np.diff(i)
+        id_densities = np.concatenate((id_densities, np.array([np.median(id_densities)])))
+        #print(id, len(i), np.max(id_densities), np.min(id_densities))
+        density_v[ident_v == id] = id_densities
+
+    if True:
+        fig, ax = plt.subplots()
+        ax.plot(valid_power, density_v[valid_v == 1], '.')
+
+    power_n, power_bins = np.histogram(valid_power, bins=500)
+    most_common_valid_power = power_bins[np.argmax(power_n)]
+    pct99_power = np.percentile(valid_power, 99.5)
+
+    if True:
+        fig = plt.figure(figsize=(20 / 2.54, 20 / 2.54))
+        gs = gridspec.GridSpec(2, 2, left=0.1, bottom=0.1, right=0.95, top=0.95, hspace=0, wspace=0,
+                               height_ratios=[1, 3], width_ratios=[3, 1])
+
+        ax = fig.add_subplot(gs[1, 0])
+        ax_t = fig.add_subplot(gs[0, 0], sharex=ax)
+        ax_t.xaxis.set_visible(False)
+        ax_r = fig.add_subplot(gs[1, 1], sharey=ax)
+        ax_r.yaxis.set_visible(False)
+        ax.set_xlabel('power [db]', fontsize=12)
+        ax.set_ylabel('density', fontsize=12)
+
+        ax_t.bar(power_bins[:-1] + (power_bins[1] - power_bins[0])/2, power_n, align='center', width=(power_bins[1] - power_bins[0])*0.9)
+        percentiles = np.percentile(valid_power, (5, 10, 25, 50, 75, 90, 95))
+        for p in percentiles:
+            ax_t.plot([p, p], [0, np.max(power_n)], lw=2, color='k')
+
+        ax_t.plot([most_common_valid_power, most_common_valid_power], [0, np.max(power_n)], '--', color='red')
+        ax_t.plot([pct99_power, pct99_power], [0, np.max(power_n)], '--', color='red')
+        ax_t.plot([most_common_valid_power - (pct99_power-most_common_valid_power), most_common_valid_power - (pct99_power-most_common_valid_power)], [0, np.max(power_n)], '--', color='red')
+
+
+        density_n, density_bins = np.histogram(density_v[valid_v == 1], bins=20)
+
+        ax_r.barh(density_bins[:-1] + (density_bins[1] - density_bins[0])/2, density_n, align='center', height=(density_bins[1] - density_bins[0])*0.9)
+        percentiles = np.percentile(density_v[valid_v ==1], (5, 10, 25, 50, 75, 90, 95))
+        for p in percentiles:
+            ax_r.plot([0, np.max(density_n)], [p, p], lw=2, color='k')
+
+        H, xedges, yedges = np.histogram2d(valid_power, density_v[valid_v ==1], bins=(power_bins, density_bins))
+        H = H.T
+        X, Y = np.meshgrid(xedges[:-1] + (xedges[1] - xedges[0])/2, yedges[:-1] + (yedges[1] - yedges[0])/2)
+        CS = ax.contour(X, Y, H/np.max(H), levels=[0.05, .2, .5])
+
+        mean_d = []
+        mean_p = []
+        for id in tqdm(np.unique(ident_v[(~np.isnan(ident_v)) & (valid_v == 1)])):
+            i = idx_v[ident_v == id]
+            d = len(i) / (i[-1] - i[0] + 1)
+            p = np.mean(np.max(sign_v[ident_v == id], axis=1))
+            mean_d.append(d)
+            mean_p.append(p)
+        ax.plot(mean_p, mean_d, 'k.', alpha=.8)
+
+    density_th = 0.1
+    dB_th = 2*most_common_valid_power - pct99_power
+    for id in tqdm(np.unique(ident_v[(~np.isnan(ident_v)) & (valid_v == 1)])):
+        i = idx_v[ident_v == id]
+        density = len(i) / (i[-1] - i[0] + 1)
+        mean_power = np.mean(np.max(sign_v[ident_v == id], axis=1))
+        if density < density_th or mean_power <= dB_th:
+            valid_v[ident_v == id] = 0
+    return valid_v
 
 def main(folder = None):
+    # load data
     if not folder:
         if os.path.exists("/home/raab/data/cleanup_test/2023-03-02-09_54"):
             folder = "/home/raab/data/cleanup_test/2023-03-02-09_54"
@@ -349,29 +412,25 @@ def main(folder = None):
     idx_v = np.load(os.path.join(folder, 'idx_v.npy'))
     ident_v = np.load(os.path.join(folder, 'ident_v.npy'))
     sign_v = np.load(os.path.join(folder, 'sign_v.npy'))
+    if np.nanmin(sign_v) > 0:
+        sign_v = decibel(sign_v)
     loaded_ident_v = np.load(os.path.join(folder, 'ident_v.npy'))
     times = np.load(os.path.join(folder, 'times.npy'))
 
-    # fine_time = np.load(os.path.join(folder, 'fine_times.npy'))
-    # fine_freq = np.load(os.path.join(folder, 'fine_freqs.npy'))
-    # fine_spec_shape = np.load(os.path.join(folder, 'fine_spec_shape.npy'))
-    # fine_spec = np.memmap(os.path.join(folder, 'fine_spec.npy'), dtype='float', mode='r',
-    #                            shape=(fine_spec_shape[0], fine_spec_shape[1]), order='F')
-    # for i0 in np.arange(3*60*60, times[-1], 10*60):
-
+    # parameters
     valid_v = np.zeros_like(ident_v)
     stride = 10 * 60
-    overlap = 0.1
+    overlap = 0.2
     f_th = 2.5
     kde_th = None
     previous_valid_ids = np.array([])
 
  #   for i0 in tqdm(np.arange(3*60*60, times[-1], int(stride*(1-overlap)))):
-    for i0 in tqdm(np.arange(0, times[-1], int(stride*(1-overlap)))):
+    for i0 in tqdm(np.arange(0, times[-1], int(stride*(1-overlap))), desc='striding window analysis'):
 
         kde_th, valid_ids = get_valid_ids_by_freq_dist(times, idx_v, ident_v, fund_v, valid_v, previous_valid_ids, i0, stride, f_th, kde_th)
 
-        previous_valid_ids, ident_v = connect_by_similarity(times, idx_v, ident_v, fund_v, valid_v, valid_ids, f_th, i0, stride)
+        previous_valid_ids, ident_v = connect_by_similarity(times, idx_v, ident_v, fund_v, sign_v, valid_v, valid_ids, f_th, i0, stride)
 
     if True:
         fig = plt.figure(figsize=(30/2.54, 18/2.54))
@@ -385,98 +444,90 @@ def main(folder = None):
             ax[0].text(times[i[0]], f[0], f'{id:.0f}', ha='center', va='bottom')
             ax[0].plot(times[idx_v[ident_v == id]], fund_v[ident_v == id], marker='.')
         ax[0].set_title('after snippet connections')
-        # plt.show()
+        #plt.show()
 
-    ##############################################################
-    valid_power = np.max(sign_v[valid_v == 1], axis=1)
-    if np.min(valid_power) >= 0:
-        valid_power = decibel(valid_power)
-    density_v = np.zeros_like(valid_v)
+    valid_v = power_density_filter(valid_v, sign_v, ident_v, idx_v)
 
-    for id in tqdm(np.unique(ident_v[(~np.isnan(ident_v)) & (valid_v == 1)])):
-        i = idx_v[ident_v == id]
-        id_densities = 1 / np.diff(i)
-        id_densities = np.concatenate((id_densities, np.array([np.median(id_densities)])))
-        print(id, len(i), np.max(id_densities), np.min(id_densities))
-
-        density_v[ident_v == id] = id_densities
-
-    if True:
-        fig, ax = plt.subplots()
-        ax.plot(valid_power, density_v[valid_v == 1], '.')
-        # plt.show()
-
-    ##############################################################
-    mean_d = []
-    mean_p = []
-    for id in tqdm(np.unique(ident_v[(~np.isnan(ident_v)) & (valid_v == 1)])):
-        i = idx_v[ident_v == id]
-        d = len(i) / (i[-1] - i[0] + 1)
-        p = np.mean(decibel(np.max(sign_v[ident_v == id], axis=1)))
-        mean_d.append(d)
-        mean_p.append(p)
-
-    if True:
-        fig = plt.figure(figsize=(20/2.54, 20/2.54))
-        gs = gridspec.GridSpec(2, 2, left=0.1, bottom=0.1, right=0.95, top=0.95, hspace=0, wspace=0, height_ratios=[1, 3], width_ratios=[3, 1])
-
-        ax = fig.add_subplot(gs[1, 0])
-        ax_t = fig.add_subplot(gs[0, 0], sharex=ax)
-        ax_t.xaxis.set_visible(False)
-        ax_r = fig.add_subplot(gs[1, 1], sharey=ax)
-        ax_r.yaxis.set_visible(False)
-        ax.set_xlabel('power [db]', fontsize=12)
-        ax.set_ylabel('density', fontsize=12)
-
-    power_n, power_bins = np.histogram(valid_power, bins=500)
-    most_common_valid_power = power_bins[np.argmax(power_n)]
-    pct99_power = np.percentile(valid_power, 99.5)
-    if True:
-        ax_t.bar(power_bins[:-1] + (power_bins[1] - power_bins[0])/2, power_n, align='center', width=(power_bins[1] - power_bins[0])*0.9)
-        percentiles = np.percentile(valid_power, (5, 10, 25, 50, 75, 90, 95))
-        for p in percentiles:
-            ax_t.plot([p, p], [0, np.max(power_n)], lw=2, color='k')
-
-        ax_t.plot([most_common_valid_power, most_common_valid_power], [0, np.max(power_n)], '--', color='red')
-        ax_t.plot([pct99_power, pct99_power], [0, np.max(power_n)], '--', color='red')
-        ax_t.plot([most_common_valid_power - (pct99_power-most_common_valid_power), most_common_valid_power - (pct99_power-most_common_valid_power)], [0, np.max(power_n)], '--', color='red')
-
-
-
-    if True:
-        density_n, density_bins = np.histogram(density_v[valid_v == 1], bins=20)
-
-        ax_r.barh(density_bins[:-1] + (density_bins[1] - density_bins[0])/2, density_n, align='center', height=(density_bins[1] - density_bins[0])*0.9)
-        percentiles = np.percentile(density_v[valid_v ==1], (5, 10, 25, 50, 75, 90, 95))
-        for p in percentiles:
-            ax_r.plot([0, np.max(density_n)], [p, p], lw=2, color='k')
-
-
-        H, xedges, yedges = np.histogram2d(valid_power, density_v[valid_v ==1], bins=(power_bins, density_bins))
-        H = H.T
-        X, Y = np.meshgrid(xedges[:-1] + (xedges[1] - xedges[0])/2, yedges[:-1] + (yedges[1] - yedges[0])/2)
-
-        CS = ax.contour(X, Y, H/np.max(H), levels=[0.05, .2, .5])
-
-        #ax.imshow(H, interpolation='nearest', origin='lower', extent=[xedges[0], xedges[-1], yedges[0], yedges[-1]])
-        ax.plot(mean_p, mean_d, 'k.', alpha=.8)
-        # plt.show()
-
-    # density_th = np.percentile(density_v[valid_v == 1], 5)
-    density_th = 0.1
-    dB_th = 2*most_common_valid_power - pct99_power
-
-    for id in tqdm(np.unique(ident_v[(~np.isnan(ident_v)) & (valid_v == 1)])):
-        # f = fund_v[ident_v == id]
-        i = idx_v[ident_v == id]
-
-        density = len(i) / (i[-1] - i[0] + 1)
-        # mean_power = np.mean(decibel(np.max(sign_v[ident_v == id], axis=1)))
-        mean_power = np.mean(np.max(sign_v[ident_v == id], axis=1))
-
-        if density < density_th or mean_power <= dB_th:
-        # if mean_power <= dB_th:
-            valid_v[ident_v == id] = 0
+    # ##############################################################
+    # valid_power = np.max(sign_v[valid_v == 1], axis=1)
+    # density_v = np.zeros_like(valid_v)
+    #
+    # for id in tqdm(np.unique(ident_v[(~np.isnan(ident_v)) & (valid_v == 1)])):
+    #     i = idx_v[ident_v == id]
+    #     id_densities = 1 / np.diff(i)
+    #     id_densities = np.concatenate((id_densities, np.array([np.median(id_densities)])))
+    #     #print(id, len(i), np.max(id_densities), np.min(id_densities))
+    #     density_v[ident_v == id] = id_densities
+    #
+    # if True:
+    #     fig, ax = plt.subplots()
+    #     ax.plot(valid_power, density_v[valid_v == 1], '.')
+    #
+    # ##############################################################
+    #
+    # power_n, power_bins = np.histogram(valid_power, bins=500)
+    # most_common_valid_power = power_bins[np.argmax(power_n)]
+    # pct99_power = np.percentile(valid_power, 99.5)
+    #
+    # if True:
+    #     fig = plt.figure(figsize=(20 / 2.54, 20 / 2.54))
+    #     gs = gridspec.GridSpec(2, 2, left=0.1, bottom=0.1, right=0.95, top=0.95, hspace=0, wspace=0,
+    #                            height_ratios=[1, 3], width_ratios=[3, 1])
+    #
+    #     ax = fig.add_subplot(gs[1, 0])
+    #     ax_t = fig.add_subplot(gs[0, 0], sharex=ax)
+    #     ax_t.xaxis.set_visible(False)
+    #     ax_r = fig.add_subplot(gs[1, 1], sharey=ax)
+    #     ax_r.yaxis.set_visible(False)
+    #     ax.set_xlabel('power [db]', fontsize=12)
+    #     ax.set_ylabel('density', fontsize=12)
+    #
+    #     ax_t.bar(power_bins[:-1] + (power_bins[1] - power_bins[0])/2, power_n, align='center', width=(power_bins[1] - power_bins[0])*0.9)
+    #     percentiles = np.percentile(valid_power, (5, 10, 25, 50, 75, 90, 95))
+    #     for p in percentiles:
+    #         ax_t.plot([p, p], [0, np.max(power_n)], lw=2, color='k')
+    #
+    #     ax_t.plot([most_common_valid_power, most_common_valid_power], [0, np.max(power_n)], '--', color='red')
+    #     ax_t.plot([pct99_power, pct99_power], [0, np.max(power_n)], '--', color='red')
+    #     ax_t.plot([most_common_valid_power - (pct99_power-most_common_valid_power), most_common_valid_power - (pct99_power-most_common_valid_power)], [0, np.max(power_n)], '--', color='red')
+    #
+    #
+    #     density_n, density_bins = np.histogram(density_v[valid_v == 1], bins=20)
+    #
+    #     ax_r.barh(density_bins[:-1] + (density_bins[1] - density_bins[0])/2, density_n, align='center', height=(density_bins[1] - density_bins[0])*0.9)
+    #     percentiles = np.percentile(density_v[valid_v ==1], (5, 10, 25, 50, 75, 90, 95))
+    #     for p in percentiles:
+    #         ax_r.plot([0, np.max(density_n)], [p, p], lw=2, color='k')
+    #
+    #     H, xedges, yedges = np.histogram2d(valid_power, density_v[valid_v ==1], bins=(power_bins, density_bins))
+    #     H = H.T
+    #     X, Y = np.meshgrid(xedges[:-1] + (xedges[1] - xedges[0])/2, yedges[:-1] + (yedges[1] - yedges[0])/2)
+    #     CS = ax.contour(X, Y, H/np.max(H), levels=[0.05, .2, .5])
+    #
+    #     mean_d = []
+    #     mean_p = []
+    #     for id in tqdm(np.unique(ident_v[(~np.isnan(ident_v)) & (valid_v == 1)])):
+    #         i = idx_v[ident_v == id]
+    #         d = len(i) / (i[-1] - i[0] + 1)
+    #         p = np.mean(np.max(sign_v[ident_v == id], axis=1))
+    #         mean_d.append(d)
+    #         mean_p.append(p)
+    #     ax.plot(mean_p, mean_d, 'k.', alpha=.8)
+    #
+    # density_th = 0.1
+    # dB_th = 2*most_common_valid_power - pct99_power
+    #
+    # for id in tqdm(np.unique(ident_v[(~np.isnan(ident_v)) & (valid_v == 1)])):
+    #     # f = fund_v[ident_v == id]
+    #     i = idx_v[ident_v == id]
+    #
+    #     density = len(i) / (i[-1] - i[0] + 1)
+    #     # mean_power = np.mean(decibel(np.max(sign_v[ident_v == id], axis=1)))
+    #     mean_power = np.mean(np.max(sign_v[ident_v == id], axis=1))
+    #
+    #     if density < density_th or mean_power <= dB_th:
+    #     # if mean_power <= dB_th:
+    #         valid_v[ident_v == id] = 0
 
     ident_v = connect_with_overlap(fund_v, ident_v, valid_v, idx_v, times)
     # pass
@@ -554,6 +605,7 @@ def main(folder = None):
 
     # ToDo: check density
 
+    ################### illustation ###################
     fig = plt.figure(figsize=(30/2.54, 18/2.54))
     gs = gridspec.GridSpec(1, 1, left=0.1, bottom=0.1, right=0.95, top=0.95)
     ax = []
@@ -566,18 +618,16 @@ def main(folder = None):
         ax[0].text(times[i[0]], f[0], f'{id:.0f}', ha='center', va='bottom')
 
         density = len(i) / (i[-1] - i[0] + 1)
-        mean_power = np.mean(decibel(np.max(sign_v[ident_v == id], axis=1)))
+        mean_power = np.mean(np.max(sign_v[ident_v == id], axis=1))
         print(f'{id}; density: {density:.3f}; power: {mean_power:.2f}dB')
 
         ax[0].plot(times[idx_v[ident_v == id]], fund_v[ident_v == id], marker='.')
 
-        # if density >= 0.1 and mean_power > -85:
-        #
-        # else:
-        #     ax[0].plot(times[idx_v[ident_v == id]], fund_v[ident_v == id], color='grey')
-
     ax[0].set_title('after global connect')
+    # plt.show()
+    ###################################################
 
+    ################### illustation ###################
     fig = plt.figure(figsize=(30/2.54, 18/2.54))
     gs = gridspec.GridSpec(1, 1, left=0.1, bottom=0.1, right=0.95, top=0.95)
     ax = []
@@ -588,6 +638,7 @@ def main(folder = None):
         ax[0].plot(times[idx_v[loaded_ident_v == id]], fund_v[loaded_ident_v == id], marker='.')
     ax[0].set_title('original')
     plt.show()
+    ###################################################
 
 if __name__ == '__main__':
     if len(sys.argv) >= 2:
