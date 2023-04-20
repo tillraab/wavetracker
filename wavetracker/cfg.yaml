@@ -36,6 +36,8 @@ harmonic_groups:
 tracking:
   freq_tolerance: 2.5 # 2.5
   max_dt: 10 # 10
+  min_fundamental_power: -100
+
 
 
 
