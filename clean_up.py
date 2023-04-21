@@ -273,23 +273,37 @@ def connect_with_overlap(fund_v, ident_v, valid_v, idx_v, times):
         join_fund_v = join_fund_v[sorter]
         join_idx_v = join_idx_v[sorter]
 
-        freq_jumps = np.diff(join_fund_v)[np.diff(id_switch_helper) != 0]
+        freq_jumps_size = np.diff(join_fund_v)[np.diff(id_switch_helper) != 0]
         jump_idxs = join_idx_v[:-1][np.diff(id_switch_helper) != 0]
+        jump_idxs_target = join_idx_v[1:][np.diff(id_switch_helper) != 0]
+        jump_freqs = join_fund_v[:-1][np.diff(id_switch_helper) != 0]
+
+        conflict_count = 0
+        ddd = double_idx[~np.in1d(double_idx, np.concatenate((jump_idxs, jump_idxs_target)))]
+
+
+        #jump_idxs = jump_idxs[np.abs(freq_jumps_size) > freq_tol]
+        #jump_freqs = jump_freqs[np.abs(freq_jumps_size) > freq_tol]
+
         if len(jump_idxs) > 1:
             fig, ax = plt.subplots()
-            ax.plot(idx_v_m, fund_v_m, marker='.', zorder=2)
-            ax.plot(idx_v_l, fund_v_l, marker='.',zorder=2)
-            ax.plot(join_idx_v, join_fund_v, marker='.',zorder=1)
+            ax.plot(times[idx_v_m], fund_v_m, marker='.', zorder=2)
+            ax.plot(times[idx_v_l], fund_v_l, marker='.',zorder=2)
+            ax.plot(times[join_idx_v], join_fund_v, marker='.',zorder=1)
 
-            ax.plot(jump_idxs, join_fund_v[:-1][np.diff(id_switch_helper) != 0], 'ok')
+            ax.plot(times[jump_idxs[np.abs(freq_jumps_size) > freq_tol]], jump_freqs[np.abs(freq_jumps_size) > freq_tol], 'ok')
 
             ax.set_title(f'{np.median(np.diff(jump_idxs) / dps):.2f}s '
                          f'{len(idx_v_l[(idx_v_l >= jump_idxs[0]) & (idx_v_l <= jump_idxs[-1])]) / (jump_idxs[-1] - jump_idxs[0]):.2f} '
                          f'{len(idx_v_m[(idx_v_m >= jump_idxs[0]) & (idx_v_m <= jump_idxs[-1])]) / (jump_idxs[-1] - jump_idxs[0]):.2f} ')
+
+            # ax.set_title(f'{np.median(np.diff(jump_idxs) / dps):.2f}s '
+            #              f'{np.mean(1/np.diff(idx_v_l[(idx_v_l >= jump_idxs[0]) & (idx_v_l <= jump_idxs[-1])])):.2f} '
+            #              f'{np.mean(1/np.diff(idx_v_m[(idx_v_m >= jump_idxs[0]) & (idx_v_m <= jump_idxs[-1])])):.2f} ')
             print('')
-            print(freq_jumps)
+            print(freq_jumps_size)
             print(jump_idxs)
-            ax.set_xlim(jump_idxs[0]-100, jump_idxs[-1] + 100)
+            ax.set_xlim(times[jump_idxs[0]]-20, times[jump_idxs[-1]] + 20)
             plt.show()
         ###############################################################
         if len(jump_idxs) > 2:
