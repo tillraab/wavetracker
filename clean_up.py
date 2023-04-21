@@ -167,20 +167,18 @@ def connect_by_similarity(times, idx_v, ident_v, fund_v, sign_v, valid_v, valid_
 def connect_with_overlap(fund_v, ident_v, valid_v, idx_v, times):
     time_tol = 5*60
     freq_tol = 2.5
+    dps = 1 / (times[1] - times[0])
+    embed()
+    quit()
 
-    valid_ids = []
-    for id in tqdm(np.unique(ident_v[(~np.isnan(ident_v)) & (valid_v == 1)])):
-        f = fund_v[(ident_v == id)]
-        t = times[idx_v[(ident_v == id)]]
-        valid_ids.append([id, len(f)])
-    valid_ids = np.array(valid_ids)
-    valid_ids[:, 1] = np.argsort(valid_ids[:, 1])
+    # old_ident_v = np.copy(ident_v)
 
     connections_candidates = []
-
-    for ii, jj in itertools.combinations(range(len(valid_ids)), r=2):
-        id0 = valid_ids[ii, 0]
-        id1 = valid_ids[jj, 0]
+    unique_ids = np.unique(ident_v[(~np.isnan(ident_v)) & (valid_v == 1)])
+    for id0, id1 in itertools.combinations(unique_ids, r=2):
+    # for ii, jj in itertools.combinations(range(len(valid_ids)), r=2):
+        #id0 = valid_ids[ii, 0]
+        #id1 = valid_ids[jj, 0]
 
         t0 = times[idx_v[ident_v == id0]]
         t1 = times[idx_v[ident_v == id1]]
@@ -239,13 +237,8 @@ def connect_with_overlap(fund_v, ident_v, valid_v, idx_v, times):
         freq_dists = np.abs(f0 - f1[:, np.newaxis])
         time_dist = times[np.abs(i0 - i1[:, np.newaxis])]
         valid_freq_dists = freq_dists[time_dist <= time_tol]
-        # mean_freq_dist = np.sum(freq_dists) / np.prod(freq_dists.shape)
         mean_freq_dist = np.mean(valid_freq_dists)
 
-        # min_dists = np.concatenate(( np.min(freq_dists, axis=0), np.min(freq_dists, axis=1) ))
-
-        # if np.all(min_dists) < freq_tol or mean_freq_dist < freq_tol:
-        #     connections_candidates.append([id0, id1, mean_freq_dist])
         connections_candidates.append([id0, id1, mean_freq_dist])
 
     connections_candidates = np.array(connections_candidates)
@@ -254,22 +247,58 @@ def connect_with_overlap(fund_v, ident_v, valid_v, idx_v, times):
         id0 = connections_candidates[pair_no, 0]
         id1 = connections_candidates[pair_no, 1]
 
-        taken_idxs0 = idx_v[(ident_v == id0)]
-        taken_idxs1 = idx_v[(ident_v == id1)]
-
-        more_id = id0 if len(taken_idxs0) > len(taken_idxs1) else id1
+        more_id = id0 if len(ident_v[ident_v == id0]) > len(ident_v[ident_v == id1]) else id1
         less_id = id1 if more_id == id0 else id0
 
-        double_idx = np.intersect1d(taken_idxs0, taken_idxs1)
+        idx_v_m = idx_v[(ident_v == more_id)]
+        idx_v_l = idx_v[(ident_v == less_id)]
+
+        double_idx = np.intersect1d(idx_v_m, idx_v_l)
 
         #ToDo:check for zig-zag
 
-        if len(double_idx) < len(taken_idxs1)*0.01 or len(double_idx) < len(taken_idxs0)*0.01:
-            ident_v[(np.in1d(idx_v, np.array(double_idx))) & (ident_v == less_id)] = np.nan
-            ident_v[ident_v == less_id] = more_id
+        if len(double_idx) >= len(idx_v_m)*0.01 and len(double_idx) >= len(idx_v_l)*0.01:
+            continue
 
-            connections_candidates[:, 0][connections_candidates[:, 0] == less_id] = more_id
-            connections_candidates[:, 1][connections_candidates[:, 1] == less_id] = more_id
+        join_idx_v = np.concatenate(( idx_v_m, idx_v_l[~np.in1d(idx_v_l, double_idx)]))
+        id_switch_helper = np.ones_like(join_idx_v) # help_v
+        id_switch_helper[:len(idx_v_m)] = 0
+
+        fund_v_m = fund_v[(ident_v == more_id)]
+        fund_v_l = fund_v[(ident_v == less_id)]
+        join_fund_v = np.concatenate(( fund_v_m, fund_v_l[~np.in1d(idx_v_l, double_idx)]))
+
+        sorter = np.argsort(join_idx_v)
+        id_switch_helper = id_switch_helper[sorter]
+        join_fund_v = join_fund_v[sorter]
+        join_idx_v = join_idx_v[sorter]
+
+        freq_jumps = np.diff(join_fund_v)[np.diff(id_switch_helper) != 0]
+        jump_idxs = join_idx_v[:-1][np.diff(id_switch_helper) != 0]
+        if len(jump_idxs) > 1:
+            fig, ax = plt.subplots()
+            ax.plot(idx_v_m, fund_v_m, marker='.', zorder=2)
+            ax.plot(idx_v_l, fund_v_l, marker='.',zorder=2)
+            ax.plot(join_idx_v, join_fund_v, marker='.',zorder=1)
+
+            ax.plot(jump_idxs, join_fund_v[:-1][np.diff(id_switch_helper) != 0], 'ok')
+
+            ax.set_title(f'{np.median(np.diff(jump_idxs) / dps):.2f}s '
+                         f'{len(idx_v_l[(idx_v_l >= jump_idxs[0]) & (idx_v_l <= jump_idxs[-1])]) / (jump_idxs[-1] - jump_idxs[0]):.2f} '
+                         f'{len(idx_v_m[(idx_v_m >= jump_idxs[0]) & (idx_v_m <= jump_idxs[-1])]) / (jump_idxs[-1] - jump_idxs[0]):.2f} ')
+            print('')
+            print(freq_jumps)
+            print(jump_idxs)
+            ax.set_xlim(jump_idxs[0]-100, jump_idxs[-1] + 100)
+            plt.show()
+        ###############################################################
+        if len(jump_idxs) > 2:
+            continue
+        ident_v[(np.in1d(idx_v, np.array(double_idx))) & (ident_v == less_id)] = np.nan
+        ident_v[ident_v == less_id] = more_id
+
+        connections_candidates[:, 0][connections_candidates[:, 0] == less_id] = more_id
+        connections_candidates[:, 1][connections_candidates[:, 1] == less_id] = more_id
 
     return ident_v
 
@@ -385,7 +414,6 @@ def power_density_filter(valid_v, sign_v, ident_v, idx_v, fund_v, times):
                 ax[1].plot(idx_v[ident_v == id], fund_v[ident_v == id], marker='.', color='k')
 
                 plt.show()
-
 
     return valid_v
 
