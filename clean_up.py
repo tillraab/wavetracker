@@ -87,28 +87,17 @@ def connect_by_similarity(times, idx_v, ident_v, fund_v, sign_v, valid_v, valid_
 
     d_med_f = np.abs(valid_ids[:, 1] - valid_ids[:, 1][:, np.newaxis])
 
-    # embed()
-    # quit()
 
     med_power_id = np.zeros(len(valid_ids))
     for enu, id in enumerate(valid_ids[:, 0]):
         med_power_id[enu] = np.median(np.max(sign_v[(ident_v == id) & (window_t_mask)], axis=1))
 
-    # d_med_power_id = np.abs(med_power_id - med_power_id[:, np.newaxis])
 
     idx0s, idx1s = np.unravel_index(np.argsort(d_med_f, axis=None), np.shape(d_med_f))
     similar_mask = idx0s == idx1s
     idx0s = idx0s[~similar_mask]
     idx1s = idx1s[~similar_mask]
-    # entities = np.sum(d_med_f[idx0s, idx1s] < f_th)
 
-    # idxs = np.sort(np.array([idx0s[:entities], idx1s[:entities]]), axis=0)
-    # idx0s, idx1s = idxs
-
-    # power_sorter = np.argsort(np.max(med_power_id[idxs], axis=0))
-
-    # idx0s = idx0s[power_sorter]
-    # idx1s = idx1s[power_sorter]
 
 
     for enu, (idx0, idx1) in enumerate(zip(idx0s, idx1s)):
@@ -167,11 +156,8 @@ def connect_by_similarity(times, idx_v, ident_v, fund_v, sign_v, valid_v, valid_
 def connect_with_overlap(fund_v, ident_v, valid_v, idx_v, times):
     time_tol = 5*60
     freq_tol = 2.5
-    dps = 1 / (times[1] - times[0])
-    embed()
-    quit()
 
-    # old_ident_v = np.copy(ident_v)
+    old_ident_v = np.copy(ident_v)
 
     connections_candidates = []
     unique_ids = np.unique(ident_v[(~np.isnan(ident_v)) & (valid_v == 1)])
@@ -247,72 +233,154 @@ def connect_with_overlap(fund_v, ident_v, valid_v, idx_v, times):
         id0 = connections_candidates[pair_no, 0]
         id1 = connections_candidates[pair_no, 1]
 
-        more_id = id0 if len(ident_v[ident_v == id0]) > len(ident_v[ident_v == id1]) else id1
-        less_id = id1 if more_id == id0 else id0
+        # more_id = id0 if len(ident_v[ident_v == id0]) > len(ident_v[ident_v == id1]) else id1
+        # less_id = id1 if more_id == id0 else id0
 
-        idx_v_m = idx_v[(ident_v == more_id)]
-        idx_v_l = idx_v[(ident_v == less_id)]
+        idx_v0 = idx_v[(ident_v == id0)]
+        idx_v1 = idx_v[(ident_v == id1)]
+        if len(idx_v0) == 0 or len(idx_v1) == 0:
+            continue
 
-        double_idx = np.intersect1d(idx_v_m, idx_v_l)
+        # fund_v0 = fund_v[(ident_v == id0)]
+        # fund_v1 = fund_v[(ident_v == id1)]
+
+        first_last_idxs = np.array([idx_v0[0], idx_v0[-1], idx_v1[0], idx_v1[-1]])
+
+        overlap_category = np.array([0, 0, 1, 1])
+        overlap_category = overlap_category[np.argsort(first_last_idxs)]
+        sorted_first_last_idxs = first_last_idxs[np.argsort(first_last_idxs)]
+
+        overlap_count0 = len(idx_v0[(idx_v0 >= sorted_first_last_idxs[1]) & (idx_v0 <= sorted_first_last_idxs[2])])
+        overlap_count1 = len(idx_v1[(idx_v1 >= sorted_first_last_idxs[1]) & (idx_v1 <= sorted_first_last_idxs[2])])
+
+        double_idx = np.intersect1d(idx_v0, idx_v1)
+
+        density0 = overlap_count0 / (sorted_first_last_idxs[2] - sorted_first_last_idxs[1]+1)
+        density1 = overlap_count1 / (sorted_first_last_idxs[2] - sorted_first_last_idxs[1]+1)
+
+        n_overlap_ratio0 = len(double_idx) / overlap_count0 if overlap_count0 > 0 else np.nan
+        n_overlap_ratio1 = len(double_idx) / overlap_count1 if overlap_count1 > 0 else np.nan
+
+        merge = False
+        id_for_overlap = None
+        del_id = None
+        if overlap_count0 <= 1 and overlap_count1 <= 1:
+            # print('1')
+            merge = True
+
+        if not merge:
+            if n_overlap_ratio0 <= 0.1 or np.isnan(n_overlap_ratio0):
+                if n_overlap_ratio1 <= 0.1 or np.isnan(n_overlap_ratio1):
+                    # print('6')q
+                    # ToDo eliminate the doubles !!!
+                    merge = True
+                    id_for_overlap = id0
+                    del_id = id1
+        if not merge:
+            if density0 <= 0.1 and density0*3 < density1:
+                merge = True
+                id_for_overlap = id1
+                del_id = id0
+                # print('2')
+            elif density1 <= 0.1 and density1*0.3 < density0:
+                merge = True
+                id_for_overlap = id0
+                del_id = id1
+                # print('3')
+            elif density0 <= 0.3 and n_overlap_ratio0 >= 0.7 and density0 * 2 < density1:
+                merge = True
+                id_for_overlap = id1
+                del_id = id0
+                # print('4')
+            elif density1 <= 0.3 and n_overlap_ratio1 >= 0.7 and density1 * 2 < density0:
+                merge = True
+                id_for_overlap = id0
+                del_id = id1
+                # print('5')
+            else:
+                pass
+
+        if not merge:
+            continue
+
+        first_id = id0 if overlap_category[0] == 0 else id1
+        not_first_id = id1 if first_id == id0 else id0
+        last_id = id0 if overlap_category[-1] == 0 else id1
+
+        if id_for_overlap == None: #  dont use "if not id_for_overlap:" because of case: id = 0.0
+            ident_v[ident_v == not_first_id] = first_id
+            # connections_candidates[:, 0][connections_candidates[:, 0] == not_first_id] = first_id
+            # connections_candidates[:, 1][connections_candidates[:, 1] == not_first_id] = first_id
+        else:
+            ident_v[(ident_v == del_id) & (idx_v >= sorted_first_last_idxs[1]) & (idx_v <= sorted_first_last_idxs[2])] = np.nan
+            ident_v[(ident_v == id_for_overlap) & (idx_v >= sorted_first_last_idxs[1]) & (idx_v <= sorted_first_last_idxs[2])] = first_id
+            if not last_id == first_id:
+                ident_v[(ident_v == last_id) & (idx_v > sorted_first_last_idxs[2])] = first_id
+
+        connections_candidates[:, 0][connections_candidates[:, 0] == not_first_id] = first_id
+        connections_candidates[:, 1][connections_candidates[:, 1] == not_first_id] = first_id
+
+        # print(overlap_category)
+        # print(first_id, not_first_id, id_for_overlap, last_id)
+        # print('')
 
         #ToDo:check for zig-zag
 
-        if len(double_idx) >= len(idx_v_m)*0.01 and len(double_idx) >= len(idx_v_l)*0.01:
-            continue
+        # if len(double_idx) >= len(idx_v_m)*0.01 and len(double_idx) >= len(idx_v_l)*0.01:
+        #     continue
 
-        join_idx_v = np.concatenate(( idx_v_m, idx_v_l[~np.in1d(idx_v_l, double_idx)]))
-        id_switch_helper = np.ones_like(join_idx_v) # help_v
-        id_switch_helper[:len(idx_v_m)] = 0
-
-        fund_v_m = fund_v[(ident_v == more_id)]
-        fund_v_l = fund_v[(ident_v == less_id)]
-        join_fund_v = np.concatenate(( fund_v_m, fund_v_l[~np.in1d(idx_v_l, double_idx)]))
-
-        sorter = np.argsort(join_idx_v)
-        id_switch_helper = id_switch_helper[sorter]
-        join_fund_v = join_fund_v[sorter]
-        join_idx_v = join_idx_v[sorter]
-
-        freq_jumps_size = np.diff(join_fund_v)[np.diff(id_switch_helper) != 0]
-        jump_idxs = join_idx_v[:-1][np.diff(id_switch_helper) != 0]
-        jump_idxs_target = join_idx_v[1:][np.diff(id_switch_helper) != 0]
-        jump_freqs = join_fund_v[:-1][np.diff(id_switch_helper) != 0]
-
-        conflict_count = 0
-        ddd = double_idx[~np.in1d(double_idx, np.concatenate((jump_idxs, jump_idxs_target)))]
+        # join_idx_v = np.concatenate(( idx_v_m, idx_v_l[~np.in1d(idx_v_l, double_idx)]))
+        # id_switch_helper = np.ones_like(join_idx_v) # help_v
+        # id_switch_helper[:len(idx_v_m)] = 0
 
 
-        #jump_idxs = jump_idxs[np.abs(freq_jumps_size) > freq_tol]
-        #jump_freqs = jump_freqs[np.abs(freq_jumps_size) > freq_tol]
+        # join_fund_v = np.concatenate(( fund_v_m, fund_v_l[~np.in1d(idx_v_l, double_idx)]))
 
-        if len(jump_idxs) > 1:
+        # sorter = np.argsort(join_idx_v)
+        # id_switch_helper = id_switch_helper[sorter]
+        # join_fund_v = join_fund_v[sorter]
+        # join_idx_v = join_idx_v[sorter]
+
+        # freq_jumps_size = np.diff(join_fund_v)[np.diff(id_switch_helper) != 0]
+        # jump_idxs = join_idx_v[:-1][np.diff(id_switch_helper) != 0]
+        # jump_idxs_target = join_idx_v[1:][np.diff(id_switch_helper) != 0]
+        # jump_freqs = join_fund_v[:-1][np.diff(id_switch_helper) != 0]
+
+
+        # if len(jump_idxs) > 1:
+        if False:
             fig, ax = plt.subplots()
-            ax.plot(times[idx_v_m], fund_v_m, marker='.', zorder=2)
-            ax.plot(times[idx_v_l], fund_v_l, marker='.',zorder=2)
-            ax.plot(times[join_idx_v], join_fund_v, marker='.',zorder=1)
+            ax.plot(times[idx_v0], fund_v0+0.5, marker='.',zorder=1, color='forestgreen')
+            ax.plot(times[idx_v1], fund_v1+0.5, marker='.', zorder=1, color='firebrick')
+            ax.plot(times[idx_v[ident_v == first_id]], fund_v[ident_v == first_id], marker='.', zorder=2, color='k')
+            # ax.plot(times[join_idx_v], join_fund_v, marker='.',zorder=1, color='forestgreen')
 
-            ax.plot(times[jump_idxs[np.abs(freq_jumps_size) > freq_tol]], jump_freqs[np.abs(freq_jumps_size) > freq_tol], 'ok')
+            # ax.plot(times[jump_idxs[np.abs(freq_jumps_size) > freq_tol]], jump_freqs[np.abs(freq_jumps_size) > freq_tol], 'ok')
+            #
+            if overlap_count0 <= 1 and overlap_count1 <= 1:
+                ax.set_title(f'd0: {density0:.2f} '
+                             f'd1: {density1:.2f} '
+                             f'no overlap')
+            else:
+                ax.set_title(f'd0: {density0:.2f} '
+                             f'd1: {density1:.2f} '
+                             f'n_double0:{n_overlap_ratio0:.2f} '
+                             f'n_double1:{n_overlap_ratio1:.2f} ')
 
-            ax.set_title(f'{np.median(np.diff(jump_idxs) / dps):.2f}s '
-                         f'{len(idx_v_l[(idx_v_l >= jump_idxs[0]) & (idx_v_l <= jump_idxs[-1])]) / (jump_idxs[-1] - jump_idxs[0]):.2f} '
-                         f'{len(idx_v_m[(idx_v_m >= jump_idxs[0]) & (idx_v_m <= jump_idxs[-1])]) / (jump_idxs[-1] - jump_idxs[0]):.2f} ')
-
-            # ax.set_title(f'{np.median(np.diff(jump_idxs) / dps):.2f}s '
-            #              f'{np.mean(1/np.diff(idx_v_l[(idx_v_l >= jump_idxs[0]) & (idx_v_l <= jump_idxs[-1])])):.2f} '
-            #              f'{np.mean(1/np.diff(idx_v_m[(idx_v_m >= jump_idxs[0]) & (idx_v_m <= jump_idxs[-1])])):.2f} ')
-            print('')
-            print(freq_jumps_size)
-            print(jump_idxs)
-            ax.set_xlim(times[jump_idxs[0]]-20, times[jump_idxs[-1]] + 20)
+            # print('')
+            # print(freq_jumps_size)
+            # print(jump_idxs)
+            ax.set_xlim(times[sorted_first_last_idxs[1]]-20, times[sorted_first_last_idxs[2]] + 20)
             plt.show()
-        ###############################################################
-        if len(jump_idxs) > 2:
-            continue
-        ident_v[(np.in1d(idx_v, np.array(double_idx))) & (ident_v == less_id)] = np.nan
-        ident_v[ident_v == less_id] = more_id
 
-        connections_candidates[:, 0][connections_candidates[:, 0] == less_id] = more_id
-        connections_candidates[:, 1][connections_candidates[:, 1] == less_id] = more_id
+        ###############################################################
+        # if len(jump_idxs) > 2:
+        # #     continue
+        # ident_v[(np.in1d(idx_v, np.array(double_idx))) & (ident_v == less_id)] = np.nan
+        # ident_v[ident_v == less_id] = more_id
+        #
+        # connections_candidates[:, 0][connections_candidates[:, 0] == less_id] = more_id
+        # connections_candidates[:, 1][connections_candidates[:, 1] == less_id] = more_id
 
     return ident_v
 
@@ -384,8 +452,9 @@ def power_density_filter(valid_v, sign_v, ident_v, idx_v, fund_v, times):
         ax.plot(mean_p, mean_d, 'k.', alpha=.8)
 
     density_th = 0.1
-    dB_th = 2*most_common_valid_power - pct99_power
-    dB_th = dB_th if dB_th > -100 else -100
+    # dB_th = 2*most_common_valid_power - pct99_power
+    # dB_th = dB_th if dB_th > -100 else -100
+    dB_th = -100
 
     for id in tqdm(np.unique(ident_v[(~np.isnan(ident_v)) & (valid_v == 1)])):
         i = idx_v[ident_v == id]
@@ -395,16 +464,16 @@ def power_density_filter(valid_v, sign_v, ident_v, idx_v, fund_v, times):
         if density < density_th or mean_power <= dB_th:
             valid_v[ident_v == id] = 0
             if mean_power <= dB_th and density > density_th and (i[-1] - i[0]) / dps > 10 * 60:
-                fig, ax = plt.subplots(2, 1)
+                # fig, ax = plt.subplots(2, 1)
                 ii = np.arange(i[0], i[-1] + 1)
                 pp = np.interp(ii, i, p)
 
                 ppp = np.convolve(pp, np.ones(int(60 * dps)) / int(10 * 60 * dps), mode='same')
                 corr_fac = np.convolve(np.ones(len(pp)), np.ones(int(60 * dps)) / int(10 * 60 * dps), mode='same')
                 ppp *= 1/corr_fac
-                ax[0].plot(i, p)
-                ax[0].plot(ii, ppp, lw=2, color='k')
-                ax[0].set_title(f'{len(p[p > dB_th])/ len(p):.2f} above th ({dB_th:.2f}Hz)')
+                # ax[0].plot(i, p)
+                # ax[0].plot(ii, ppp, lw=2, color='k')
+                # ax[0].set_title(f'{len(p[p > dB_th])/ len(p):.2f} above th ({dB_th:.2f}Hz)')
 
                 if len(p[p > dB_th])/ len(p) > 0.1:
                     up_idx = ii[:-1][(ppp[:-1] < dB_th) & (ppp[1:] > dB_th)]
@@ -417,17 +486,17 @@ def power_density_filter(valid_v, sign_v, ident_v, idx_v, fund_v, times):
                         up_idx = np.concatenate((np.array([ii[0]-1]), up_idx))
                     if down_idx[-1] < up_idx[-1]:
                         down_idx = np.concatenate((down_idx, np.array([ii[-1]+1])))
-                    ax[0].plot(up_idx, np.ones(len(up_idx))*dB_th, 'og', markersize=10)
-                    ax[0].plot(down_idx, np.ones(len(down_idx))*dB_th, 'or', markersize=10)
+                    # ax[0].plot(up_idx, np.ones(len(up_idx))*dB_th, 'og', markersize=10)
+                    # ax[0].plot(down_idx, np.ones(len(down_idx))*dB_th, 'or', markersize=10)
                     next_ident = np.nanmax(ident_v)+1
                     for ui, di in zip(up_idx, down_idx):
                         ident_v[(ident_v == id) & (idx_v >= ui) & (idx_v < di)] = next_ident
                     valid_v[ident_v == next_ident] = 1
-                    ax[1].plot(idx_v[ident_v == next_ident], fund_v[ident_v == next_ident], marker='.')
+                    # ax[1].plot(idx_v[ident_v == next_ident], fund_v[ident_v == next_ident], marker='.')
 
-                ax[1].plot(idx_v[ident_v == id], fund_v[ident_v == id], marker='.', color='k')
+                # ax[1].plot(idx_v[ident_v == id], fund_v[ident_v == id], marker='.', color='k')
 
-                plt.show()
+                # plt.show()
 
     return valid_v
 
