@@ -8,6 +8,8 @@ from IPython import embed
 from tqdm import tqdm
 import sys
 
+illustrate_cleanup = False
+
 def gauss(t, shift, sigma, size, norm = False):
     if not hasattr(shift, '__len__'):
         g = np.exp(-((t - shift) / sigma) ** 2 / 2) * size
@@ -39,7 +41,7 @@ def get_valid_ids_by_freq_dist(times, idx_v, ident_v, fund_v, valid_v, old_valid
         kde_th = np.max(g) * len(times[(times >= times[0]) & (times < times[0] + stride)]) * 0.05
 
     ################### illustation ###################
-    if plot:
+    if illustrate_cleanup:
         fig = plt.figure(figsize=(30/2.54, 18/2.54))
         gs = gridspec.GridSpec(1, 2, left=0.1, bottom=0.1, right=0.95, top=0.95, width_ratios=[3, 1], hspace=0)
         ax = []
@@ -70,7 +72,7 @@ def get_valid_ids_by_freq_dist(times, idx_v, ident_v, fund_v, valid_v, old_valid
             valid_ids.append([id, np.median(f), times[idx_v[(ident_v == id)]][0]])
             valid_v[ident_v == id] = 1
 
-        if plot:
+        if illustrate_cleanup:
             c = np.random.rand(3) if valid else 'grey'
             a = 1 if valid else 0.2
             t = times[idx_v[(ident_v == id) & (window_t_mask)]]
@@ -157,7 +159,7 @@ def connect_with_overlap(fund_v, ident_v, valid_v, idx_v, times):
     time_tol = 5*60
     freq_tol = 2.5
 
-    old_ident_v = np.copy(ident_v)
+    # old_ident_v = np.copy(ident_v)
 
     connections_candidates = []
     unique_ids = np.unique(ident_v[(~np.isnan(ident_v)) & (valid_v == 1)])
@@ -348,7 +350,7 @@ def connect_with_overlap(fund_v, ident_v, valid_v, idx_v, times):
 
 
         # if len(jump_idxs) > 1:
-        if False:
+        if illustrate_cleanup:
             fig, ax = plt.subplots()
             ax.plot(times[idx_v0], fund_v0+0.5, marker='.',zorder=1, color='forestgreen')
             ax.plot(times[idx_v1], fund_v1+0.5, marker='.', zorder=1, color='firebrick')
@@ -398,7 +400,7 @@ def power_density_filter(valid_v, sign_v, ident_v, idx_v, fund_v, times):
         #print(id, len(i), np.max(id_densities), np.min(id_densities))
         density_v[ident_v == id] = id_densities
 
-    if True:
+    if illustrate_cleanup:
         fig, ax = plt.subplots()
         ax.plot(valid_power, density_v[valid_v == 1], '.')
 
@@ -406,7 +408,7 @@ def power_density_filter(valid_v, sign_v, ident_v, idx_v, fund_v, times):
     most_common_valid_power = power_bins[np.argmax(power_n)]
     pct99_power = np.percentile(valid_power, 99.5)
 
-    if True:
+    if illustrate_cleanup:
         fig = plt.figure(figsize=(20 / 2.54, 20 / 2.54))
         gs = gridspec.GridSpec(2, 2, left=0.1, bottom=0.1, right=0.95, top=0.95, hspace=0, wspace=0,
                                height_ratios=[1, 3], width_ratios=[3, 1])
@@ -527,9 +529,6 @@ def main(folder = None):
     kde_th = None
     previous_valid_ids = np.array([])
 
-    # embed()
-    # quit()
-
     for i0 in tqdm(np.arange(0, times[-1], int(stride*(1-overlap))), desc='striding window analysis'):
 
         kde_th, valid_ids = get_valid_ids_by_freq_dist(times, idx_v, ident_v, fund_v, valid_v, previous_valid_ids, i0,
@@ -539,7 +538,7 @@ def main(folder = None):
                                                             f_th, i0, stride)
 
     ################### illustation ###################
-    if True:
+    if illustrate_cleanup:
         fig = plt.figure(figsize=(30/2.54, 18/2.54))
         gs = gridspec.GridSpec(1, 1, left=0.1, bottom=0.1, right=0.95, top=0.95)
         ax = []
@@ -575,7 +574,7 @@ def main(folder = None):
     ident_v = connect_with_overlap(fund_v, ident_v, valid_v, idx_v, times)
 
     ################### illustation ###################
-    if True:
+    if illustrate_cleanup:
         fig = plt.figure(figsize=(30/2.54, 18/2.54))
         gs = gridspec.GridSpec(1, 1, left=0.1, bottom=0.1, right=0.95, top=0.95)
         ax = []
