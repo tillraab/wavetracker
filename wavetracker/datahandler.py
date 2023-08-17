@@ -13,6 +13,7 @@ from PyQt5.QtGui import *
 from PyQt5 import QtCore
 from PyQt5.QtCore import *
 import pyqtgraph as pg
+import time
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
 try:
@@ -108,19 +109,19 @@ class MainWindow(QMainWindow):
 
         self.gridLayout = QGridLayout()
 
-        data_viewer_widget = DataViewer(temp_data)
-        self.gridLayout.addWidget(data_viewer_widget, 0, 0, 4, 4)
-
         self.central_widget.setLayout(self.gridLayout)
         self.setCentralWidget(self.central_widget)
 
-        self.show()
+        # self.show()
 
-        for i in range(temp_data.n_channels):
-            data_viewer_widget.plot_handels[i].setData(temp_data.shape[0], temp_data[:, i])
+        ### data
+        cfg = Configuration(args.config, verbose=args.verbose)
+        data, samplerate, channels, dataset, data_shape = open_raw_data(folder=args.folder, verbose=args.verbose, **cfg.spectrogram)
+        data_viewer_widget = DataViewer(data)
+        self.gridLayout.addWidget(data_viewer_widget, 0, 0, 4, 4)
 
-        data_viewer_widget.plot_widgets[1].hide() # clears plot data
-        data_viewer_widget.plot_widgets[1].hide() # hides plot temporarily
+        # data_viewer_widget.plot_widgets[1].hide() # clears plot data
+        # data_viewer_widget.plot_widgets[1].hide() # hides plot temporarily
 
 class DataViewer(QWidget):
     def __init__(self, data, parent=None):
@@ -134,14 +135,25 @@ class DataViewer(QWidget):
 
         self._create_channel_subplots()
 
+        self._initial_plot()
+
+        for plot_widget in self.plot_widgets:
+            plot_widget.sigXRangeChanged.connect(self._update_plot)
+
+    def _initial_plot(self):
+        for i in range(self.data.channels):
+            self.plot_handels[i].setData(np.arange(self.data.samplerate), self.data[:self.data.samplerate, i])
+
+            self.plot_widgets[0].setXRange(0, 20000)
 
     def _create_channel_subplots(self):
         c = 0
         self.plot_handels = []
         self.plot_widgets = []
-        for row in range(self.data.n_channels//4):
+        for row in range(self.data.channels//4 + 1):
             for col in range(4):
-                if c >= self.n_channels:
+                if c >= self.data.channels:
+                    print('breaking')
                     break
                 plot_widget = pg.PlotWidget()
                 subplot_h = plot_widget.plot()
@@ -150,15 +162,43 @@ class DataViewer(QWidget):
                 self.plot_widgets.append(plot_widget)
                 self.plot_handels.append(subplot_h)
 
+                # print(c)
                 if c >= 1:
                     plot_widget.setXLink(self.plot_widgets[0])
+                    plot_widget.setYLink(self.plot_widgets[0])
                 c += 1
 
+    def _update_plot(self):
+        # print('yay')
+        x_min, x_max = self.plot_widgets[0].getAxis('bottom').range
+        x_min = 0 if x_min < 0 else x_min
+        for enu, plot_widget in enumerate(self.plot_handels):
+            # print(enu)
+            x = np.arange(x_min, x_max + 1)
+            y = self.data[x_min:x_max+1, enu]
+
+            if len(y) > len(x):
+                y = y[:len(x)]
+            elif len(x) > len(y):
+                x = x[:len(y)]
+            else:
+                pass
+            plot_widget.setData(x, y)
+
+        # self.plot_handels[0].setXRange(x_min, x_max)
+        # for ch in range(len(self.plot_handels)):
+        #     self.plot_handels[ch].setData(np.arange(x_min, x_max+1), self.data[x_min:x_max, ch])
+        # new_x = np.linspace(x_min, x_max, 1000)
+        # new_y = np.sin(new_x)
+
+        # Update the plot data
+        # self.plot.setData(new_x, new_y)
 
 if __name__ == '__main__':
     # run as: run as "python3 -m wavetracker.dataloader"
 
-    example_data = "/home/raab/data/2023-02-09-08_16"
+    # example_data = "/home/raab/data/2023-02-09-08_16"
+    example_data = "/data1/data/2023_Breeding/raw_data/2023-02-09-08_16"
     parser = argparse.ArgumentParser(description='Evaluated electrode array recordings with multiple fish.')
     parser.add_argument('-f', '--folder', type=str, help='file to be analyzed', default=example_data)
     parser.add_argument('-c', "--config", type=str, help="<config>.yaml file for analysis", default=None)
