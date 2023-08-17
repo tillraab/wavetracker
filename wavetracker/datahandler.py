@@ -168,6 +168,18 @@ class DataViewer(QWidget):
                     plot_widget.setYLink(self.plot_widgets[0])
                 c += 1
 
+        scrollbar_plot = pg.PlotWidget()
+        sb_plot_handle = scrollbar_plot.plot()
+        scrollbar_plot.setXRange(0, self.data.shape[0])
+        self.layout.addWidget(row+1, 0, 1, 4)
+
+        # data2 = np.sin(x2) / x2
+        # p8 = win.addPlot(title="Region Selection")
+        # p8.plot(data2, pen=(255, 255, 255, 200))
+        # lr = pg.LinearRegionItem([400, 700])
+        # lr.setZValue(-10)
+        # p8.addItem(lr)
+
     def _update_plot(self):
         # print('yay')
         x_min, x_max = self.plot_widgets[0].getAxis('bottom').range
