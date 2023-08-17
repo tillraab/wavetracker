@@ -598,17 +598,7 @@ def main():
                             label=f'{spec_freq[assigned_hg[t] == hg][0]:.2f}Hz')
         ax.legend(loc = 1)
 
-        # plt.show()
-
     fundamentals = get_fundamentals(assigned_hg, spec_freq)
-    # f_list = []
-    # for t in range(assigned_hg.shape[0]):
-    #     f_list.append([])
-    #     for hg in np.unique(assigned_hg[t]):
-    #         if hg == 0:
-    #             continue
-    #         f_list[-1].append(spec_freq[assigned_hg[t] == hg][0])
-
 
     fig, ax = plt.subplots(figsize=(30/2.54, 18/2.54))
     f1 = np.where(spec_freq > cfg.harmonic_groups['max_freq'] * cfg.harmonic_groups['min_group_size'])[0][0]
