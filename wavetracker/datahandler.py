@@ -146,6 +146,13 @@ class DataViewer(QWidget):
 
             self.plot_widgets[0].setXRange(0, 20000)
 
+    def updatePlot(self):
+        for pw in self.plot_widgets:
+            pw.setXRange(*self.lr.getRegion(), padding=0)
+
+    def updateRegion(self):
+        self.lr.setRegion(self.plot_handels[0].getViewBox().viewRange()[0])
+
     def _create_channel_subplots(self):
         c = 0
         self.plot_handels = []
@@ -156,6 +163,9 @@ class DataViewer(QWidget):
                     print('breaking')
                     break
                 plot_widget = pg.PlotWidget()
+                plot_widget.sigXRangeChanged.connect(self.updateRegion)
+                plot_widget.sigXRangeChanged.connect(self._update_plot)
+
                 subplot_h = plot_widget.plot()
                 self.layout.addWidget(plot_widget, row, col, 1, 1)
 
@@ -170,15 +180,16 @@ class DataViewer(QWidget):
 
         scrollbar_plot = pg.PlotWidget()
         sb_plot_handle = scrollbar_plot.plot()
-        scrollbar_plot.setXRange(0, self.data.shape[0])
-        self.layout.addWidget(row+1, 0, 1, 4)
+        scrollbar_plot.setMouseEnabled(x=False, y=False)
 
-        # data2 = np.sin(x2) / x2
-        # p8 = win.addPlot(title="Region Selection")
-        # p8.plot(data2, pen=(255, 255, 255, 200))
-        # lr = pg.LinearRegionItem([400, 700])
-        # lr.setZValue(-10)
-        # p8.addItem(lr)
+        scrollbar_plot.setXRange(0, self.data.shape[0])
+        self.layout.addWidget(scrollbar_plot, row+1, 0, 1, 4)
+        self.lr = pg.LinearRegionItem([0, 20000])
+        self.lr.setZValue(-10)
+        scrollbar_plot.addItem(self.lr)
+
+        self.lr.sigRegionChanged.connect(self.updatePlot)
+
 
     def _update_plot(self):
         # print('yay')
