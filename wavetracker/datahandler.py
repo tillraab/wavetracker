@@ -8,6 +8,12 @@ from thunderfish.dataloader import DataLoader as open_data
 from IPython import embed
 from .config import Configuration
 
+from PyQt5.QtWidgets import *
+from PyQt5.QtGui import *
+from PyQt5 import QtCore
+from PyQt5.QtCore import *
+import pyqtgraph as pg
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
 try:
     import tensorflow as tf
@@ -62,17 +68,7 @@ def open_raw_data(folder: str,
 
     return data, samplerate, channels, dataset, shape
 
-def main():
-    example_data = "/home/raab/data/2023-02-09-08_16"
-    parser = argparse.ArgumentParser(description='Evaluated electrode array recordings with multiple fish.')
-    parser.add_argument('-f', '--folder', type=str, help='file to be analyzed', default=example_data)
-    parser.add_argument('-c', "--config", type=str, help="<config>.yaml file for analysis", default=None)
-    parser.add_argument('-v', '--verbose', action='count', dest='verbose', default=0,
-                        help='verbosity level. Increase by specifying -v multiple times, or like -vvv')
-    parser.add_argument('--cpu', action='store_true', help='analysis using only CPU.')
-    args = parser.parse_args()
-    args.folder = os.path.normpath(args.folder)
-
+def main(args):
     if args.verbose >= 1: print(f'\n--- Running wavetracker.datahandler ---')
 
     cfg = Configuration(args.config, verbose=args.verbose)
@@ -99,6 +95,84 @@ def main():
                 ax[i].text(0.9, 0.9, f'{i}', transform = ax[i].transAxes, ha='center', va='center')
             plt.show()
 
+class MainWindow(QMainWindow):
+    def __init__(self, args, parent=None):
+        super(MainWindow, self).__init__(parent)
+        rec = QApplication.desktop().screenGeometry()
+        height = rec.height()
+        width = rec.width()
+        self.resize(int(1 * width), int(1 * height))
+        self.setWindowTitle('datahandler')  # set window title
+
+        self.central_widget = QWidget(self) # basic widget ; can be exchanged with tabwidget etc.
+
+        self.gridLayout = QGridLayout()
+
+        data_viewer_widget = DataViewer(temp_data)
+        self.gridLayout.addWidget(data_viewer_widget, 0, 0, 4, 4)
+
+        self.central_widget.setLayout(self.gridLayout)
+        self.setCentralWidget(self.central_widget)
+
+        self.show()
+
+        for i in range(temp_data.n_channels):
+            data_viewer_widget.plot_handels[i].setData(temp_data.shape[0], temp_data[:, i])
+
+        data_viewer_widget.plot_widgets[1].hide() # clears plot data
+        data_viewer_widget.plot_widgets[1].hide() # hides plot temporarily
+
+class DataViewer(QWidget):
+    def __init__(self, data, parent=None):
+        super(DataViewer, self).__init__()
+        self.data = data
+
+        self.layout = QGridLayout()
+        # ToDo: reaplace this with a scroll area
+        # self.layout = QScrollArea()
+        self.setLayout(self.layout)
+
+        self._create_channel_subplots()
+
+
+    def _create_channel_subplots(self):
+        c = 0
+        self.plot_handels = []
+        self.plot_widgets = []
+        for row in range(self.data.n_channels//4):
+            for col in range(4):
+                if c >= self.n_channels:
+                    break
+                plot_widget = pg.PlotWidget()
+                subplot_h = plot_widget.plot()
+                self.layout.addWidget(plot_widget, row, col, 1, 1)
+
+                self.plot_widgets.append(plot_widget)
+                self.plot_handels.append(subplot_h)
+
+                if c >= 1:
+                    plot_widget.setXLink(self.plot_widgets[0])
+                c += 1
+
+
 if __name__ == '__main__':
     # run as: run as "python3 -m wavetracker.dataloader"
-    main()
+
+    example_data = "/home/raab/data/2023-02-09-08_16"
+    parser = argparse.ArgumentParser(description='Evaluated electrode array recordings with multiple fish.')
+    parser.add_argument('-f', '--folder', type=str, help='file to be analyzed', default=example_data)
+    parser.add_argument('-c', "--config", type=str, help="<config>.yaml file for analysis", default=None)
+    parser.add_argument('-v', '--verbose', action='count', dest='verbose', default=0,
+                        help='verbosity level. Increase by specifying -v multiple times, or like -vvv')
+    parser.add_argument('--cpu', action='store_true', help='analysis using only CPU.')
+    parser.add_argument('-s', '--shell', action='store_true', help='execute shell pipeline')
+    args = parser.parse_args()
+    args.folder = os.path.normpath(args.folder)
+
+    if args.shell:
+        main(args)
+    else:
+        app = QApplication(sys.argv)  # create application
+        w = MainWindow(args)  # create window
+        w.show()
+        sys.exit(app.exec_())  # exit if window is closed
