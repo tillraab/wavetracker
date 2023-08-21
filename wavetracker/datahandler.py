@@ -133,35 +133,58 @@ class DataViewer(QWidget):
         self.x_min_for_sb = np.linspace(0, self.data.shape[0]-self.plot_current_d_xaxis, 100)
         self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, self.data.shape[0], 100)
 
-
         # layout
         self.main_layout = QGridLayout(self)
-        self.plot_layout = QGridLayout()
 
-        # self.scrollWidget = QScrollArea() #  is a widget
-        # self.scrollWidget.setWidgetResizable(True)
-        # self.scrollWidget.setVerticalScrollBarPolicy(2)
-        #
-        # self.plot_layout = QVBoxLayout()
-        # self.scrollWidget.setLayout(self.plot_layout)
-        # self.main_layout.addWidget(self.scrollWidget, 0, 0, 1, 1)
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setVerticalScrollBarPolicy(2)  # Always show scrollbar
 
-        self.main_layout.addLayout(self.plot_layout, 0, 0, 1, 1)
+        self.content_widget = QWidget()  # Create a content widget for the scroll area
+        self.content_layout = QGridLayout(self.content_widget)  # Use QGridLayout for the content widget
+
+        self.plots_per_row = 4
+        num_rows_visible = 4
+        rec = QApplication.desktop().screenGeometry()
+        height = rec.height()
+        self.subplot_height = height / num_rows_visible
+
+        # for i in range(num_plots):
+        #     row = i // self.plots_per_row
+        #     col = i % self.plots_per_row
+        #     plot = pg.PlotWidget()
+        #     plot.setMinimumHeight(int(self.subplot_height))
+        #     plot.plot(np.random.rand(10))
+        #     self.content_layout.addWidget(plot, row, col)  # Add plots to the content widget's layout
         #
+
+        self.scroll_area.setWidget(self.content_widget)  # Set the content widget as the scroll area's content
+
+        self.main_layout.addWidget(self.scroll_area, 0, 0)
+
+        print('1')
+        ########################################################################
+        # self.main_layout.addLayout(self.plot_layout, 0, 0, 1, 1)
+        # #
         # channel subplots
         self._create_channel_subplots()
 
+        print('2')
+        #
         # scrollbar
         self._add_plot_scrollbar()
-
+        print('3')
+        #
         # fill channel subplots
         self._initial_plot()
-
+        print('4')
+        #
         for plot_widget in self.plot_widgets:
             plot_widget.sigXRangeChanged.connect(self._update_data_in_plot)
 
     def _initial_plot(self):
         for i in range(self.data.channels):
+            print(i)
             self.plot_handels[i].setData(np.arange(self.data.samplerate), self.data[:self.data.samplerate, i])
             self.plot_widgets[0].setXRange(0, self.plot_current_d_xaxis)
 
@@ -169,23 +192,28 @@ class DataViewer(QWidget):
         c = 0
         self.plot_handels = []
         self.plot_widgets = []
-        for row in range(self.data.channels//4 + 1):
+        for row in range(self.data.channels//self.plots_per_row + 1):
 
-            # sub_widget = QWidget()
-            # sub_widget.setFixedHeight(400)
-            # sub_layout = QHBoxLayout()
-            # sub_widget.setLayout(sub_layout)
-            # self.plot_layout.addWidget(sub_widget)
-
-            for col in range(4):
+            for col in range(self.plots_per_row):
                 if c >= self.data.channels:
                     print('breaking')
                     break
+
+                # for i in range(num_plots):
+                #     row = i // self.plots_per_row
+                #     col = i % self.plots_per_row
+                #     plot = pg.PlotWidget()
+                #     plot.setMinimumHeight(int(self.subplot_height))
+                #     plot.plot(np.random.rand(10))
+                #     self.content_layout.addWidget(plot, row, col)  # Add plots to the content widget's layout
+
                 plot_widget = pg.PlotWidget()
+                plot_widget.setMinimumHeight(int(self.subplot_height))
                 plot_widget.sigXRangeChanged.connect(self._update_data_in_plot)
 
                 subplot_h = plot_widget.plot()
-                self.plot_layout.addWidget(plot_widget, row, col, 1, 1)
+                self.content_layout.addWidget(plot_widget, row, col, 1, 1)
+                # self.plot_layout.addWidget(plot_widget, row, col, 1, 1)
                 # sub_layout.addWidget(plot_widget)
 
                 self.plot_widgets.append(plot_widget)
