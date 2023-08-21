@@ -137,15 +137,17 @@ class DataViewer(QWidget):
         # layout
         self.main_layout = QGridLayout(self)
         self.plot_layout = QGridLayout()
-        # self.plot_layout = QScrollArea()
 
-        # self.plot_layout_countent = QWidget(self.plot_layout)
-
-        # ToDo: reaplace this with a scroll area
-        # self.layout = QScrollArea()
+        # self.scrollWidget = QScrollArea() #  is a widget
+        # self.scrollWidget.setWidgetResizable(True)
+        # self.scrollWidget.setVerticalScrollBarPolicy(2)
+        #
+        # self.plot_layout = QVBoxLayout()
+        # self.scrollWidget.setLayout(self.plot_layout)
+        # self.main_layout.addWidget(self.scrollWidget, 0, 0, 1, 1)
 
         self.main_layout.addLayout(self.plot_layout, 0, 0, 1, 1)
-
+        #
         # channel subplots
         self._create_channel_subplots()
 
@@ -168,6 +170,13 @@ class DataViewer(QWidget):
         self.plot_handels = []
         self.plot_widgets = []
         for row in range(self.data.channels//4 + 1):
+
+            # sub_widget = QWidget()
+            # sub_widget.setFixedHeight(400)
+            # sub_layout = QHBoxLayout()
+            # sub_widget.setLayout(sub_layout)
+            # self.plot_layout.addWidget(sub_widget)
+
             for col in range(4):
                 if c >= self.data.channels:
                     print('breaking')
@@ -177,6 +186,7 @@ class DataViewer(QWidget):
 
                 subplot_h = plot_widget.plot()
                 self.plot_layout.addWidget(plot_widget, row, col, 1, 1)
+                # sub_layout.addWidget(plot_widget)
 
                 self.plot_widgets.append(plot_widget)
                 self.plot_handels.append(subplot_h)
