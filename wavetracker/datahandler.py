@@ -135,17 +135,14 @@ class DataViewer(QWidget):
 
 
         # layout
-        self.main_layout = QGridLayout()
-        # self.plot_layout = QGridLayout()
-        self.plot_layout = QScrollArea()
+        self.main_layout = QGridLayout(self)
+        self.plot_layout = QGridLayout()
+        # self.plot_layout = QScrollArea()
 
         # ToDo: reaplace this with a scroll area
         # self.layout = QScrollArea()
 
         self.main_layout.addLayout(self.plot_layout, 0, 0, 1, 1)
-
-        # self.setLayout(self.layout)
-        self.setLayout(self.main_layout)
 
         # channel subplots
         self._create_channel_subplots()
