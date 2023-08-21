@@ -128,30 +128,43 @@ class DataViewer(QWidget):
         super(DataViewer, self).__init__()
         self.data = data
 
+        # params: scrollbar
+        self._scroller_size = None
+        self.min_rel_scroller_size = 0.1
+
+        # params: data plotting
+        self.plot_max_d_xaxis = self.data.samplerate * 10
+        self.plot_current_d_xaxis = 20_000
+        self.x_min_for_sb = np.linspace(0, self.data.shape[0]-self.plot_current_d_xaxis, 100)
+        self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, self.data.shape[0], 100)
+
+
+        # layout
         self.layout = QGridLayout()
         # ToDo: reaplace this with a scroll area
         # self.layout = QScrollArea()
+
+        # self.main_layout = QGridLayout()
+        # self.main_layout.addItem(self.layout)
+
         self.setLayout(self.layout)
 
+        # channel subplots
         self._create_channel_subplots()
 
+        # scrollbar
+        self._add_plot_scrollbar()
+
+        # fill channel subplots
         self._initial_plot()
 
         for plot_widget in self.plot_widgets:
-            plot_widget.sigXRangeChanged.connect(self._update_plot)
+            plot_widget.sigXRangeChanged.connect(self._update_data_in_plot)
 
     def _initial_plot(self):
         for i in range(self.data.channels):
             self.plot_handels[i].setData(np.arange(self.data.samplerate), self.data[:self.data.samplerate, i])
-
-            self.plot_widgets[0].setXRange(0, 20000)
-
-    def updatePlot(self):
-        for pw in self.plot_widgets:
-            pw.setXRange(*self.lr.getRegion(), padding=0)
-
-    def updateRegion(self):
-        self.lr.setRegion(self.plot_handels[0].getViewBox().viewRange()[0])
+            self.plot_widgets[0].setXRange(0, self.plot_current_d_xaxis)
 
     def _create_channel_subplots(self):
         c = 0
@@ -163,8 +176,7 @@ class DataViewer(QWidget):
                     print('breaking')
                     break
                 plot_widget = pg.PlotWidget()
-                plot_widget.sigXRangeChanged.connect(self.updateRegion)
-                plot_widget.sigXRangeChanged.connect(self._update_plot)
+                plot_widget.sigXRangeChanged.connect(self._update_data_in_plot)
 
                 subplot_h = plot_widget.plot()
                 self.layout.addWidget(plot_widget, row, col, 1, 1)
@@ -178,44 +190,80 @@ class DataViewer(QWidget):
                     plot_widget.setYLink(self.plot_widgets[0])
                 c += 1
 
-        scrollbar_plot = pg.PlotWidget()
-        sb_plot_handle = scrollbar_plot.plot()
-        scrollbar_plot.setMouseEnabled(x=False, y=False)
+    def _add_plot_scrollbar(self):
+        self.x_scrollbar = QScrollBar()
+        self.x_scrollbar.setOrientation(1)  # Horizontal orientation
+        self.x_scrollbar.setMinimum(0)
+        self.x_scrollbar.setMaximum(99)
 
-        scrollbar_plot.setXRange(0, self.data.shape[0])
-        self.layout.addWidget(scrollbar_plot, row+1, 0, 1, 4)
-        self.lr = pg.LinearRegionItem([0, 20000])
-        self.lr.setZValue(-10)
-        scrollbar_plot.addItem(self.lr)
+        stylesheet = f"""
+             QScrollBar:horizontal {{
+                 background: lightgray;
+                 height: 20px;
+             }}
 
-        self.lr.sigRegionChanged.connect(self.updatePlot)
+             QScrollBar::handle:horizontal {{
+                 background: gray;
+             }}
 
+             QScrollBar::add-line:horizontal {{
+                 background: none;
+             }}
 
-    def _update_plot(self):
-        # print('yay')
-        x_min, x_max = self.plot_widgets[0].getAxis('bottom').range
-        x_min = 0 if x_min < 0 else x_min
-        for enu, plot_widget in enumerate(self.plot_handels):
-            # print(enu)
-            x = np.arange(x_min, x_max + 1)
-            y = self.data[x_min:x_max+1, enu]
+             QScrollBar::sub-line:horizontal {{
+                 background: none;
+             }}
+         """
+        self.x_scrollbar.setStyleSheet(stylesheet)
 
-            if len(y) > len(x):
-                y = y[:len(x)]
-            elif len(x) > len(y):
-                x = x[:len(y)]
-            else:
-                pass
-            plot_widget.setData(x, y)
+        self._scroller_size = int(self.min_rel_scroller_size * self.x_scrollbar.maximum())
+        self.x_scrollbar.setPageStep(self._scroller_size) # ToDo:property  / setter      set self.xrange
 
-        # self.plot_handels[0].setXRange(x_min, x_max)
-        # for ch in range(len(self.plot_handels)):
-        #     self.plot_handels[ch].setData(np.arange(x_min, x_max+1), self.data[x_min:x_max, ch])
-        # new_x = np.linspace(x_min, x_max, 1000)
-        # new_y = np.sin(new_x)
+        self.scroller_position = int(0 * self.x_scrollbar.maximum())
+        self.x_scrollbar.setValue(self.scroller_position)
 
-        # Update the plot data
-        # self.plot.setData(new_x, new_y)
+        self.x_scrollbar.valueChanged.connect(self._update_x_limits_by_scrollbar)
+
+        self.layout.addWidget(self.x_scrollbar, int(self.layout.rowCount()), 0, 1, int(self.layout.columnCount()))
+
+    def _update_x_limits_by_scrollbar(self, value): #  1-100 as set earlier
+        self.x_min = int(self.x_min_for_sb[value])
+        self.x_max = int(self.x_max_for_sb[value])
+
+        self.plot_current_d_xaxis = self.x_max - self.x_min
+        self.x_min_for_sb = np.linspace(0, self.data.shape[0]-self.plot_current_d_xaxis, 100)
+        self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, self.data.shape[0], 100)
+
+        self.plot_widgets[0].setXRange(self.x_min, self.x_max, padding=0) # triggers self._update_plot
+
+    def _update_data_in_plot(self):
+        self.x_min, self.x_max = self.plot_widgets[0].getAxis('bottom').range
+        self.x_min = 0 if self.x_min < 0 else self.x_min
+
+        if self.x_max - self.x_min > self.plot_max_d_xaxis:
+            self.x_max = self.x_min + self.plot_max_d_xaxis
+            self.plot_widgets[0].setXRange(self.x_min, self.x_max, padding=0) # triggers the same function again
+        else:
+            for enu, plot_widget in enumerate(self.plot_handels):
+                # print(enu)
+                x = np.arange(self.x_min, self.x_max + 1)
+                y = self.data[self.x_min:self.x_max+1, enu]
+
+                if len(y) > len(x):
+                    y = y[:len(x)]
+                elif len(x) > len(y):
+                    x = x[:len(y)]
+                else:
+                    pass
+                plot_widget.setData(x, y)
+
+        self.plot_current_d_xaxis = self.x_max - self.x_min
+        self.x_min_for_sb = np.linspace(0, self.data.shape[0]-self.plot_current_d_xaxis, 100)
+        self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, self.data.shape[0], 100)
+
+        y_min = np.min(self.data[self.x_min:self.x_max+1, :])
+        y_max = np.max(self.data[self.x_min:self.x_max+1, :])
+        self.plot_widgets[0].setYRange(y_min, y_max, padding=0)
 
 if __name__ == '__main__':
     # run as: run as "python3 -m wavetracker.dataloader"
