@@ -112,16 +112,11 @@ class MainWindow(QMainWindow):
         self.central_widget.setLayout(self.gridLayout)
         self.setCentralWidget(self.central_widget)
 
-        # self.show()
-
         ### data
         cfg = Configuration(args.config, verbose=args.verbose)
         data, samplerate, channels, dataset, data_shape = open_raw_data(folder=args.folder, verbose=args.verbose, **cfg.spectrogram)
         data_viewer_widget = DataViewer(data)
-        self.gridLayout.addWidget(data_viewer_widget, 0, 0, 4, 4)
-
-        # data_viewer_widget.plot_widgets[1].hide() # clears plot data
-        # data_viewer_widget.plot_widgets[1].hide() # hides plot temporarily
+        self.gridLayout.addWidget(data_viewer_widget, 0, 0, 1, 1)
 
 class DataViewer(QWidget):
     def __init__(self, data, parent=None):
@@ -140,14 +135,15 @@ class DataViewer(QWidget):
 
 
         # layout
-        self.layout = QGridLayout()
+        self.main_layout = QGridLayout()
+        self.plot_layout = QGridLayout()
         # ToDo: reaplace this with a scroll area
         # self.layout = QScrollArea()
 
-        # self.main_layout = QGridLayout()
-        # self.main_layout.addItem(self.layout)
+        self.main_layout.addLayout(self.plot_layout, 0, 0, 1, 1)
 
-        self.setLayout(self.layout)
+        # self.setLayout(self.layout)
+        self.setLayout(self.main_layout)
 
         # channel subplots
         self._create_channel_subplots()
@@ -179,7 +175,7 @@ class DataViewer(QWidget):
                 plot_widget.sigXRangeChanged.connect(self._update_data_in_plot)
 
                 subplot_h = plot_widget.plot()
-                self.layout.addWidget(plot_widget, row, col, 1, 1)
+                self.plot_layout.addWidget(plot_widget, row, col, 1, 1)
 
                 self.plot_widgets.append(plot_widget)
                 self.plot_handels.append(subplot_h)
@@ -224,7 +220,8 @@ class DataViewer(QWidget):
 
         self.x_scrollbar.valueChanged.connect(self._update_x_limits_by_scrollbar)
 
-        self.layout.addWidget(self.x_scrollbar, int(self.layout.rowCount()), 0, 1, int(self.layout.columnCount()))
+        # self.layout.addWidget(self.x_scrollbar, int(self.layout.rowCount()), 0, 1, int(self.layout.columnCount()))
+        self.main_layout.addWidget(self.x_scrollbar, 1, 0, 1, 1)
 
     def _update_x_limits_by_scrollbar(self, value): #  1-100 as set earlier
         self.x_min = int(self.x_min_for_sb[value])
