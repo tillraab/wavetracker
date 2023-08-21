@@ -136,7 +136,9 @@ class DataViewer(QWidget):
 
         # layout
         self.main_layout = QGridLayout()
-        self.plot_layout = QGridLayout()
+        # self.plot_layout = QGridLayout()
+        self.plot_layout = QScrollArea()
+
         # ToDo: reaplace this with a scroll area
         # self.layout = QScrollArea()
 
