@@ -1,3 +1,5 @@
+import queue
+
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import sys
@@ -14,7 +16,7 @@ from PyQt5 import QtCore
 from PyQt5.QtCore import *
 import pyqtgraph as pg
 import time
-import time
+import queue
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
 try:
@@ -119,6 +121,27 @@ class MainWindow(QMainWindow):
         data_viewer_widget = DataViewer(data)
         self.gridLayout.addWidget(data_viewer_widget, 0, 0, 1, 1)
 
+# class Worker(QThread):
+#     update_plot = pyqtSignal(int)
+#
+#     def __init__(self, queue):
+#         super().__init__()
+#         self.queue = queue
+#         self.running = False
+#
+#     def run(self):
+#         self.running = True
+#         while self.running:
+#             if not self.queue.empty():
+#                 task = self.queue.get()
+#                 self.update_plot.emit(task)
+#                 self.queue.task_done()
+#             else:
+#                 time.sleep(.1)  # Sleep for a short period when queue is empty
+#
+#     def stop(self):
+#         self.running = False
+
 class DataViewer(QWidget):
     def __init__(self, data, parent=None):
         super(DataViewer, self).__init__()
@@ -159,6 +182,19 @@ class DataViewer(QWidget):
         self._initial_plot()
 
         self.plot_widgets[0].sigXRangeChanged.connect(self._update_data_in_plot)
+
+        # self.queue = queue.Queue()
+        # self.worker_thread = Worker(self.queue)
+        # self.worker_thread.update_plot.connect(self.update_plot)
+        # self.worker_thread.start()
+
+    # def closeEvent(self, event): # kills thead when programm is closed
+    #     self.worker_thread.stop()
+    #     self.worker_thread.wait()
+    #     event.accept()
+
+    # def update_plot(self, task):
+    #     print("task:", task, time.time())
 
     def _initial_plot(self):
         for i in range(self.data.channels):
@@ -253,6 +289,7 @@ class DataViewer(QWidget):
                     self.x_max > self.current_data_xrange[1] - 0.1*self.current_data_xrange[2]):
 
                 for enu, plot_widget in enumerate(self.plot_handels):
+                    # self.queue.put(enu)
                     plot_x_idx0 = self.x_min - self.plot_current_d_xaxis
                     plot_x_idx0 = plot_x_idx0 if plot_x_idx0 >= 0 else 0
                     plot_x_idx1 = self.x_max + self.plot_current_d_xaxis
