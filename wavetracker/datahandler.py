@@ -121,26 +121,6 @@ class MainWindow(QMainWindow):
         data_viewer_widget = DataViewer(data)
         self.gridLayout.addWidget(data_viewer_widget, 0, 0, 1, 1)
 
-# class Worker(QThread):
-#     update_plot = pyqtSignal(int)
-#
-#     def __init__(self, queue):
-#         super().__init__()
-#         self.queue = queue
-#         self.running = False
-#
-#     def run(self):
-#         self.running = True
-#         while self.running:
-#             if not self.queue.empty():
-#                 task = self.queue.get()
-#                 self.update_plot.emit(task)
-#                 self.queue.task_done()
-#             else:
-#                 time.sleep(.1)  # Sleep for a short period when queue is empty
-#
-#     def stop(self):
-#         self.running = False
 
 class DataViewer(QWidget):
     def __init__(self, data, parent=None):
@@ -183,18 +163,6 @@ class DataViewer(QWidget):
 
         self.plot_widgets[0].sigXRangeChanged.connect(self._update_data_in_plot)
 
-        # self.queue = queue.Queue()
-        # self.worker_thread = Worker(self.queue)
-        # self.worker_thread.update_plot.connect(self.update_plot)
-        # self.worker_thread.start()
-
-    # def closeEvent(self, event): # kills thead when programm is closed
-    #     self.worker_thread.stop()
-    #     self.worker_thread.wait()
-    #     event.accept()
-
-    # def update_plot(self, task):
-    #     print("task:", task, time.time())
 
     def _initial_plot(self):
         for i in range(self.data.channels):
@@ -255,7 +223,8 @@ class DataViewer(QWidget):
         self.scroller_position = int(0 * self.x_scrollbar.maximum())
         self.x_scrollbar.setValue(self.scroller_position)
 
-        self.x_scrollbar.valueChanged.connect(self._update_x_limits_by_scrollbar)
+        # self.x_scrollbar.valueChanged.connect(self._update_x_limits_by_scrollbar)
+        self.x_scrollbar.sliderReleased.connect(lambda: self._update_x_limits_by_scrollbar(self.x_scrollbar.value()))
 
         self.main_layout.addWidget(self.x_scrollbar, 1, 0, 1, 1)
 
