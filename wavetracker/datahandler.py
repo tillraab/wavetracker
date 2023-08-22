@@ -155,14 +155,16 @@ class DataViewer(QWidget):
         self.update_by_scrollbar = False
         self._add_plot_scrollbar()
 
+        self.current_data_xrange = (0, 0, 0) # x_min, x_max, dx
         self._initial_plot()
 
         self.plot_widgets[0].sigXRangeChanged.connect(self._update_data_in_plot)
 
     def _initial_plot(self):
         for i in range(self.data.channels):
-            self.plot_handels[i].setData(np.arange(self.data.samplerate), self.data[:self.data.samplerate, i])
-            self.plot_widgets[0].setXRange(0, self.plot_current_d_xaxis)
+            self.plot_handels[i].setData(np.arange(self.data.samplerate*2), self.data[:self.data.samplerate*2, i])
+        self.plot_widgets[0].setXRange(0, self.plot_current_d_xaxis)
+        self.current_data_xrange = (0, self.data.samplerate*2, self.data.samplerate*2)
 
     def _create_channel_subplots(self):
         c = 0
@@ -247,22 +249,29 @@ class DataViewer(QWidget):
             self.x_min_for_sb = np.linspace(0, self.data.shape[0] - self.plot_current_d_xaxis, 100)
             self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, self.data.shape[0], 100)
 
-            for enu, plot_widget in enumerate(self.plot_handels):
-                plot_x_idx0 = self.x_min - self.plot_current_d_xaxis
-                plot_x_idx0 = plot_x_idx0 if plot_x_idx0 >= 0 else 0
-                plot_x_idx1 = self.x_max + self.plot_current_d_xaxis
+            if (self.x_min < self.current_data_xrange[0] + 0.1*self.current_data_xrange[2]) or (
+                    self.x_max > self.current_data_xrange[1] - 0.1*self.current_data_xrange[2]):
 
-                x = np.arange(plot_x_idx0, plot_x_idx1)
-                y = self.data[plot_x_idx0:plot_x_idx1, enu]
+                for enu, plot_widget in enumerate(self.plot_handels):
+                    plot_x_idx0 = self.x_min - self.plot_current_d_xaxis
+                    plot_x_idx0 = plot_x_idx0 if plot_x_idx0 >= 0 else 0
+                    plot_x_idx1 = self.x_max + self.plot_current_d_xaxis
 
-                if len(y) > len(x):
-                    y = y[:len(x)]
-                elif len(x) > len(y):
-                    x = x[:len(y)]
-                else:
-                    pass
-                # print(x[:10], y[:10])
-                plot_widget.setData(x, y)
+                    x = np.arange(plot_x_idx0, plot_x_idx1)
+                    y = self.data[plot_x_idx0:plot_x_idx1, enu]
+
+                    if len(y) > len(x):
+                        y = y[:len(x)]
+                    elif len(x) > len(y):
+                        x = x[:len(y)]
+                    else:
+                        pass
+                    # print(x[:10], y[:10])
+                    plot_widget.setData(x, y)
+
+                self.current_data_xrange = (self.x_min - self.plot_current_d_xaxis,
+                                            self.x_max + self.plot_current_d_xaxis,
+                                            (self.x_max - self.x_min + 2*self.plot_current_d_xaxis))
 
         y_min = np.min(self.data[self.x_min:self.x_max+1, :])
         y_max = np.max(self.data[self.x_min:self.x_max+1, :])
