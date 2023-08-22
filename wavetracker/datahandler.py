@@ -243,6 +243,10 @@ class DataViewer(QWidget):
             self.x_max = self.x_min + self.plot_max_d_xaxis
             self.plot_widgets[0].setXRange(self.x_min, self.x_max, padding=0) # triggers the same function again
         else:
+            self.plot_current_d_xaxis = self.x_max - self.x_min
+            self.x_min_for_sb = np.linspace(0, self.data.shape[0] - self.plot_current_d_xaxis, 100)
+            self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, self.data.shape[0], 100)
+
             for enu, plot_widget in enumerate(self.plot_handels):
                 plot_x_idx0 = self.x_min - self.plot_current_d_xaxis
                 plot_x_idx0 = plot_x_idx0 if plot_x_idx0 >= 0 else 0
@@ -259,10 +263,6 @@ class DataViewer(QWidget):
                     pass
                 # print(x[:10], y[:10])
                 plot_widget.setData(x, y)
-
-        self.plot_current_d_xaxis = self.x_max - self.x_min
-        self.x_min_for_sb = np.linspace(0, self.data.shape[0]-self.plot_current_d_xaxis, 100)
-        self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, self.data.shape[0], 100)
 
         y_min = np.min(self.data[self.x_min:self.x_max+1, :])
         y_max = np.max(self.data[self.x_min:self.x_max+1, :])
