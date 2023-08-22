@@ -158,7 +158,8 @@ class DataViewer(QWidget):
         self.update_by_scrollbar = False
         self._add_plot_scrollbar()
 
-        self.current_data_xrange = (0, 0, 0) # x_min, x_max, dx
+        # self.current_data_xrange = (0, 0, 0) # x_min, x_max, dx
+        self.current_data_xrange = (0, self.data.samplerate * 2, self.data.samplerate * 2)
         self._initial_plot()
 
         self.plot_widgets[0].sigXRangeChanged.connect(self._update_data_in_plot)
@@ -184,6 +185,7 @@ class DataViewer(QWidget):
 
                 subplot_h = plot_widget.plot()
                 self.content_layout.addWidget(plot_widget, row, col, 1, 1)
+                plot_widget.mouseDoubleClickEvent = lambda event, p=plot_widget: self.plot_mouse_pressed(event, p)
 
                 self.plot_widgets.append(plot_widget)
                 self.plot_handels.append(subplot_h)
@@ -192,6 +194,17 @@ class DataViewer(QWidget):
                     plot_widget.setXLink(self.plot_widgets[0])
                     plot_widget.setYLink(self.plot_widgets[0])
                 c += 1
+
+    def plot_mouse_pressed(self, event, plot):
+        plot_idx = self.content_layout.indexOf(plot)
+        doi = self.data[self.current_data_xrange[0]:self.current_data_xrange[1], plot_idx]
+        y_min, y_max = np.min(doi), np.max(doi)
+        dy = (y_max-y_max)
+        y_min -= dy*0.05
+        y_max += dy*0.05
+        for pw in self.plot_widgets:
+            pw.setYRange(y_min, y_max, padding=0)
+
 
     def _add_plot_scrollbar(self):
         self.x_scrollbar = QScrollBar()
