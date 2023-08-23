@@ -52,7 +52,7 @@ class Analysis_pipeline(object):
         self.gpu_use = gpu_use
         self.core_count = multiprocessing.cpu_count()
 
-        self.Spec = Spectrogram(self.folder, self.samplerate, self.data_shape, verbose=verbose,
+        self.Spec = Spectrogram(self.samplerate, self.data_shape, folder=self.folder, verbose=verbose,
                                 gpu_use=gpu_use, **cfg.raw, **cfg.spectrogram)
 
         self._get_signals = True

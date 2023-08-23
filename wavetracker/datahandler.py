@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from thunderfish.dataloader import DataLoader as open_data
 from IPython import embed
 from .config import Configuration
+from .spectrogram import *
 
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
@@ -131,8 +132,8 @@ class DataViewer(QWidget):
         self._rel_scroller_size = 0.1
 
         # params: data plotting
-        self.plot_max_d_xaxis = self.data.samplerate * 10
-        self.plot_current_d_xaxis = 20_000
+        self.plot_max_d_xaxis = self.data.samplerate * 2
+        self.plot_current_d_xaxis = self.data.samplerate
         self.x_min_for_sb = np.linspace(0, self.data.shape[0]-self.plot_current_d_xaxis, 100)
         self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, self.data.shape[0], 100)
 
@@ -148,30 +149,29 @@ class DataViewer(QWidget):
 
         self.main_layout.addWidget(self.scroll_area, 0, 0)
 
-        self.plots_per_row = 4
-        self.num_rows_visible = 4
+        self.plots_per_row = 3
+        self.num_rows_visible = 3
         rec = QApplication.desktop().screenGeometry()
         height = rec.height()
         self.subplot_height = height / self.num_rows_visible
-        self._create_channel_subplots()
+        self.create_channel_subplots()
 
         self.update_by_scrollbar = False
-        self._add_plot_scrollbar()
+        self.add_plot_scrollbar()
 
-        # self.current_data_xrange = (0, 0, 0) # x_min, x_max, dx
         self.current_data_xrange = (0, self.data.samplerate * 2, self.data.samplerate * 2)
-        self._initial_plot()
+        self.initial_plot()
 
-        self.plot_widgets[0].sigXRangeChanged.connect(self._update_data_in_plot)
+        self.plot_widgets[0].sigXRangeChanged.connect(self.update_data_in_all_subplotsplot)
+
+        Spec = Spectrogram(data.samplerate, data.shape, snippet_size=2**21, nfft=2**12, overlap_frac=0.9, channels = -1, gpu_use= available_GPU)
+        # Spec.snippet_spectrogram(data[self.current_data_xrange[0]:self.current_data_xrange[1], :].T, 0)
 
 
-    def _initial_plot(self):
-        for i in range(self.data.channels):
-            self.plot_handels[i].setData(np.arange(self.data.samplerate*2), self.data[:self.data.samplerate*2, i])
-        self.plot_widgets[0].setXRange(0, self.plot_current_d_xaxis)
-        self.current_data_xrange = (0, self.data.samplerate*2, self.data.samplerate*2)
-
-    def _create_channel_subplots(self):
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_D:
+            self.content_widget.hide()
+    def create_channel_subplots(self):
         c = 0
         self.plot_handels = []
         self.plot_widgets = []
@@ -185,63 +185,61 @@ class DataViewer(QWidget):
 
                 subplot_h = plot_widget.plot()
                 self.content_layout.addWidget(plot_widget, row, col, 1, 1)
-                plot_widget.mouseDoubleClickEvent = lambda event, p=plot_widget: self.plot_mouse_pressed(event, p)
+                plot_widget.mouseDoubleClickEvent = lambda event, p=plot_widget: self.adjust_ylim_to_double_clicked_subplot(event, p)
 
                 self.plot_widgets.append(plot_widget)
                 self.plot_handels.append(subplot_h)
+
+                plot_widget.setLabel('bottom', "samples")
+                plot_widget.setLabel('left', "ampl [aU]")
 
                 if c >= 1:
                     plot_widget.setXLink(self.plot_widgets[0])
                     plot_widget.setYLink(self.plot_widgets[0])
                 c += 1
 
-    def plot_mouse_pressed(self, event, plot):
-        plot_idx = self.content_layout.indexOf(plot)
-        doi = self.data[self.current_data_xrange[0]:self.current_data_xrange[1], plot_idx]
-        y_min, y_max = np.min(doi), np.max(doi)
-        dy = (y_max-y_max)
-        y_min -= dy*0.05
-        y_max += dy*0.05
-        for pw in self.plot_widgets:
-            pw.setYRange(y_min, y_max, padding=0)
+    def initial_plot(self):
+        for i in range(self.data.channels):
+            self.plot_handels[i].setData(np.arange(self.data.samplerate*2), self.data[:self.data.samplerate*2, i])
+        self.plot_widgets[0].setXRange(0, self.plot_current_d_xaxis)
+        # self.current_data_xrange = (0, self.data.samplerate*2, self.data.samplerate*2)
 
-
-    def _add_plot_scrollbar(self):
+    def add_plot_scrollbar(self):
         self.x_scrollbar = QScrollBar()
         self.x_scrollbar.setOrientation(1)  # Horizontal orientation
         self.x_scrollbar.setMinimum(0)
         self.x_scrollbar.setMaximum(99)
 
-        stylesheet = f"""
-             QScrollBar:horizontal {{
-                 background: lightgray;
-                 height: 20px;
-             }}
-
-             QScrollBar::handle:horizontal {{
-                 background: gray;
-             }}
-
-             QScrollBar::add-line:horizontal {{
-                 background: none;
-             }}
-
-             QScrollBar::sub-line:horizontal {{
-                 background: none;
-             }}
-         """
-        self.x_scrollbar.setStyleSheet(stylesheet)
+        # stylesheet = f"""
+        #      QScrollBar:horizontal {{
+        #          background: lightgray;
+        #          height: 20px;
+        #      }}
+        #
+        #      QScrollBar::handle:horizontal {{
+        #          background: gray;
+        #      }}
+        #
+        #      QScrollBar::add-line:horizontal {{
+        #          background: none;
+        #      }}
+        #
+        #      QScrollBar::sub-line:horizontal {{
+        #          background: none;
+        #      }}
+        #  """
+        # self.x_scrollbar.setStyleSheet(stylesheet)
 
         self.x_scrollbar.setPageStep(int(self._rel_scroller_size * self.x_scrollbar.maximum()))
         self.scroller_position = int(0 * self.x_scrollbar.maximum())
         self.x_scrollbar.setValue(self.scroller_position)
 
         # self.x_scrollbar.valueChanged.connect(self._update_x_limits_by_scrollbar)
-        self.x_scrollbar.sliderReleased.connect(lambda: self._update_x_limits_by_scrollbar(self.x_scrollbar.value()))
+        self.x_scrollbar.sliderReleased.connect(lambda: self.update_plot_x_limits_by_scrollbar(self.x_scrollbar.value()))
 
         self.main_layout.addWidget(self.x_scrollbar, 1, 0, 1, 1)
 
-    def _update_x_limits_by_scrollbar(self, value): #  1-100 as set earlier
+    def update_plot_x_limits_by_scrollbar(self, value): #  1-100 as set earlier
         self.x_min = int(self.x_min_for_sb[value])
         self.x_max = int(self.x_max_for_sb[value])
 
@@ -252,29 +250,40 @@ class DataViewer(QWidget):
         self.update_by_scrollbar = True
         self.plot_widgets[0].setXRange(self.x_min, self.x_max, padding=0) # triggers self._update_plot
 
-    def _update_data_in_plot(self):
+    def update_data_in_all_subplotsplot(self):
         if self.update_by_scrollbar:
             self.update_by_scrollbar = False
         else:
             self.x_min, self.x_max = self.plot_widgets[0].getAxis('bottom').range
-            self.x_min = 0 if self.x_min < 0 else self.x_min
+            self.plot_current_d_xaxis = self.x_max - self.x_min
 
-        if self.x_max - self.x_min > self.plot_max_d_xaxis:
+        # ToDo: implement solution for when we scroll beound data end
+        if self.x_min < 0:
+            self.x_min = 0
+            self.x_max = self.plot_current_d_xaxis
+            self.plot_widgets[0].setXRange(self.x_min, self.x_max, padding=0)
+        elif self.x_max - self.x_min > self.plot_max_d_xaxis:
             self.x_max = self.x_min + self.plot_max_d_xaxis
+            self.plot_current_d_xaxis = self.plot_max_d_xaxis
             self.plot_widgets[0].setXRange(self.x_min, self.x_max, padding=0) # triggers the same function again
         else:
-            self.plot_current_d_xaxis = self.x_max - self.x_min
             self.x_min_for_sb = np.linspace(0, self.data.shape[0] - self.plot_current_d_xaxis, 100)
             self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, self.data.shape[0], 100)
 
             if (self.x_min < self.current_data_xrange[0] + 0.1*self.current_data_xrange[2]) or (
                     self.x_max > self.current_data_xrange[1] - 0.1*self.current_data_xrange[2]):
 
+                plot_x_idx0 = self.x_min - self.plot_current_d_xaxis
+                plot_x_idx0 = plot_x_idx0 if plot_x_idx0 >= 0 else 0
+                plot_x_idx1 = self.x_max + self.plot_current_d_xaxis
+
+                # self.current_data_xrange = (self.x_min - self.plot_current_d_xaxis,
+                #                             self.x_max + self.plot_current_d_xaxis,
+                #                             (self.x_max - self.x_min + 2*self.plot_current_d_xaxis))
+                self.current_data_xrange = (plot_x_idx0, plot_x_idx1, plot_x_idx1 - plot_x_idx0)
+
                 for enu, plot_widget in enumerate(self.plot_handels):
-                    # self.queue.put(enu)
-                    plot_x_idx0 = self.x_min - self.plot_current_d_xaxis
-                    plot_x_idx0 = plot_x_idx0 if plot_x_idx0 >= 0 else 0
-                    plot_x_idx1 = self.x_max + self.plot_current_d_xaxis
+
 
                     x = np.arange(plot_x_idx0, plot_x_idx1)
                     y = self.data[plot_x_idx0:plot_x_idx1, enu]
@@ -285,17 +294,23 @@ class DataViewer(QWidget):
                         x = x[:len(y)]
                     else:
                         pass
-                    # print(x[:10], y[:10])
                     plot_widget.setData(x, y)
 
-                self.current_data_xrange = (self.x_min - self.plot_current_d_xaxis,
-                                            self.x_max + self.plot_current_d_xaxis,
-                                            (self.x_max - self.x_min + 2*self.plot_current_d_xaxis))
+            y_min = np.min(self.data[self.x_min:self.x_max+1, :])
+            y_max = np.max(self.data[self.x_min:self.x_max+1, :])
+            for pw in self.plot_widgets:
+                pw.setYRange(y_min, y_max, padding=0)
 
-        y_min = np.min(self.data[self.x_min:self.x_max+1, :])
-        y_max = np.max(self.data[self.x_min:self.x_max+1, :])
+    def adjust_ylim_to_double_clicked_subplot(self, event, plot):
+        plot_idx = self.content_layout.indexOf(plot)
+        doi = self.data[self.current_data_xrange[0]:self.current_data_xrange[1], plot_idx]
+        y_min, y_max = np.min(doi), np.max(doi)
+        dy = (y_max-y_max)
+        y_min -= dy*0.05
+        y_max += dy*0.05
         for pw in self.plot_widgets:
             pw.setYRange(y_min, y_max, padding=0)
+
 
 if __name__ == '__main__':
     # run as: run as "python3 -m wavetracker.dataloader"

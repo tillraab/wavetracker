@@ -73,12 +73,13 @@ def mlab_spec(data, samplerate, nfft, noverlap, detrend='constant', window='hann
 
 
 class Spectrogram(object):
-    def __init__(self, folder, samplerate, data_shape, snippet_size, nfft, overlap_frac, channels, verbose, gpu_use,
+    def __init__(self, samplerate, data_shape, snippet_size, nfft, overlap_frac, channels, gpu_use, verbose=0, folder=None,
                  core_count = None, **kwargs):
         # meta parameters
-        save_path = list(folder.split(os.sep))
-        save_path.insert(-1, 'derived_data')
-        self.save_path = os.sep.join(save_path)
+        if folder != None:
+            save_path = list(folder.split(os.sep))
+            save_path.insert(-1, 'derived_data')
+            self.save_path = os.sep.join(save_path)
 
         self.verbose = verbose
         self.kwargs = kwargs
@@ -103,44 +104,49 @@ class Spectrogram(object):
         self.sum_spec = None
         self.spec_times = None
         self.spec_freqs = None
+        self.spec = None
 
         # additional tasks
         ### sparse spec
-        self._get_sparse_spec = False
+
         self.min_freq, self.max_freq = 0, 2000
         self.monitor_res = (1920, 1080)
 
-        if not os.path.exists(os.path.join(self.save_path, 'sparse_spectra.npy')):
-            self._get_sparse_spec = True
-            if os.path.ismount(os.sep.join(self.save_path.split(os.sep)[:-2])):
-                self.fine_spec_str = os.path.join(os.sep, 'home', os.getlogin(), 'analysis', save_path[-1], 'sparse_spectra.npy')
-                if not os.path.exists(os.path.split(self.fine_spec_str)[0]):
-                    os.makedirs(os.path.split(self.fine_spec_str)[0])
-            self.sparse_spectra = None
-            self.sparse_time_borders, self.sparse_freq_borders = None, None
-            self.sparse_time, self.sparse_freq = None, None
-        else:
-            self.sparse_spectra = np.load(os.path.join(self.save_path, 'sparse_spectra.npy'))
-            self.sparse_time_borders, self.sparse_freq_borders = None, None
-            self.sparse_time = np.load(os.path.join(self.save_path, 'sparse_time.npy'))
-            self.sparse_freq = np.load(os.path.join(self.save_path, 'sparse_freq.npy'))
+        self._get_fine_spec = False
+        self._get_sparse_spec = False
 
-        ### fine spec
-        self._get_fine_spec = False # ToDo: check if already existing in save folder
-        self.fine_spec_str = os.path.join(self.save_path, 'fine_spec.npy')
-        self.buffer_spectra = None
+        if folder:
+            if not os.path.exists(os.path.join(self.save_path, 'sparse_spectra.npy')):
+                self._get_sparse_spec = True
+                if os.path.ismount(os.sep.join(self.save_path.split(os.sep)[:-2])):
+                    self.fine_spec_str = os.path.join(os.sep, 'home', os.getlogin(), 'analysis', save_path[-1], 'sparse_spectra.npy')
+                    if not os.path.exists(os.path.split(self.fine_spec_str)[0]):
+                        os.makedirs(os.path.split(self.fine_spec_str)[0])
+                self.sparse_spectra = None
+                self.sparse_time_borders, self.sparse_freq_borders = None, None
+                self.sparse_time, self.sparse_freq = None, None
+            else:
+                self.sparse_spectra = np.load(os.path.join(self.save_path, 'sparse_spectra.npy'))
+                self.sparse_time_borders, self.sparse_freq_borders = None, None
+                self.sparse_time = np.load(os.path.join(self.save_path, 'sparse_time.npy'))
+                self.sparse_freq = np.load(os.path.join(self.save_path, 'sparse_freq.npy'))
 
-        if not os.path.exists(os.path.join(self.save_path, 'fine_spec_shape.npy')):
-            self._get_fine_spec = True
-            self.fine_spec = None
-            self.fine_spec_shape = None
-            self.fine_times = np.array([])
-        else:
-            self.fine_spec_shape = np.load(os.path.join(self.save_path, 'fine_spec_shape.npy'))
-            self.fine_spec = np.memmap(self.fine_spec_str, dtype='float', mode='r',
-                                       shape=(self.fine_spec_shape[0], self.fine_spec_shape[1]), order='F')
-            self.fine_times = np.load(os.path.join(self.save_path, 'fine_times.npy'))
-            self.spec_freqs = np.load(os.path.join(self.save_path, 'fine_freqs.npy'))
+            ### fine spec
+            # ToDo: check if already existing in save folder
+            self.fine_spec_str = os.path.join(self.save_path, 'fine_spec.npy')
+            self.buffer_spectra = None
+
+            if not os.path.exists(os.path.join(self.save_path, 'fine_spec_shape.npy')):
+                self._get_fine_spec = True
+                self.fine_spec = None
+                self.fine_spec_shape = None
+                self.fine_times = np.array([])
+            else:
+                self.fine_spec_shape = np.load(os.path.join(self.save_path, 'fine_spec_shape.npy'))
+                self.fine_spec = np.memmap(self.fine_spec_str, dtype='float', mode='r',
+                                           shape=(self.fine_spec_shape[0], self.fine_spec_shape[1]), order='F')
+                self.fine_times = np.load(os.path.join(self.save_path, 'fine_times.npy'))
+                self.spec_freqs = np.load(os.path.join(self.save_path, 'fine_freqs.npy'))
         self.terminate = False
 
     @property
@@ -298,7 +304,7 @@ def main():
                                                                     **cfg.spectrogram)
 
     # Spectrogram
-    Spec = Spectrogram(args.folder, samplerate, data_shape, verbose=args.verbose,
+    Spec = Spectrogram(samplerate, data_shape, folder=args.folder, verbose=args.verbose,
                        gpu_use=not args.cpu and available_GPU, **cfg.raw, **cfg.spectrogram)
     if args.renew:
         Spec._get_sparse_spec, Spec._get_fine_spec = True, True
