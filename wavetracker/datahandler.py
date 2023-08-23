@@ -182,27 +182,41 @@ class DataViewer(QWidget):
         # Spec.snippet_spectrogram(data[self.current_data_xrange[0]:self.current_data_xrange[1], :].T, 0)
 
     def switch_to_spectrograms(self):
-        self.Spec.snippet_spectrogram(self.data[self.current_data_xrange[0]:self.current_data_xrange[1], :].T, 0)
-
+        self.Spec.snippet_spectrogram(self.data[self.current_data_xrange[0]:self.current_data_xrange[1], :].T, self.current_data_xrange[0]/self.data.samplerate)
         print(self.current_data_xrange[2]/self.data.samplerate)
+
+        f_idx_0 = 0
+        f_idx_1 = np.where(self.Spec.spec_freqs < 2000)[0][-1]
         for ch in range(self.data.channels):
-            self.plot_handels_spec[ch].setImage(decibel(self.Spec.spec[ch].T), levels=[-100, -50])
+            # self.plot_handels_spec[ch].setImage(decibel(self.Spec.spec[ch].T), levels=[-100, -50])
+            # self.plot_handels_spec[ch].setRect(
+            #     pg.QtCore.QRectF(self.Spec.spec_times[0], self.Spec.spec_freqs[0],
+            #                      self.Spec.times[-1] - self.Spec.times[0],
+            #                      self.Spec.spec_freqs[-1] - self.Spec.spec_freqs[0]))
+
+            self.plot_handels_spec[ch].setImage(decibel(self.Spec.spec[ch, f_idx_0:f_idx_1, :].T), levels=[-100, -50])
             self.plot_handels_spec[ch].setRect(
-                pg.QtCore.QRectF(self.Spec.spec_times[0], self.Spec.spec_freqs[0], self.Spec.times[-1] - self.Spec.times[0], self.Spec.spec_freqs[-1] - self.Spec.spec_freqs[0]))
-            # self.plot_handels_spec[ch].setColorMap(pg.colormap.ColorMap("viridis").getLookupTable())
+                pg.QtCore.QRectF(self.Spec.spec_times[0], self.Spec.spec_freqs[f_idx_0],
+                                 self.Spec.times[-1] - self.Spec.times[0],
+                                 self.Spec.spec_freqs[f_idx_1] - self.Spec.spec_freqs[f_idx_0]))
 
-
+        self.plot_widgets_spec[0].setXRange(self.Spec.spec_times[0], self.Spec.spec_times[-1])
+        self.plot_widgets_spec[0].setYRange(self.Spec.spec_freqs[f_idx_0], self.Spec.spec_freqs[f_idx_1])
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_D:
             if not self.scroll_area_traces.isHidden():
+                scroll_val = self.scroll_area_traces.verticalScrollBar().value()
                 self.switch_to_spectrograms()
                 self.scroll_area_spec.show()
                 self.scroll_area_traces.hide()
+                self.scroll_area_spec.verticalScrollBar().setValue(scroll_val)
             else:
+                scroll_val = self.scroll_area_spec.verticalScrollBar().value()
                 for ch in range(self.data.channels):
                     self.plot_handels_spec[ch].setImage()
                 self.scroll_area_traces.show()
                 self.scroll_area_spec.hide()
+                self.scroll_area_traces.verticalScrollBar().setValue(scroll_val)
 
     def create_channel_subplots(self):
         c = 0
@@ -230,10 +244,6 @@ class DataViewer(QWidget):
                 self.plot_widgets_trace.append(plot_widget)
                 self.plot_handels_trace.append(subplot_h)
 
-                if c >= 1:
-                    plot_widget.setXLink(self.plot_widgets_trace[0])
-                    plot_widget.setYLink(self.plot_widgets_trace[0])
-
 
                 ####
                 plot_widget_s = pg.PlotWidget()
@@ -247,7 +257,15 @@ class DataViewer(QWidget):
                 self.content_layout_spec.addWidget(plot_widget_s, row, col, 1, 1)
 
                 self.plot_widgets_spec.append(plot_widget_s)
-                self.plot_handels_spec.append(subplot_h_s) # ToDo: add whatever needs to be added here
+                self.plot_handels_spec.append(subplot_h_s)
+
+                if c >= 1:
+                    plot_widget.setXLink(self.plot_widgets_trace[0])
+                    plot_widget.setYLink(self.plot_widgets_trace[0])
+
+                    plot_widget_s.setXLink(self.plot_widgets_spec[0])
+                    plot_widget_s.setYLink(self.plot_widgets_spec[0])
+
                 c += 1
 
     def initial_plot(self):
@@ -348,10 +366,10 @@ class DataViewer(QWidget):
                         pass
                     plot_widget.setData(x, y)
 
-            y_min = np.min(self.data[self.x_min:self.x_max+1, :])
-            y_max = np.max(self.data[self.x_min:self.x_max+1, :])
-            for pw in self.plot_widgets_trace:
-                pw.setYRange(y_min, y_max, padding=0)
+        y_min = np.min(self.data[self.x_min:self.x_max+1, :])
+        y_max = np.max(self.data[self.x_min:self.x_max+1, :])
+        for pw in self.plot_widgets_trace:
+            pw.setYRange(y_min, y_max, padding=0)
 
     def adjust_ylim_to_double_clicked_subplot(self, event, plot):
         plot_idx = self.content_layout_traces.indexOf(plot)
