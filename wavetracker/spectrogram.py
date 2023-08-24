@@ -60,7 +60,6 @@ def tensorflow_spec(data, samplerate, nfft, step, verbose = 1, **kwargs):
     freqs[-1] = samplerate / 2
     # ToDo: this is not completely correct
     times = np.linspace(0, int(tf.shape(data)[1]) / samplerate, int(spectra.shape[1]), endpoint=False)
-
     return conversion_to_old_scale(spectra), freqs, times
 
 
@@ -176,8 +175,10 @@ class Spectrogram(object):
 
 
     def snippet_spectrogram(self, data_snippet, snipptet_t0):
+        # ToDo: I changed some things here so that the input can be the same for both pathways
+
         if self.gpu:
-            self.spec, self.spec_freqs, spec_times = tensorflow_spec(tf.transpose(data_snippet), samplerate=self.samplerate,
+            self.spec, self.spec_freqs, spec_times = tensorflow_spec(data_snippet, samplerate=self.samplerate,
                                                              verbose=self.verbose, step=self.step, nfft = self.nfft,
                                                              **self.kwargs)
             self.spec = np.swapaxes(self.spec, 1, 2)
