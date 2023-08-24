@@ -193,6 +193,7 @@ class Analysis_pipeline(object):
                 self.Spec.terminate = True
 
             t0_spec = time.time()
+            # ToDo: check if i need to transpose this ?!
             self.Spec.snippet_spectrogram(snippet_data, snipptet_t0=snippet_t0)
             t1_spec = time.time()
 
