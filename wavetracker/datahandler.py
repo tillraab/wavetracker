@@ -122,8 +122,10 @@ class MainWindow(QMainWindow):
         data_viewer_widget = DataViewer(data)
         self.gridLayout.addWidget(data_viewer_widget, 0, 0, 1, 1)
 
+        data_viewer_widget.kill.connect(self.close)
 
 class DataViewer(QWidget):
+    kill = pyqtSignal()
     def __init__(self, data, parent=None):
         super(DataViewer, self).__init__()
         self.data = data
@@ -134,10 +136,12 @@ class DataViewer(QWidget):
         # params: data plotting
         self.plot_max_d_xaxis = self.data.samplerate * 2
         self.plot_current_d_xaxis = self.data.samplerate
+        self.current_data_xrange = (0, self.data.samplerate * 2, self.data.samplerate * 2)
         self.x_min_for_sb = np.linspace(0, self.data.shape[0]-self.plot_current_d_xaxis, 100)
         self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, self.data.shape[0], 100)
+        self.update_xrange_by_scrollbar = False
 
-        # layout
+        ### layout -- traces per channel
         self.main_layout = QGridLayout(self)
 
         self.scroll_area_traces = QScrollArea() # this is a widget
@@ -150,7 +154,7 @@ class DataViewer(QWidget):
 
         self.main_layout.addWidget(self.scroll_area_traces, 0, 0)
 
-        ###########################################
+        ### layout -- specs per channel
         self.scroll_area_spec = QScrollArea() # this is a widget
         self.scroll_area_spec.setWidgetResizable(True)
         self.scroll_area_spec.setVerticalScrollBarPolicy(2)  # Always show scrollbar
@@ -161,93 +165,38 @@ class DataViewer(QWidget):
 
         self.main_layout.addWidget(self.scroll_area_spec, 0, 0)
         self.scroll_area_spec.hide()
-        ###########################################
 
+        ### layout -- single spec
         self.content_widget_sum_spec = QWidget()
         self.content_layout_sum_spec = QGridLayout(self.content_widget_sum_spec)
 
         self.main_layout.addWidget(self.content_widget_sum_spec, 0, 0)
         self.content_widget_sum_spec.hide()
 
-        ###########################################
-
+        ### content -- create plots
         self.plots_per_row = 3
         self.num_rows_visible = 3
         rec = QApplication.desktop().screenGeometry()
         height = rec.height()
         self.subplot_height = height / self.num_rows_visible
-        self.create_channel_subplots()
+        self.setup_plot_environment()
 
-        self.update_by_scrollbar = False
-        self.add_plot_scrollbar()
+        ### scrollbar for x lims
+        self.add_scrollbar_to_adjust_xrange()
 
-        self.current_data_xrange = (0, self.data.samplerate * 2, self.data.samplerate * 2)
-        self.initial_plot()
+        ### fill plots
+        self.initial_trace_plot()
 
+        ### functions tiggered by actions
         self.plot_widgets_trace[0].sigXRangeChanged.connect(self.update_data_in_all_subplotsplot)
+        self.power_hist.sigLevelsChanged.connect(self.lookupTableChanged)
 
+        ### initialize spectrogram
         self.Spec = Spectrogram(data.samplerate, data.shape, snippet_size=2**21, nfft=2**12, overlap_frac=0.9, channels = -1, gpu_use= available_GPU)
         self.Spec.snippet_spectrogram(self.data[self.current_data_xrange[0]:self.current_data_xrange[1], :].T,
                                       self.current_data_xrange[0] / self.data.samplerate)
 
-        # Spec.snippet_spectrogram(data[self.current_data_xrange[0]:self.current_data_xrange[1], :].T, 0)
-
-    def switch_to_spectrograms(self):
-        self.Spec.snippet_spectrogram(self.data[self.current_data_xrange[0]:self.current_data_xrange[1], :].T, self.current_data_xrange[0]/self.data.samplerate)
-        print(self.current_data_xrange[2]/self.data.samplerate)
-        f_idx_0 = 0
-        f_idx_1 = np.where(self.Spec.spec_freqs < 2000)[0][-1]
-        for ch in range(self.data.channels):
-
-            self.plot_handels_spec[ch].setImage(decibel(self.Spec.spec[ch, f_idx_0:f_idx_1, :].T))
-            self.plot_handels_spec[ch].setRect(
-                pg.QtCore.QRectF(self.Spec.spec_times[0], self.Spec.spec_freqs[f_idx_0],
-                                 self.Spec.times[-1] - self.Spec.times[0],
-                                 self.Spec.spec_freqs[f_idx_1] - self.Spec.spec_freqs[f_idx_0]))
-
-        self.plot_widgets_spec[0].setXRange(self.Spec.spec_times[0], self.Spec.spec_times[-1])
-        self.plot_widgets_spec[0].setYRange(self.Spec.spec_freqs[f_idx_0], self.Spec.spec_freqs[f_idx_1])
-
-    def keyPressEvent(self, event):
-        if event.key() == Qt.Key_D:
-            if not self.scroll_area_traces.isHidden():
-                scroll_val = self.scroll_area_traces.verticalScrollBar().value()
-                self.switch_to_spectrograms()
-                self.scroll_area_spec.show()
-                self.scroll_area_traces.hide()
-                self.scroll_area_spec.verticalScrollBar().setValue(scroll_val)
-            else:
-                scroll_val = self.scroll_area_spec.verticalScrollBar().value()
-                for ch in range(self.data.channels):
-                    self.plot_handels_spec[ch].setImage()
-                self.scroll_area_traces.show()
-                self.scroll_area_spec.hide()
-                self.scroll_area_traces.verticalScrollBar().setValue(scroll_val)
-
-        if event.key() == Qt.Key_S:
-            if not self.scroll_area_traces.isHidden():
-                self.scroll_area_traces.hide()
-            if not self.scroll_area_spec.isHidden():
-                for ch in range(self.data.channels):
-                    self.plot_handels_spec[ch].setImage()
-                self.scroll_area_spec.hide()
-
-            f_idx_0 = 0
-            f_idx_1 = np.where(self.Spec.spec_freqs < 2000)[0][-1]
-            self.sum_spec_img.setImage(decibel(self.Spec.sum_spec[f_idx_0:f_idx_1, :].T))
-            self.sum_spec_img.setRect(
-                pg.QtCore.QRectF(self.Spec.spec_times[0], self.Spec.spec_freqs[f_idx_0],
-                                 self.Spec.times[-1] - self.Spec.times[0],
-                                 self.Spec.spec_freqs[f_idx_1] - self.Spec.spec_freqs[f_idx_0]))
-            self.content_widget_sum_spec.show()
-
-    def lookupTableChanged(self):
-        # Obtain the new lookup table values
-        levels = self.hist.getLevels()
-        self.x_min, self.v_max = levels
-        print("New Levels:", levels)
-
-    def create_channel_subplots(self):
+    def setup_plot_environment(self):
         c = 0
         self.plot_handels_trace = []
         self.plot_widgets_trace = []
@@ -255,95 +204,59 @@ class DataViewer(QWidget):
         self.plot_handels_spec = []
         self.plot_widgets_spec = []
 
-        for row in range(self.data.channels//self.plots_per_row + 1):
-            for col in range(self.plots_per_row):
-                if c >= self.data.channels:
-                    break
+        for channel in range(self.data.channels):
+            row, col = channel // self.plots_per_row, channel % self.plots_per_row
 
-                plot_widget = pg.PlotWidget()
-                plot_widget.setMinimumHeight(int(self.subplot_height))
-                plot_widget.mouseDoubleClickEvent = lambda event, p=plot_widget: self.adjust_ylim_to_double_clicked_subplot(event, p)
-                plot_widget.setLabel('bottom', "samples")
-                plot_widget.setLabel('left', "ampl [aU]")
+            plot_widget = pg.PlotWidget()
+            plot_widget.setMinimumHeight(int(self.subplot_height))
+            plot_widget.mouseDoubleClickEvent = lambda event, p=plot_widget: self.adjust_ylim_to_double_clicked_subplot(event, p)
+            plot_widget.setLabel('bottom', "samples")
+            plot_widget.setLabel('left', "ampl [aU]")
 
-                subplot_h = plot_widget.plot()
+            subplot_h = plot_widget.plot()
+            self.content_layout_traces.addWidget(plot_widget, row, col, 1, 1)
 
-                self.content_layout_traces.addWidget(plot_widget, row, col, 1, 1)
+            self.plot_widgets_trace.append(plot_widget)
+            self.plot_handels_trace.append(subplot_h)
 
-                self.plot_widgets_trace.append(plot_widget)
-                self.plot_handels_trace.append(subplot_h)
+            ### spec plots
+            plot_widget_s = pg.PlotWidget()
+            plot_widget_s.setMinimumHeight(int(self.subplot_height))
+            plot_widget_s.setLabel('bottom', "time [s]")
+            plot_widget_s.setLabel('left', "freq [Hz]")
 
+            subplot_h_s = pg.ImageItem()
+            plot_widget_s.addItem(subplot_h_s)
+            self.content_layout_spec.addWidget(plot_widget_s, row, col, 1, 1)
 
-                ####
-                plot_widget_s = pg.PlotWidget()
-                plot_widget_s.setMinimumHeight(int(self.subplot_height))
-                plot_widget_s.setLabel('bottom', "time [s]")
-                plot_widget_s.setLabel('left', "freq [Hz]")
+            self.plot_widgets_spec.append(plot_widget_s)
+            self.plot_handels_spec.append(subplot_h_s)
 
-                subplot_h_s = pg.ImageItem()
-                # subplot_h_s = pg.image(np.array([[0]]))
-                plot_widget_s.addItem(subplot_h_s)
+            ### set share axes
+            if channel >= 1:
+                plot_widget.setXLink(self.plot_widgets_trace[0])
+                plot_widget.setYLink(self.plot_widgets_trace[0])
 
-                self.content_layout_spec.addWidget(plot_widget_s, row, col, 1, 1)
+                plot_widget_s.setXLink(self.plot_widgets_spec[0])
+                plot_widget_s.setYLink(self.plot_widgets_spec[0])
 
-                self.plot_widgets_spec.append(plot_widget_s)
-                self.plot_handels_spec.append(subplot_h_s)
-
-                if c >= 1:
-                    plot_widget.setXLink(self.plot_widgets_trace[0])
-                    plot_widget.setYLink(self.plot_widgets_trace[0])
-
-                    plot_widget_s.setXLink(self.plot_widgets_spec[0])
-                    plot_widget_s.setYLink(self.plot_widgets_spec[0])
-
-                c += 1
-
-        ####
+        ### single spec plot with histogram
         win = pg.GraphicsLayoutWidget()
-        p1 = win.addPlot(title="")
-
         self.sum_spec_img = pg.ImageItem()
+        p1 = win.addPlot(title="")
         p1.addItem(self.sum_spec_img)
 
-        self.hist = pg.HistogramLUTItem()
-        self.hist.setImageItem(self.sum_spec_img)
-        self.hist.sigLevelsChanged.connect(self.lookupTableChanged)
-        win.addItem(self.hist)
+        self.power_hist = pg.HistogramLUTItem()
+        self.power_hist.setImageItem(self.sum_spec_img)
+        win.addItem(self.power_hist)
 
         self.content_layout_sum_spec.addWidget(win, 0, 0)
 
-
-    def initial_plot(self):
-        for i in range(self.data.channels):
-            self.plot_handels_trace[i].setData(np.arange(self.data.samplerate * 2), self.data[:self.data.samplerate * 2, i])
-        self.plot_widgets_trace[0].setXRange(0, self.plot_current_d_xaxis)
-        # self.current_data_xrange = (0, self.data.samplerate*2, self.data.samplerate*2)
-
-    def add_plot_scrollbar(self):
+    def add_scrollbar_to_adjust_xrange(self):
         self.x_scrollbar = QScrollBar()
         self.x_scrollbar.setOrientation(1)  # Horizontal orientation
         self.x_scrollbar.setMinimum(0)
         self.x_scrollbar.setMaximum(99)
-
-        # stylesheet = f"""
-        #      QScrollBar:horizontal {{
-        #          background: lightgray;
-        #          height: 20px;
-        #      }}
-        #
-        #      QScrollBar::handle:horizontal {{
-        #          background: gray;
-        #      }}
-        #
-        #      QScrollBar::add-line:horizontal {{
-        #          background: none;
-        #      }}
-        #
-        #      QScrollBar::sub-line:horizontal {{
-        #          background: none;
-        #      }}
-        #  """
-        # self.x_scrollbar.setStyleSheet(stylesheet)
 
         self.x_scrollbar.setPageStep(int(self._rel_scroller_size * self.x_scrollbar.maximum()))
         self.scroller_position = int(0 * self.x_scrollbar.maximum())
@@ -354,6 +267,11 @@ class DataViewer(QWidget):
 
         self.main_layout.addWidget(self.x_scrollbar, 1, 0, 1, 1)
 
+    def initial_trace_plot(self):
+        for i in range(self.data.channels):
+            self.plot_handels_trace[i].setData(np.arange(self.data.samplerate * 2), self.data[:self.data.samplerate * 2, i])
+        self.plot_widgets_trace[0].setXRange(0, self.plot_current_d_xaxis)
+
     def update_plot_x_limits_by_scrollbar(self, value): #  1-100 as set earlier
         self.x_min = int(self.x_min_for_sb[value])
         self.x_max = int(self.x_max_for_sb[value])
@@ -362,12 +280,12 @@ class DataViewer(QWidget):
         self.x_min_for_sb = np.linspace(0, self.data.shape[0]-self.plot_current_d_xaxis, 100)
         self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, self.data.shape[0], 100)
 
-        self.update_by_scrollbar = True
+        self.update_xrange_by_scrollbar = True
         self.plot_widgets_trace[0].setXRange(self.x_min, self.x_max, padding=0) # triggers self._update_plot
 
     def update_data_in_all_subplotsplot(self):
-        if self.update_by_scrollbar:
-            self.update_by_scrollbar = False
+        if self.update_xrange_by_scrollbar:
+            self.update_xrange_by_scrollbar = False
         else:
             self.x_min, self.x_max = self.plot_widgets_trace[0].getAxis('bottom').range
             self.plot_current_d_xaxis = self.x_max - self.x_min
@@ -416,6 +334,96 @@ class DataViewer(QWidget):
         for pw in self.plot_widgets_trace:
             pw.setYRange(y_min, y_max, padding=0)
 
+    def switch_to_spectrograms(self):
+        self.Spec.snippet_spectrogram(self.data[self.current_data_xrange[0]:self.current_data_xrange[1], :].T, self.current_data_xrange[0]/self.data.samplerate)
+        print(self.current_data_xrange[2]/self.data.samplerate)
+        f_idx_0 = 0
+        f_idx_1 = np.where(self.Spec.spec_freqs < 2000)[0][-1]
+        for ch in range(self.data.channels):
+
+            self.plot_handels_spec[ch].setImage(decibel(self.Spec.spec[ch, f_idx_0:f_idx_1, :].T))
+            self.plot_handels_spec[ch].setRect(
+                pg.QtCore.QRectF(self.Spec.spec_times[0], self.Spec.spec_freqs[f_idx_0],
+                                 self.Spec.times[-1] - self.Spec.times[0],
+                                 self.Spec.spec_freqs[f_idx_1] - self.Spec.spec_freqs[f_idx_0]))
+
+        self.plot_widgets_spec[0].setXRange(self.Spec.spec_times[0], self.Spec.spec_times[-1])
+        self.plot_widgets_spec[0].setYRange(self.Spec.spec_freqs[f_idx_0], self.Spec.spec_freqs[f_idx_1])
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_T:
+            if self.scroll_area_traces.isHidden():
+                if not self.scroll_area_spec.isHidden():
+                    self.scroll_area_spec.hide()
+                if not self.content_widget_sum_spec.isHidden():
+                    self.content_widget_sum_spec.hide()
+
+                # ToDo: trigger function to do all neccessary processes
+                self.scroll_area_traces.show()
+        if event.key() == Qt.Key_S:
+            if self.scroll_area_spec.isHidden():
+                if not self.scroll_area_traces.isHidden():
+                    self.scroll_area_traces.hide()
+                if not self.content_widget_sum_spec.isHidden():
+                    self.content_widget_sum_spec.hide()
+
+                # ToDo: trigger function to do all neccessary processes
+                self.switch_to_spectrograms()
+                self.scroll_area_spec.show()
+            elif self.content_widget_sum_spec.isHidden():
+
+                f_idx_0 = 0
+                f_idx_1 = np.where(self.Spec.spec_freqs < 2000)[0][-1]
+                self.sum_spec_img.setImage(decibel(self.Spec.sum_spec[f_idx_0:f_idx_1, :].T))
+                self.sum_spec_img.setRect(
+                    pg.QtCore.QRectF(self.Spec.spec_times[0], self.Spec.spec_freqs[f_idx_0],
+                                     self.Spec.times[-1] - self.Spec.times[0],
+                                     self.Spec.spec_freqs[f_idx_1] - self.Spec.spec_freqs[f_idx_0]))
+                self.content_widget_sum_spec.show()
+
+                self.scroll_area_spec.hide()
+        if event.key() == Qt.Key_Q:
+            self.kill.emit()
+
+        # if event.key() == Qt.Key_T:
+        #     if not self.scroll_area_traces.isHidden():
+        #         scroll_val = self.scroll_area_traces.verticalScrollBar().value()
+        #         self.switch_to_spectrograms()
+        #         self.scroll_area_spec.show()
+        #         self.scroll_area_traces.hide()
+        #         self.scroll_area_spec.verticalScrollBar().setValue(scroll_val)
+        #     else:
+        #         scroll_val = self.scroll_area_spec.verticalScrollBar().value()
+        #         for ch in range(self.data.channels):
+        #             self.plot_handels_spec[ch].setImage()
+        #         self.scroll_area_traces.show()
+        #         self.scroll_area_spec.hide()
+        #         self.scroll_area_traces.verticalScrollBar().setValue(scroll_val)
+        #
+        # if event.key() == Qt.Key_S:
+        #     if not self.scroll_area_traces.isHidden():
+        #         self.scroll_area_traces.hide()
+        #     if not self.scroll_area_spec.isHidden():
+        #         for ch in range(self.data.channels):
+        #             self.plot_handels_spec[ch].setImage()
+        #
+        #         self.scroll_area_spec.hide()
+        #
+        #     f_idx_0 = 0
+        #     f_idx_1 = np.where(self.Spec.spec_freqs < 2000)[0][-1]
+        #     self.sum_spec_img.setImage(decibel(self.Spec.sum_spec[f_idx_0:f_idx_1, :].T))
+        #     self.sum_spec_img.setRect(
+        #         pg.QtCore.QRectF(self.Spec.spec_times[0], self.Spec.spec_freqs[f_idx_0],
+        #                          self.Spec.times[-1] - self.Spec.times[0],
+        #                          self.Spec.spec_freqs[f_idx_1] - self.Spec.spec_freqs[f_idx_0]))
+        #     self.content_widget_sum_spec.show()
+
+    def lookupTableChanged(self):
+        # Obtain the new lookup table values
+        levels = self.power_hist.getLevels()
+        self.x_min, self.v_max = levels
+        print("New Levels:", levels)
+
     def adjust_ylim_to_double_clicked_subplot(self, event, plot):
         plot_idx = self.content_layout_traces.indexOf(plot)
         doi = self.data[self.current_data_xrange[0]:self.current_data_xrange[1], plot_idx]
@@ -428,9 +436,6 @@ class DataViewer(QWidget):
 
 
 if __name__ == '__main__':
-    # run as: run as "python3 -m wavetracker.dataloader"
-
-    # example_data = "/home/raab/data/2023-02-09-08_16"
     example_data = "/data1/data/2023_Breeding/raw_data/2023-02-09-08_16"
     parser = argparse.ArgumentParser(description='Evaluated electrode array recordings with multiple fish.')
     parser.add_argument('-f', '--folder', type=str, help='file to be analyzed', default=example_data)
