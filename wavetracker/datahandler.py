@@ -134,12 +134,13 @@ class DataViewer(QWidget):
         self._rel_scroller_size = 0.1
 
         # params: data plotting
-        self.plot_max_d_xaxis = self.data.samplerate * 2
-        self.plot_current_d_xaxis = self.data.samplerate
-        self.current_data_xrange = (0, self.data.samplerate * 2, self.data.samplerate * 2)
-        self.x_min_for_sb = np.linspace(0, self.data.shape[0]-self.plot_current_d_xaxis, 100)
-        self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, self.data.shape[0], 100)
+        self.plot_max_d_xaxis = 2.
+        self.plot_current_d_xaxis = 1.
+        self.current_data_xrange = (0, 2., 2.)
+        self.x_min_for_sb = np.linspace(0, (self.data.shape[0]-self.plot_current_d_xaxis*self.data.samplerate) / self.data.samplerate, 100)
+        self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, (self.data.shape[0]-self.plot_current_d_xaxis*self.data.samplerate) / self.data.samplerate, 100)
         self.update_xrange_by_scrollbar = False
+        self.v_min, self.v_max = -100, -50
 
         ### layout -- traces per channel
         self.main_layout = QGridLayout(self)
@@ -193,11 +194,11 @@ class DataViewer(QWidget):
 
         ### initialize spectrogram
         self.Spec = Spectrogram(data.samplerate, data.shape, snippet_size=2**21, nfft=2**12, overlap_frac=0.9, channels = -1, gpu_use= available_GPU)
-        self.Spec.snippet_spectrogram(self.data[self.current_data_xrange[0]:self.current_data_xrange[1], :].T,
-                                      self.current_data_xrange[0] / self.data.samplerate)
+        self.Spec.snippet_spectrogram(self.data[int(self.current_data_xrange[0] * self.data.samplerate):
+                                                int(self.current_data_xrange[1] * self.data.samplerate), :].T,
+                                      self.current_data_xrange[0])
 
     def setup_plot_environment(self):
-        c = 0
         self.plot_handels_trace = []
         self.plot_widgets_trace = []
 
@@ -210,7 +211,7 @@ class DataViewer(QWidget):
             plot_widget = pg.PlotWidget()
             plot_widget.setMinimumHeight(int(self.subplot_height))
             plot_widget.mouseDoubleClickEvent = lambda event, p=plot_widget: self.adjust_ylim_to_double_clicked_subplot(event, p)
-            plot_widget.setLabel('bottom', "samples")
+            plot_widget.setLabel('bottom', "time [s]")
             plot_widget.setLabel('left', "ampl [aU]")
 
             subplot_h = plot_widget.plot()
@@ -269,18 +270,23 @@ class DataViewer(QWidget):
 
     def initial_trace_plot(self):
         for i in range(self.data.channels):
-            self.plot_handels_trace[i].setData(np.arange(self.data.samplerate * 2), self.data[:self.data.samplerate * 2, i])
+            self.plot_handels_trace[i].setData(np.arange(self.data.samplerate * 2)/self.data.samplerate, self.data[:self.data.samplerate * 2, i])
         self.plot_widgets_trace[0].setXRange(0, self.plot_current_d_xaxis)
 
     def update_plot_x_limits_by_scrollbar(self, value): #  1-100 as set earlier
-        self.x_min = int(self.x_min_for_sb[value])
-        self.x_max = int(self.x_max_for_sb[value])
+        self.x_min = self.x_min_for_sb[value]
+        self.x_max = self.x_max_for_sb[value]
 
-        self.plot_current_d_xaxis = self.x_max - self.x_min
-        self.x_min_for_sb = np.linspace(0, self.data.shape[0]-self.plot_current_d_xaxis, 100)
-        self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, self.data.shape[0], 100)
+        # self.plot_current_d_xaxis = self.x_max - self.x_min
+
+        # This function does not change self.plot_curent_d_xais ... so these steps are not necessary
+        # self.x_min_for_sb = np.linspace(0, self.data.shape[0]-self.plot_current_d_xaxis, 100)
+        # self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, self.data.shape[0], 100)
+        # self.x_min_for_sb = np.linspace(0, (self.data.shape[0]-self.plot_current_d_xaxis*self.data.samplerate) / self.data.samplerate, 100)
+        # self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, (self.data.shape[0]-self.plot_current_d_xaxis*self.data.samplerate) / self.data.samplerate, 100)
 
         self.update_xrange_by_scrollbar = True
+
         self.plot_widgets_trace[0].setXRange(self.x_min, self.x_max, padding=0) # triggers self._update_plot
 
     def update_data_in_all_subplotsplot(self):
@@ -300,23 +306,25 @@ class DataViewer(QWidget):
             self.plot_current_d_xaxis = self.plot_max_d_xaxis
             self.plot_widgets_trace[0].setXRange(self.x_min, self.x_max, padding=0) # triggers the same function again
         else:
-            self.x_min_for_sb = np.linspace(0, self.data.shape[0] - self.plot_current_d_xaxis, 100)
-            self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, self.data.shape[0], 100)
+            print('2')
+            # self.x_min_for_sb = np.linspace(0, self.data.shape[0] - self.plot_current_d_xaxis, 100)
+            # self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, self.data.shape[0], 100)
+            self.x_min_for_sb = np.linspace(0, (self.data.shape[0]-self.plot_current_d_xaxis*self.data.samplerate) / self.data.samplerate, 100)
+            self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, (self.data.shape[0]) / self.data.samplerate, 100)
 
             if (self.x_min < self.current_data_xrange[0] + 0.1*self.current_data_xrange[2]) or (
                     self.x_max > self.current_data_xrange[1] - 0.1*self.current_data_xrange[2]):
 
-                plot_x_idx0 = self.x_min - self.plot_current_d_xaxis
-                plot_x_idx0 = plot_x_idx0 if plot_x_idx0 >= 0 else 0
-                plot_x_idx1 = self.x_max + self.plot_current_d_xaxis
+                plot_x_0 = self.x_min - self.plot_current_d_xaxis
+                plot_x_0 = plot_x_0 if plot_x_0 >= 0 else 0
+                plot_x_1 = self.x_max + self.plot_current_d_xaxis
 
-                # self.current_data_xrange = (self.x_min - self.plot_current_d_xaxis,
-                #                             self.x_max + self.plot_current_d_xaxis,
-                #                             (self.x_max - self.x_min + 2*self.plot_current_d_xaxis))
-                self.current_data_xrange = (plot_x_idx0, plot_x_idx1, plot_x_idx1 - plot_x_idx0)
+                self.current_data_xrange = (plot_x_0, plot_x_1, plot_x_1 - plot_x_0)
+
+                plot_x_idx0 = int(plot_x_0 * self.data.samplerate)
+                plot_x_idx1 = int(plot_x_1 * self.data.samplerate)
 
                 for enu, plot_widget in enumerate(self.plot_handels_trace):
-
 
                     x = np.arange(plot_x_idx0, plot_x_idx1)
                     y = self.data[plot_x_idx0:plot_x_idx1, enu]
@@ -327,21 +335,28 @@ class DataViewer(QWidget):
                         x = x[:len(y)]
                     else:
                         pass
-                    plot_widget.setData(x, y)
+                    plot_widget.setData(x / self.data.samplerate, y)
 
-        y_min = np.min(self.data[self.x_min:self.x_max+1, :])
-        y_max = np.max(self.data[self.x_min:self.x_max+1, :])
+        y_min = np.min(self.data[int(self.x_min * self.data.samplerate):int(self.x_max * self.data.samplerate) + 1, :])
+        y_max = np.max(self.data[int(self.x_min * self.data.samplerate):int(self.x_max * self.data.samplerate) + 1, :])
+        print(y_min, y_max)
+        print(self.current_data_xrange)
+        print(self.x_min, self.x_max)
         for pw in self.plot_widgets_trace:
             pw.setYRange(y_min, y_max, padding=0)
 
     def switch_to_spectrograms(self):
-        self.Spec.snippet_spectrogram(self.data[self.current_data_xrange[0]:self.current_data_xrange[1], :].T, self.current_data_xrange[0]/self.data.samplerate)
-        print(self.current_data_xrange[2]/self.data.samplerate)
+        # sself.Spec.snippet_spectrogram(self.data[self.current_data_xrange[0]:self.current_data_xrange[1], :].T, self.current_data_xrange[0]/self.data.samplerate)
+        self.Spec.snippet_spectrogram(self.data[int(self.current_data_xrange[0] * self.data.samplerate):
+                                                int(self.current_data_xrange[1] * self.data.samplerate), :].T,
+                                      self.current_data_xrange[0])
+
+        print(self.Spec.spec_times[0])
         f_idx_0 = 0
         f_idx_1 = np.where(self.Spec.spec_freqs < 2000)[0][-1]
         for ch in range(self.data.channels):
 
-            self.plot_handels_spec[ch].setImage(decibel(self.Spec.spec[ch, f_idx_0:f_idx_1, :].T))
+            self.plot_handels_spec[ch].setImage(decibel(self.Spec.spec[ch, f_idx_0:f_idx_1, :].T), levels=[self.v_min, self.v_max])
             self.plot_handels_spec[ch].setRect(
                 pg.QtCore.QRectF(self.Spec.spec_times[0], self.Spec.spec_freqs[f_idx_0],
                                  self.Spec.times[-1] - self.Spec.times[0],
@@ -374,7 +389,7 @@ class DataViewer(QWidget):
 
                 f_idx_0 = 0
                 f_idx_1 = np.where(self.Spec.spec_freqs < 2000)[0][-1]
-                self.sum_spec_img.setImage(decibel(self.Spec.sum_spec[f_idx_0:f_idx_1, :].T))
+                self.sum_spec_img.setImage(decibel(self.Spec.sum_spec[f_idx_0:f_idx_1, :].T), levels=[self.v_min, self.v_max])
                 self.sum_spec_img.setRect(
                     pg.QtCore.QRectF(self.Spec.spec_times[0], self.Spec.spec_freqs[f_idx_0],
                                      self.Spec.times[-1] - self.Spec.times[0],
@@ -421,13 +436,18 @@ class DataViewer(QWidget):
     def lookupTableChanged(self):
         # Obtain the new lookup table values
         levels = self.power_hist.getLevels()
-        self.x_min, self.v_max = levels
+        self.v_min, self.v_max = levels
         print("New Levels:", levels)
 
     def adjust_ylim_to_double_clicked_subplot(self, event, plot):
+        self.x_min, self.x_max = self.plot_widgets_trace[0].getAxis('bottom').range
+        self.x_min = 0 if self.x_min < 0 else self.x_min
         plot_idx = self.content_layout_traces.indexOf(plot)
-        doi = self.data[self.current_data_xrange[0]:self.current_data_xrange[1], plot_idx]
+        # doi = self.data[self.current_data_xrange[0]:self.current_data_xrange[1], plot_idx]
+        doi = self.data[int(self.x_min * self.data.samplerate):int(self.x_max * self.data.samplerate) + 1, plot_idx]
+
         y_min, y_max = np.min(doi), np.max(doi)
+
         dy = (y_max-y_max)
         y_min -= dy*0.05
         y_max += dy*0.05
