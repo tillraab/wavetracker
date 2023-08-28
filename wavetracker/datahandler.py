@@ -73,56 +73,6 @@ def open_raw_data(folder: str,
 
     return data, samplerate, channels, dataset, shape
 
-def main(args):
-    if args.verbose >= 1: print(f'\n--- Running wavetracker.datahandler ---')
-
-    cfg = Configuration(args.config, verbose=args.verbose)
-
-    data, samplerate, channels, dataset, data_shape = open_raw_data(folder=args.folder, verbose=args.verbose, **cfg.spectrogram)
-
-    fig, ax = plt.subplots(int(np.ceil(data_shape[1] / 2)), 2, figsize=(20 / 2.54, 20 / 2.54), sharex='all', sharey='all')
-    ax = np.hstack(ax)
-    d = data[0: cfg.spectrogram['snippet_size'], :]
-    fig.suptitle('Data loaded with thunderfish.DataLoader')
-    for i in range(channels):
-        ax[i].plot(np.arange(cfg.spectrogram['snippet_size']) / samplerate, d[:, i])
-        ax[i].text(0.9, 0.9, f'{i}', transform=ax[i].transAxes, ha='center', va='center')
-    plt.show()
-
-    if available_GPU:
-        for enu, data in enumerate(dataset.take(2)):
-            fig, ax = plt.subplots(int(np.ceil(data_shape[1]/2)), 2, figsize=(20/2.54, 20/2.54), sharex='all', sharey='all')
-            ax = np.hstack(ax)
-            d = data.numpy()
-            fig.suptitle('Data loaded with tensorflow.generator')
-            for i in range(channels):
-                ax[i].plot((np.arange(cfg.spectrogram['snippet_size']) + enu * cfg.spectrogram['snippet_size']) / samplerate, d[:, i])
-                ax[i].text(0.9, 0.9, f'{i}', transform = ax[i].transAxes, ha='center', va='center')
-            plt.show()
-
-class MainWindow(QMainWindow):
-    def __init__(self, args, parent=None):
-        super(MainWindow, self).__init__(parent)
-        rec = QApplication.desktop().screenGeometry()
-        height = rec.height()
-        width = rec.width()
-        self.resize(int(1 * width), int(1 * height))
-        self.setWindowTitle('datahandler')  # set window title
-
-        self.central_widget = QWidget(self) # basic widget ; can be exchanged with tabwidget etc.
-
-        self.gridLayout = QGridLayout()
-
-        self.central_widget.setLayout(self.gridLayout)
-        self.setCentralWidget(self.central_widget)
-
-        ### data
-        cfg = Configuration(args.config, verbose=args.verbose)
-        data, samplerate, channels, dataset, data_shape = open_raw_data(folder=args.folder, verbose=args.verbose, **cfg.spectrogram)
-        data_viewer_widget = DataViewer(data)
-        self.gridLayout.addWidget(data_viewer_widget, 0, 0, 1, 1)
-
-        data_viewer_widget.kill.connect(self.close)
 
 class DataViewer(QWidget):
     kill = pyqtSignal()
@@ -144,6 +94,8 @@ class DataViewer(QWidget):
         self.min_freq, self.max_freq = 400, 1200
 
         ### layout -- traces per channel
+        self.scroll_val  = 0
+
         self.main_layout = QGridLayout(self)
 
         self.scroll_area_traces = QScrollArea() # this is a widget
@@ -371,15 +323,20 @@ class DataViewer(QWidget):
         if event.key() == Qt.Key_T:
             if self.scroll_area_traces.isHidden():
                 if not self.scroll_area_spec.isHidden():
+                    self.scroll_val = self.scroll_area_spec.verticalScrollBar().value()
                     self.scroll_area_spec.hide()
                 if not self.content_widget_sum_spec.isHidden():
                     self.content_widget_sum_spec.hide()
 
                 # ToDo: trigger function to do all neccessary processes
+
+                self.scroll_area_traces.verticalScrollBar().setValue(self.scroll_val)
                 self.scroll_area_traces.show()
+
         if event.key() == Qt.Key_S:
             if self.scroll_area_spec.isHidden():
                 if not self.scroll_area_traces.isHidden():
+                    self.scroll_val = self.scroll_area_traces.verticalScrollBar().value()
                     self.scroll_area_traces.hide()
                 if not self.content_widget_sum_spec.isHidden():
                     self.min_freq, self.max_freq = self.sum_spec_h.getAxis('left').range
@@ -387,6 +344,7 @@ class DataViewer(QWidget):
 
                 # ToDo: trigger function to do all neccessary processes
                 self.switch_to_spectrograms()
+                self.scroll_area_spec.verticalScrollBar().setValue(self.scroll_val)
                 self.scroll_area_spec.show()
             elif self.content_widget_sum_spec.isHidden():
 
@@ -398,6 +356,7 @@ class DataViewer(QWidget):
                                      self.Spec.times[-1] - self.Spec.times[0],
                                      self.Spec.spec_freqs[f_idx_1] - self.Spec.spec_freqs[f_idx_0]))
                 self.min_freq, self.max_freq = self.plot_widgets_spec[0].getAxis('left').range
+                self.sum_spec_h.setXRange(self.Spec.spec_times[0], self.Spec.spec_times[-1])
                 self.sum_spec_h.setYRange(self.min_freq, self.max_freq)
                 self.content_widget_sum_spec.show()
 
@@ -427,6 +386,58 @@ class DataViewer(QWidget):
             pw.setYRange(y_min, y_max, padding=0)
 
 
+class DataViewerStandalone(QMainWindow):
+    def __init__(self, args, parent=None):
+        super(DataViewerStandalone, self).__init__(parent)
+        rec = QApplication.desktop().screenGeometry()
+        height = rec.height()
+        width = rec.width()
+        self.resize(int(1 * width), int(1 * height))
+        self.setWindowTitle('datahandler')  # set window title
+
+        self.central_widget = QWidget(self) # basic widget ; can be exchanged with tabwidget etc.
+
+        self.gridLayout = QGridLayout()
+
+        self.central_widget.setLayout(self.gridLayout)
+        self.setCentralWidget(self.central_widget)
+
+        ### data
+        cfg = Configuration(args.config, verbose=args.verbose)
+        data, samplerate, channels, dataset, data_shape = open_raw_data(folder=args.folder, verbose=args.verbose, **cfg.spectrogram)
+        data_viewer_widget = DataViewer(data)
+        self.gridLayout.addWidget(data_viewer_widget, 0, 0, 1, 1)
+
+        data_viewer_widget.kill.connect(self.close)
+
+
+def main(args):
+    if args.verbose >= 1: print(f'\n--- Running wavetracker.datahandler ---')
+
+    cfg = Configuration(args.config, verbose=args.verbose)
+
+    data, samplerate, channels, dataset, data_shape = open_raw_data(folder=args.folder, verbose=args.verbose, **cfg.spectrogram)
+
+    fig, ax = plt.subplots(int(np.ceil(data_shape[1] / 2)), 2, figsize=(20 / 2.54, 20 / 2.54), sharex='all', sharey='all')
+    ax = np.hstack(ax)
+    d = data[0: cfg.spectrogram['snippet_size'], :]
+    fig.suptitle('Data loaded with thunderfish.DataLoader')
+    for i in range(channels):
+        ax[i].plot(np.arange(cfg.spectrogram['snippet_size']) / samplerate, d[:, i])
+        ax[i].text(0.9, 0.9, f'{i}', transform=ax[i].transAxes, ha='center', va='center')
+    plt.show()
+
+    if available_GPU:
+        for enu, data in enumerate(dataset.take(2)):
+            fig, ax = plt.subplots(int(np.ceil(data_shape[1]/2)), 2, figsize=(20/2.54, 20/2.54), sharex='all', sharey='all')
+            ax = np.hstack(ax)
+            d = data.numpy()
+            fig.suptitle('Data loaded with tensorflow.generator')
+            for i in range(channels):
+                ax[i].plot((np.arange(cfg.spectrogram['snippet_size']) + enu * cfg.spectrogram['snippet_size']) / samplerate, d[:, i])
+                ax[i].text(0.9, 0.9, f'{i}', transform = ax[i].transAxes, ha='center', va='center')
+            plt.show()
+
 if __name__ == '__main__':
     example_data = "/data1/data/2023_Breeding/raw_data/2023-02-09-08_16"
     parser = argparse.ArgumentParser(description='Evaluated electrode array recordings with multiple fish.')
@@ -443,6 +454,6 @@ if __name__ == '__main__':
         main(args)
     else:
         app = QApplication(sys.argv)  # create application
-        w = MainWindow(args)  # create window
+        w = DataViewerStandalone(args)  # create window
         w.show()
         sys.exit(app.exec_())  # exit if window is closed
