@@ -87,12 +87,12 @@ class Spectrogram(object):
         # spectrogram parameters
         self.snippet_size = snippet_size
         self.nfft = nfft
-        self.overlap_frac = overlap_frac
+        self._overlap_frac = overlap_frac
         self.channels = data_shape[1] if channels == -1 else channels
         self.channel_list = np.arange(self.channels)
         self.samplerate = samplerate
         self.data_shape = data_shape
-        self.step, self.noverlap = get_step_and_overlap(self.overlap_frac, self.nfft)
+        self.step, self.noverlap = get_step_and_overlap(self._overlap_frac, self.nfft)
 
         self.core_count = multiprocessing.cpu_count() if not core_count else core_count
         self.partial_func = partial(mlab_spec, samplerate=self.samplerate, nfft=self.nfft, noverlap=self.noverlap)
@@ -147,6 +147,15 @@ class Spectrogram(object):
                 self.fine_times = np.load(os.path.join(self.save_path, 'fine_times.npy'))
                 self.spec_freqs = np.load(os.path.join(self.save_path, 'fine_freqs.npy'))
         self.terminate = False
+
+    @property
+    def overlap_frac(self):
+        return self._overlap_frac
+
+    @overlap_frac.setter
+    def overlap_frac(self, value):
+        self._overlap_frac = value
+        self.step, self.noverlap = get_step_and_overlap(self._overlap_frac, self.nfft)
 
     @property
     def get_sparse_spec(self):

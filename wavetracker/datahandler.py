@@ -90,8 +90,15 @@ class DataViewer(QWidget):
         self.x_min_for_sb = np.linspace(0, (self.data.shape[0]-self.plot_current_d_xaxis*self.data.samplerate) / self.data.samplerate, 100)
         self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, (self.data.shape[0]-self.plot_current_d_xaxis*self.data.samplerate) / self.data.samplerate, 100)
         self.update_xrange_by_scrollbar = False
+
+        # params: spectrogram
         self.v_min, self.v_max = -100, -50
         self.min_freq, self.max_freq = 400, 1200
+        self.snippet_size = 2 ** 21
+        self.nfft = 2 ** 12
+        self.overlap_frac = 0.9
+        self.Spec = Spectrogram(data.samplerate, data.shape, snippet_size=self.snippet_size, nfft=self.nfft,
+                                overlap_frac=self.overlap_frac, channels = -1, gpu_use= available_GPU)
 
         ### layout -- traces per channel
         self.scroll_val  = 0
@@ -138,18 +145,27 @@ class DataViewer(QWidget):
         ### scrollbar for x lims
         self.add_scrollbar_to_adjust_xrange()
 
-        ### fill plots
+        ### plots
         self.initial_trace_plot()
+
+        # Actions
+        self.define_actions()
 
         ### functions tiggered by actions
         self.plot_widgets_trace[0].sigXRangeChanged.connect(self.update_data_in_all_subplotsplot)
         self.power_hist.sigLevelsChanged.connect(self.lookupTableChanged)
 
-        ### initialize spectrogram
-        self.Spec = Spectrogram(data.samplerate, data.shape, snippet_size=2**21, nfft=2**12, overlap_frac=0.9, channels = -1, gpu_use= available_GPU)
-        self.Spec.snippet_spectrogram(self.data[int(self.current_data_xrange[0] * self.data.samplerate):
-                                                int(self.current_data_xrange[1] * self.data.samplerate), :].T,
-                                      self.current_data_xrange[0])
+
+        # self.Spec.snippet_spectrogram(self.data[int(self.current_data_xrange[0] * self.data.samplerate):
+        #                                         int(self.current_data_xrange[1] * self.data.samplerate), :].T,
+        #                               self.current_data_xrange[0])
+
+        self.timer=QTimer()
+        self.timer.timeout.connect(self.check)
+        self.timer.start(1000)
+
+    def check(self):
+        print(time.time(),  self.Spec.nfft, self.Spec.overlap_frac, self.Spec.noverlap)
 
     def setup_plot_environment(self):
         self.plot_handels_trace = []
@@ -228,6 +244,37 @@ class DataViewer(QWidget):
 
         self.main_layout.addWidget(self.x_scrollbar, 1, 0, 1, 1)
 
+    def define_actions(self):
+        self.Act_spec_nfft_up = QAction('nfft up', self)
+        self.Act_spec_nfft_up.setEnabled(False)
+        self.Act_spec_nfft_up.triggered.connect(lambda: setattr(self.Spec, "nfft", int(2**(np.log2(self.Spec.nfft)+1))))
+        self.Act_spec_nfft_up.triggered.connect(lambda: self.update_switch_spectrograms(update=True))
+        self.Act_spec_nfft_up.setShortcut('Shift+F')
+        self.addAction(self.Act_spec_nfft_up)
+
+        self.Act_spec_nfft_down = QAction('nfft down', self)
+        self.Act_spec_nfft_down.setEnabled(False)
+        self.Act_spec_nfft_down.triggered.connect(lambda: setattr(self.Spec, "nfft", int(2**(np.log2(self.Spec.nfft)-1))))
+        self.Act_spec_nfft_down.triggered.connect(lambda: self.update_switch_spectrograms(update=True))
+        self.Act_spec_nfft_down.setShortcut('F')
+        self.addAction(self.Act_spec_nfft_down)
+
+        self.Act_spec_overlap_up = QAction('overlap up', self)
+        self.Act_spec_overlap_up.setEnabled(False)
+        self.Act_spec_overlap_up.triggered.connect(lambda: setattr(self.Spec, "overlap_frac",
+                                                                   self.Spec.overlap_frac + 0.05 if self.Spec.overlap_frac < 0.95 else self.Spec.overlap_frac))
+        self.Act_spec_overlap_up.triggered.connect(lambda: self.update_switch_spectrograms(update=True))
+        self.Act_spec_overlap_up.setShortcut('O')
+        self.addAction(self.Act_spec_overlap_up)
+
+        self.Act_spec_overlap_down = QAction('overlap down', self)
+        self.Act_spec_overlap_down.setEnabled(False)
+        self.Act_spec_overlap_down.triggered.connect(lambda: setattr(self.Spec, "overlap_frac",
+                                                                   self.Spec.overlap_frac - 0.05 if self.Spec.overlap_frac > 0.05 else self.Spec.overlap_frac))
+        self.Act_spec_overlap_down.triggered.connect(lambda: self.update_switch_spectrograms(update=True))
+        self.Act_spec_overlap_down.setShortcut('Shift+O')
+        self.addAction(self.Act_spec_overlap_down)
+        pass
     def initial_trace_plot(self):
         for i in range(self.data.channels):
             self.plot_handels_trace[i].setData(np.arange(self.data.samplerate * 2)/self.data.samplerate, self.data[:self.data.samplerate * 2, i])
@@ -236,14 +283,6 @@ class DataViewer(QWidget):
     def update_plot_x_limits_by_scrollbar(self, value): #  1-100 as set earlier
         self.x_min = self.x_min_for_sb[value]
         self.x_max = self.x_max_for_sb[value]
-
-        # self.plot_current_d_xaxis = self.x_max - self.x_min
-
-        # This function does not change self.plot_curent_d_xais ... so these steps are not necessary
-        # self.x_min_for_sb = np.linspace(0, self.data.shape[0]-self.plot_current_d_xaxis, 100)
-        # self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, self.data.shape[0], 100)
-        # self.x_min_for_sb = np.linspace(0, (self.data.shape[0]-self.plot_current_d_xaxis*self.data.samplerate) / self.data.samplerate, 100)
-        # self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, (self.data.shape[0]-self.plot_current_d_xaxis*self.data.samplerate) / self.data.samplerate, 100)
 
         self.update_xrange_by_scrollbar = True
 
@@ -300,28 +339,61 @@ class DataViewer(QWidget):
         for pw in self.plot_widgets_trace:
             pw.setYRange(y_min, y_max, padding=0)
 
-    def switch_to_spectrograms(self):
-        # sself.Spec.snippet_spectrogram(self.data[self.current_data_xrange[0]:self.current_data_xrange[1], :].T, self.current_data_xrange[0]/self.data.samplerate)
-        self.Spec.snippet_spectrogram(self.data[int(self.current_data_xrange[0] * self.data.samplerate):
-                                                int(self.current_data_xrange[1] * self.data.samplerate), :].T,
-                                      self.current_data_xrange[0])
-
+    def update_switch_spectrograms(self, update=False):
+        if update:
+            print('recalc')
+            self.Spec.snippet_spectrogram(self.data[int(self.current_data_xrange[0] * self.data.samplerate):
+                                                    int(self.current_data_xrange[1] * self.data.samplerate), :].T,
+                                          self.current_data_xrange[0])
         f_idx_0 = 0
         f_idx_1 = np.where(self.Spec.spec_freqs < 2000)[0][-1]
-        for ch in range(self.data.channels):
 
-            self.plot_handels_spec[ch].setImage(decibel(self.Spec.spec[ch, f_idx_0:f_idx_1, :].T), levels=[self.v_min, self.v_max])
-            self.plot_handels_spec[ch].setRect(
+        if not self.scroll_area_spec.isHidden():
+
+            for ch in range(self.data.channels):
+
+                self.plot_handels_spec[ch].setImage(decibel(self.Spec.spec[ch, f_idx_0:f_idx_1, :].T), levels=[self.v_min, self.v_max])
+                self.plot_handels_spec[ch].setRect(
+                    pg.QtCore.QRectF(self.Spec.spec_times[0], self.Spec.spec_freqs[f_idx_0],
+                                     self.Spec.times[-1] - self.Spec.times[0],
+                                     self.Spec.spec_freqs[f_idx_1] - self.Spec.spec_freqs[f_idx_0]))
+
+            self.plot_widgets_spec[0].setXRange(self.Spec.spec_times[0], self.Spec.spec_times[-1])
+            self.plot_widgets_spec[0].setYRange(self.min_freq, self.max_freq)
+        else:
+            print('yay')
+            # f_idx_0 = 0
+            # f_idx_1 = np.where(self.Spec.spec_freqs < 2000)[0][-1]
+            self.sum_spec_img.setImage(decibel(self.Spec.sum_spec[f_idx_0:f_idx_1, :].T),
+                                       levels=[self.v_min, self.v_max])
+            self.sum_spec_img.setRect(
                 pg.QtCore.QRectF(self.Spec.spec_times[0], self.Spec.spec_freqs[f_idx_0],
                                  self.Spec.times[-1] - self.Spec.times[0],
                                  self.Spec.spec_freqs[f_idx_1] - self.Spec.spec_freqs[f_idx_0]))
+            self.min_freq, self.max_freq = self.plot_widgets_spec[0].getAxis('left').range
+            self.sum_spec_h.setXRange(self.Spec.spec_times[0], self.Spec.spec_times[-1])
+            self.sum_spec_h.setYRange(self.min_freq, self.max_freq)
+            # self.sum_spec_img.setImage(decibel(self.Spec.sum_spec[f_idx_0:f_idx_1, :].T),
+            #                            levels=[self.v_min, self.v_max])
+            # self.sum_spec_img.setRect(
+            #     pg.QtCore.QRectF(self.Spec.spec_times[0], self.Spec.spec_freqs[f_idx_0],
+            #                      self.Spec.times[-1] - self.Spec.times[0],
+            #                      self.Spec.spec_freqs[f_idx_1] - self.Spec.spec_freqs[f_idx_0]))
+            # self.min_freq, self.max_freq = self.plot_widgets_spec[0].getAxis('left').range
+            # # self.sum_spec_h.setXRange(self.Spec.spec_times[0], self.Spec.spec_times[-1])
+            # self.sum_spec_h.setXRange(self.x_min, self.x_max)
+            # self.sum_spec_h.setYRange(self.min_freq, self.max_freq)
+            # self.content_widget_sum_spec.show()
 
-        self.plot_widgets_spec[0].setXRange(self.Spec.spec_times[0], self.Spec.spec_times[-1])
-        self.plot_widgets_spec[0].setYRange(self.min_freq, self.max_freq)
+            pass
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_T:
             if self.scroll_area_traces.isHidden():
+                self.Act_spec_nfft_up.setEnabled(False)
+                self.Act_spec_nfft_down.setEnabled(False)
+                self.Act_spec_overlap_up.setEnabled(False)
+                self.Act_spec_overlap_down.setEnabled(False)
                 if not self.scroll_area_spec.isHidden():
                     self.scroll_val = self.scroll_area_spec.verticalScrollBar().value()
                     self.scroll_area_spec.hide()
@@ -335,32 +407,42 @@ class DataViewer(QWidget):
 
         if event.key() == Qt.Key_S:
             if self.scroll_area_spec.isHidden():
+                self.Act_spec_nfft_up.setEnabled(True)
+                self.Act_spec_nfft_down.setEnabled(True)
+                self.Act_spec_overlap_up.setEnabled(True)
+                self.Act_spec_overlap_down.setEnabled(True)
+                self.scroll_area_spec.verticalScrollBar().setValue(self.scroll_val)
+                self.scroll_area_spec.show()
+
                 if not self.scroll_area_traces.isHidden():
                     self.scroll_val = self.scroll_area_traces.verticalScrollBar().value()
                     self.scroll_area_traces.hide()
+                    self.update_switch_spectrograms(update=True)
                 if not self.content_widget_sum_spec.isHidden():
                     self.min_freq, self.max_freq = self.sum_spec_h.getAxis('left').range
                     self.content_widget_sum_spec.hide()
+                    self.update_switch_spectrograms()
 
-                # ToDo: trigger function to do all neccessary processes
-                self.switch_to_spectrograms()
-                self.scroll_area_spec.verticalScrollBar().setValue(self.scroll_val)
-                self.scroll_area_spec.show()
+                # ToDo: auto update when active
+
             elif self.content_widget_sum_spec.isHidden():
-
-                f_idx_0 = 0
-                f_idx_1 = np.where(self.Spec.spec_freqs < 2000)[0][-1]
-                self.sum_spec_img.setImage(decibel(self.Spec.sum_spec[f_idx_0:f_idx_1, :].T), levels=[self.v_min, self.v_max])
-                self.sum_spec_img.setRect(
-                    pg.QtCore.QRectF(self.Spec.spec_times[0], self.Spec.spec_freqs[f_idx_0],
-                                     self.Spec.times[-1] - self.Spec.times[0],
-                                     self.Spec.spec_freqs[f_idx_1] - self.Spec.spec_freqs[f_idx_0]))
-                self.min_freq, self.max_freq = self.plot_widgets_spec[0].getAxis('left').range
-                self.sum_spec_h.setXRange(self.Spec.spec_times[0], self.Spec.spec_times[-1])
-                self.sum_spec_h.setYRange(self.min_freq, self.max_freq)
                 self.content_widget_sum_spec.show()
-
                 self.scroll_area_spec.hide()
+
+
+                self.update_switch_spectrograms()
+                # f_idx_0 = 0
+                # f_idx_1 = np.where(self.Spec.spec_freqs < 2000)[0][-1]
+                # self.sum_spec_img.setImage(decibel(self.Spec.sum_spec[f_idx_0:f_idx_1, :].T), levels=[self.v_min, self.v_max])
+                # self.sum_spec_img.setRect(
+                #     pg.QtCore.QRectF(self.Spec.spec_times[0], self.Spec.spec_freqs[f_idx_0],
+                #                      self.Spec.times[-1] - self.Spec.times[0],
+                #                      self.Spec.spec_freqs[f_idx_1] - self.Spec.spec_freqs[f_idx_0]))
+                # self.min_freq, self.max_freq = self.plot_widgets_spec[0].getAxis('left').range
+                # self.sum_spec_h.setXRange(self.Spec.spec_times[0], self.Spec.spec_times[-1])
+                # self.sum_spec_h.setYRange(self.min_freq, self.max_freq)
+
+                # self.scroll_area_spec.hide()
         if event.key() == Qt.Key_Q:
             self.kill.emit()
 
