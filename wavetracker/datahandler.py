@@ -155,11 +155,7 @@ class DataViewer(QWidget):
         self.plot_widgets_trace[0].sigXRangeChanged.connect(self.update_data_in_all_subplotsplot)
         self.power_hist.sigLevelsChanged.connect(self.lookupTableChanged)
 
-
-        # self.Spec.snippet_spectrogram(self.data[int(self.current_data_xrange[0] * self.data.samplerate):
-        #                                         int(self.current_data_xrange[1] * self.data.samplerate), :].T,
-        #                               self.current_data_xrange[0])
-
+        ### loop plot parameters
         self.timer=QTimer()
         self.timer.timeout.connect(self.check)
         self.timer.start(1000)
@@ -219,10 +215,6 @@ class DataViewer(QWidget):
         self.sum_spec_h.setLabel('bottom', 'time [s]')
 
         self.power_hist = pg.HistogramLUTItem()
-        # self.power_hist.setHistogramLabel('left', 'power [dB]')
-        # self.power_hist.getHistogramWidget().setLabel('left', 'power [dB]')
-        # power_hist_viewbox = self.power_hist.getViewBox()
-        # power_hist_viewbox.setLabel('left', 'power [dB]')
         self.power_hist.setImageItem(self.sum_spec_img)
         self.power_hist.axis.setLabel('power [dB]')
         win.addItem(self.power_hist)
@@ -275,6 +267,7 @@ class DataViewer(QWidget):
         self.Act_spec_overlap_down.setShortcut('Shift+O')
         self.addAction(self.Act_spec_overlap_down)
         pass
+
     def initial_trace_plot(self):
         for i in range(self.data.channels):
             self.plot_handels_trace[i].setData(np.arange(self.data.samplerate * 2)/self.data.samplerate, self.data[:self.data.samplerate * 2, i])
@@ -294,8 +287,6 @@ class DataViewer(QWidget):
         else:
             self.x_min, self.x_max = self.plot_widgets_trace[0].getAxis('bottom').range
             self.plot_current_d_xaxis = self.x_max - self.x_min
-
-        # ToDo: implement solution for when we scroll beound data end
         if self.x_min < 0:
             self.x_min = 0
             self.x_max = self.plot_current_d_xaxis
@@ -361,9 +352,6 @@ class DataViewer(QWidget):
             self.plot_widgets_spec[0].setXRange(self.Spec.spec_times[0], self.Spec.spec_times[-1])
             self.plot_widgets_spec[0].setYRange(self.min_freq, self.max_freq)
         else:
-            print('yay')
-            # f_idx_0 = 0
-            # f_idx_1 = np.where(self.Spec.spec_freqs < 2000)[0][-1]
             self.sum_spec_img.setImage(decibel(self.Spec.sum_spec[f_idx_0:f_idx_1, :].T),
                                        levels=[self.v_min, self.v_max])
             self.sum_spec_img.setRect(
@@ -373,17 +361,6 @@ class DataViewer(QWidget):
             self.min_freq, self.max_freq = self.plot_widgets_spec[0].getAxis('left').range
             self.sum_spec_h.setXRange(self.Spec.spec_times[0], self.Spec.spec_times[-1])
             self.sum_spec_h.setYRange(self.min_freq, self.max_freq)
-            # self.sum_spec_img.setImage(decibel(self.Spec.sum_spec[f_idx_0:f_idx_1, :].T),
-            #                            levels=[self.v_min, self.v_max])
-            # self.sum_spec_img.setRect(
-            #     pg.QtCore.QRectF(self.Spec.spec_times[0], self.Spec.spec_freqs[f_idx_0],
-            #                      self.Spec.times[-1] - self.Spec.times[0],
-            #                      self.Spec.spec_freqs[f_idx_1] - self.Spec.spec_freqs[f_idx_0]))
-            # self.min_freq, self.max_freq = self.plot_widgets_spec[0].getAxis('left').range
-            # # self.sum_spec_h.setXRange(self.Spec.spec_times[0], self.Spec.spec_times[-1])
-            # self.sum_spec_h.setXRange(self.x_min, self.x_max)
-            # self.sum_spec_h.setYRange(self.min_freq, self.max_freq)
-            # self.content_widget_sum_spec.show()
 
             pass
 
@@ -400,11 +377,8 @@ class DataViewer(QWidget):
                 if not self.content_widget_sum_spec.isHidden():
                     self.content_widget_sum_spec.hide()
 
-                # ToDo: trigger function to do all neccessary processes
-
                 self.scroll_area_traces.verticalScrollBar().setValue(self.scroll_val)
                 self.scroll_area_traces.show()
-
         if event.key() == Qt.Key_S:
             if self.scroll_area_spec.isHidden():
                 self.Act_spec_nfft_up.setEnabled(True)
@@ -429,18 +403,7 @@ class DataViewer(QWidget):
                 self.content_widget_sum_spec.show()
                 self.scroll_area_spec.hide()
 
-
                 self.update_switch_spectrograms()
-                # f_idx_0 = 0
-                # f_idx_1 = np.where(self.Spec.spec_freqs < 2000)[0][-1]
-                # self.sum_spec_img.setImage(decibel(self.Spec.sum_spec[f_idx_0:f_idx_1, :].T), levels=[self.v_min, self.v_max])
-                # self.sum_spec_img.setRect(
-                #     pg.QtCore.QRectF(self.Spec.spec_times[0], self.Spec.spec_freqs[f_idx_0],
-                #                      self.Spec.times[-1] - self.Spec.times[0],
-                #                      self.Spec.spec_freqs[f_idx_1] - self.Spec.spec_freqs[f_idx_0]))
-                # self.min_freq, self.max_freq = self.plot_widgets_spec[0].getAxis('left').range
-                # self.sum_spec_h.setXRange(self.Spec.spec_times[0], self.Spec.spec_times[-1])
-                # self.sum_spec_h.setYRange(self.min_freq, self.max_freq)
 
                 # self.scroll_area_spec.hide()
         if event.key() == Qt.Key_Q:
@@ -456,7 +419,6 @@ class DataViewer(QWidget):
         self.x_min, self.x_max = self.plot_widgets_trace[0].getAxis('bottom').range
         self.x_min = 0 if self.x_min < 0 else self.x_min
         plot_idx = self.content_layout_traces.indexOf(plot)
-        # doi = self.data[self.current_data_xrange[0]:self.current_data_xrange[1], plot_idx]
         doi = self.data[int(self.x_min * self.data.samplerate):int(self.x_max * self.data.samplerate) + 1, plot_idx]
 
         y_min, y_max = np.min(doi), np.max(doi)
