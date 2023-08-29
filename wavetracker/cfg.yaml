@@ -31,7 +31,7 @@ harmonic_groups:
   max_db_diff: 20.
   max_divisor: 3
   min_group_size: 3
-  min_good_peak_power: -100
+  min_good_peak_power: -102.35729410768924
 
 tracking:
   freq_tolerance: 2.5 # 2.5

@@ -83,17 +83,27 @@ class DataViewer(QWidget):
         self._rel_scroller_size = 0.1
 
         # params: data plotting
-        self.plot_max_d_xaxis = 2.
+        self.plot_max_d_xaxis = 5.
         self.plot_current_d_xaxis = 1.
         self.current_data_xrange = (0, 2., 2.)
         self.update_xrange_by_scrollbar = False
 
         # params: spectrogram
-        self.v_min, self.v_max = -100, -50
-        self.min_freq, self.max_freq = 400, 1200
-        self.snippet_size = 2 ** 21
-        self.nfft = 2 ** 12
-        self.overlap_frac = 0.9
+        self.cfg = None
+        if cfg:
+            self.cfg = cfg
+            self.v_min, self.v_max = self.cfg.harmonic_groups['min_good_peak_power'], -50
+            self.min_freq, self.max_freq = self.cfg.harmonic_groups['min_freq'], cfg.harmonic_groups['max_freq']
+            self.snippet_size = self.cfg.spectrogram['snippet_size']
+            self.nfft = self.cfg.spectrogram['nfft']
+            self.overlap_frac = self.cfg.spectrogram['overlap_frac']
+            print('found config')
+        else:
+            self.v_min, self.v_max = -100, -50
+            self.min_freq, self.max_freq = 400, 1200
+            self.snippet_size = 2 ** 21
+            self.nfft = 2 ** 12
+            self.overlap_frac = 0.9
 
         ### subplot layout
         self.plots_per_row = 3
@@ -141,33 +151,31 @@ class DataViewer(QWidget):
 
         # Actions
         self.define_actions()
+        #
+        # data init
+        self.data = data
+        self.x_min_for_sb = np.linspace(0, (self.data.shape[0] - self.plot_current_d_xaxis * self.data.samplerate) / self.data.samplerate, 100)
+        self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, (self.data.shape[0] - self.plot_current_d_xaxis * self.data.samplerate) / self.data.samplerate, 100)
+        self.Spec = Spectrogram(data.samplerate, data.shape, snippet_size=self.snippet_size, nfft=self.nfft,
+                                overlap_frac=self.overlap_frac, channels = -1, gpu_use= available_GPU)
 
-        #
-        # # data init
-        # self.data = data
-        # self.x_min_for_sb = np.linspace(0, (self.data.shape[0] - self.plot_current_d_xaxis * self.data.samplerate) / self.data.samplerate, 100)
-        # self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, (self.data.shape[0] - self.plot_current_d_xaxis * self.data.samplerate) / self.data.samplerate, 100)
-        # self.Spec = Spectrogram(data.samplerate, data.shape, snippet_size=self.snippet_size, nfft=self.nfft,
-        #                         overlap_frac=self.overlap_frac, channels = -1, gpu_use= available_GPU)
-        #
-        # ### content -- create plots
-        # self.setup_plot_environment()
-        #
-        # ### plots
-        # self.initial_trace_plot()
-        #
-        # ### functions tiggered by actions
-        # self.plot_widgets_trace[0].sigXRangeChanged.connect(self.update_data_in_all_subplotsplot)
-        # self.power_hist.sigLevelsChanged.connect(self.vmin_vmax_adapt)
-        #
-        # ### loop plot parameters
-        # self.timer=QTimer()
-        # self.timer.timeout.connect(self.check)
-        # self.timer.start(1000)
+        ### content -- create plots
+        self.setup_plot_environment()
 
-    def check(self):
-        print(time.time(),  self.Spec.nfft, self.Spec.overlap_frac, self.Spec.noverlap)
+        ### plots
+        self.initial_trace_plot()
 
+        ### functions tiggered by actions
+        self.plot_widgets_trace[0].sigXRangeChanged.connect(self.update_data_in_all_subplotsplot)
+        self.power_hist.sigLevelsChanged.connect(self.vmin_vmax_adapt)
+
+        ### loop plot parameters
+    #     self.timer=QTimer()
+    #     self.timer.timeout.connect(self.check)
+    #     self.timer.start(1000)
+    #
+    # def check(self):
+    #     print(self.Spec.nfft, self.Spec.overlap_frac)
     def setup_plot_environment(self):
         self.plot_handels_trace = []
         self.plot_widgets_trace = []
@@ -218,6 +226,7 @@ class DataViewer(QWidget):
         self.sum_spec_h.addItem(self.sum_spec_img)
         self.sum_spec_h.setLabel('left', 'frequency [Hz]')
         self.sum_spec_h.setLabel('bottom', 'time [s]')
+        # self.sum_spec_h.setYLink(self.plot_widgets_spec[0])
 
         self.power_hist = pg.HistogramLUTItem()
         self.power_hist.setImageItem(self.sum_spec_img)
@@ -251,7 +260,10 @@ class DataViewer(QWidget):
 
         self.Act_spec_nfft_down = QAction('nfft down', self)
         self.Act_spec_nfft_down.setEnabled(False)
-        self.Act_spec_nfft_down.triggered.connect(lambda: setattr(self.Spec, "nfft", int(2**(np.log2(self.Spec.nfft)-1))))
+        self.Act_spec_nfft_down.triggered.connect(lambda: setattr(self.Spec, "nfft",
+                                                                  int(2**(np.log2(self.Spec.nfft)-1)) if
+                                                                  int(2**(np.log2(self.Spec.nfft)-1)) > 16
+                                                                  else self.Spec.nfft))
         self.Act_spec_nfft_down.triggered.connect(lambda: self.update_switch_spectrograms(update=True))
         self.Act_spec_nfft_down.setShortcut('F')
         self.addAction(self.Act_spec_nfft_down)
@@ -337,7 +349,6 @@ class DataViewer(QWidget):
 
     def update_switch_spectrograms(self, update=False):
         if update:
-            print('recalc')
             self.Spec.snippet_spectrogram(self.data[int(self.current_data_xrange[0] * self.data.samplerate):
                                                     int(self.current_data_xrange[1] * self.data.samplerate), :].T,
                                           self.current_data_xrange[0])
@@ -345,7 +356,6 @@ class DataViewer(QWidget):
         f_idx_1 = np.where(self.Spec.spec_freqs < 2000)[0][-1]
 
         if not self.scroll_area_spec.isHidden():
-
             for ch in range(self.data.channels):
 
                 self.plot_handels_spec[ch].setImage(decibel(self.Spec.spec[ch, f_idx_0:f_idx_1, :].T), levels=[self.v_min, self.v_max])
@@ -409,7 +419,13 @@ class DataViewer(QWidget):
                 self.scroll_area_spec.hide()
 
                 self.update_switch_spectrograms()
+        if event.key() == Qt.Key_C:
+            reply = QMessageBox.question(self, 'Save config.yaml', 'Want to save the current setting?',
+                                         QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
 
+            if reply == QMessageBox.Yes:
+                self.cfg.harmonic_groups['min_good_peak_power'] = self.v_min
+                self.cfg.save()
                 # self.scroll_area_spec.hide()
         if event.key() == Qt.Key_Q:
             self.kill.emit()
@@ -451,14 +467,30 @@ class DataViewerStandalone(QMainWindow):
         self.central_widget.setLayout(self.gridLayout)
         self.setCentralWidget(self.central_widget)
 
+        self.cfg = Configuration(args.config, verbose=args.verbose)
+
         ### data
-        cfg = Configuration(args.config, verbose=args.verbose)
-        data, samplerate, channels, dataset, data_shape = open_raw_data(folder=args.folder, verbose=args.verbose, **cfg.spectrogram)
-        data_viewer_widget = DataViewer(data)
+        if not args.folder:
+            self.open_btn = QPushButton('Open file', self.central_widget)
+            self.open_btn.clicked.connect(self.open_with_file_dialog)
+            self.gridLayout.addWidget(self.open_btn, 0, 0)
+        else:
+            self.folder = args.folder
+            self.go_to_DataViewer()
+
+    def open_with_file_dialog(self):
+        fd = QFileDialog()
+        self.folder = fd.getExistingDirectory(self, 'Select Directory')
+        if self.folder != '':
+            self.folder = os.path.abspath(self.folder)
+            self.open_btn.hide()
+            self.go_to_DataViewer()
+
+    def go_to_DataViewer(self):
+        data, samplerate, channels, dataset, data_shape = open_raw_data(folder=self.folder)
+        data_viewer_widget = DataViewer(data, self.cfg)
         self.gridLayout.addWidget(data_viewer_widget, 0, 0, 1, 1)
-
-        data_viewer_widget.kill.connect(self.close)
-
+        data_viewer_widget.kill.connect(lambda: self.close())
 
 def main(args):
     if args.verbose >= 1: print(f'\n--- Running wavetracker.datahandler ---')
@@ -490,14 +522,16 @@ def main(args):
 if __name__ == '__main__':
     example_data = "/data1/data/2023_Breeding/raw_data/2023-02-09-08_16"
     parser = argparse.ArgumentParser(description='Evaluated electrode array recordings with multiple fish.')
-    parser.add_argument('-f', '--folder', type=str, help='file to be analyzed', default=example_data)
+    # parser.add_argument('-f', '--folder', type=str, help='file to be analyzed', default=example_data)
+    parser.add_argument('-f', '--folder', type=str, help='file to be analyzed', default=None)
     parser.add_argument('-c', "--config", type=str, help="<config>.yaml file for analysis", default=None)
     parser.add_argument('-v', '--verbose', action='count', dest='verbose', default=0,
                         help='verbosity level. Increase by specifying -v multiple times, or like -vvv')
     parser.add_argument('--cpu', action='store_true', help='analysis using only CPU.')
     parser.add_argument('-s', '--shell', action='store_true', help='execute shell pipeline')
     args = parser.parse_args()
-    args.folder = os.path.normpath(args.folder)
+    if args.folder:
+        args.folder = os.path.normpath(args.folder)
 
     if args.shell:
         main(args)
