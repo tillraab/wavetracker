@@ -76,10 +76,9 @@ def open_raw_data(folder: str,
 
 class DataViewer(QWidget):
     kill = pyqtSignal()
-    def __init__(self, data, parent=None):
-        super(DataViewer, self).__init__()
-        self.data = data
 
+    def __init__(self, data=None, cfg=None, parent=None):
+        super(DataViewer, self).__init__()
         # params: scrollbar
         self._rel_scroller_size = 0.1
 
@@ -87,8 +86,6 @@ class DataViewer(QWidget):
         self.plot_max_d_xaxis = 2.
         self.plot_current_d_xaxis = 1.
         self.current_data_xrange = (0, 2., 2.)
-        self.x_min_for_sb = np.linspace(0, (self.data.shape[0]-self.plot_current_d_xaxis*self.data.samplerate) / self.data.samplerate, 100)
-        self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, (self.data.shape[0]-self.plot_current_d_xaxis*self.data.samplerate) / self.data.samplerate, 100)
         self.update_xrange_by_scrollbar = False
 
         # params: spectrogram
@@ -97,11 +94,16 @@ class DataViewer(QWidget):
         self.snippet_size = 2 ** 21
         self.nfft = 2 ** 12
         self.overlap_frac = 0.9
-        self.Spec = Spectrogram(data.samplerate, data.shape, snippet_size=self.snippet_size, nfft=self.nfft,
-                                overlap_frac=self.overlap_frac, channels = -1, gpu_use= available_GPU)
+
+        ### subplot layout
+        self.plots_per_row = 3
+        self.num_rows_visible = 3
+        rec = QApplication.desktop().screenGeometry()
+        height = rec.height()
+        self.subplot_height = height / self.num_rows_visible
 
         ### layout -- traces per channel
-        self.scroll_val  = 0
+        self.scroll_val = 0
 
         self.main_layout = QGridLayout(self)
 
@@ -134,31 +136,34 @@ class DataViewer(QWidget):
         self.main_layout.addWidget(self.content_widget_sum_spec, 0, 0)
         self.content_widget_sum_spec.hide()
 
-        ### content -- create plots
-        self.plots_per_row = 3
-        self.num_rows_visible = 3
-        rec = QApplication.desktop().screenGeometry()
-        height = rec.height()
-        self.subplot_height = height / self.num_rows_visible
-        self.setup_plot_environment()
-
         ### scrollbar for x lims
         self.add_scrollbar_to_adjust_xrange()
-
-        ### plots
-        self.initial_trace_plot()
 
         # Actions
         self.define_actions()
 
-        ### functions tiggered by actions
-        self.plot_widgets_trace[0].sigXRangeChanged.connect(self.update_data_in_all_subplotsplot)
-        self.power_hist.sigLevelsChanged.connect(self.lookupTableChanged)
-
-        ### loop plot parameters
-        self.timer=QTimer()
-        self.timer.timeout.connect(self.check)
-        self.timer.start(1000)
+        #
+        # # data init
+        # self.data = data
+        # self.x_min_for_sb = np.linspace(0, (self.data.shape[0] - self.plot_current_d_xaxis * self.data.samplerate) / self.data.samplerate, 100)
+        # self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, (self.data.shape[0] - self.plot_current_d_xaxis * self.data.samplerate) / self.data.samplerate, 100)
+        # self.Spec = Spectrogram(data.samplerate, data.shape, snippet_size=self.snippet_size, nfft=self.nfft,
+        #                         overlap_frac=self.overlap_frac, channels = -1, gpu_use= available_GPU)
+        #
+        # ### content -- create plots
+        # self.setup_plot_environment()
+        #
+        # ### plots
+        # self.initial_trace_plot()
+        #
+        # ### functions tiggered by actions
+        # self.plot_widgets_trace[0].sigXRangeChanged.connect(self.update_data_in_all_subplotsplot)
+        # self.power_hist.sigLevelsChanged.connect(self.vmin_vmax_adapt)
+        #
+        # ### loop plot parameters
+        # self.timer=QTimer()
+        # self.timer.timeout.connect(self.check)
+        # self.timer.start(1000)
 
     def check(self):
         print(time.time(),  self.Spec.nfft, self.Spec.overlap_frac, self.Spec.noverlap)
@@ -410,7 +415,7 @@ class DataViewer(QWidget):
             self.kill.emit()
 
 
-    def lookupTableChanged(self):
+    def vmin_vmax_adapt(self):
         # Obtain the new lookup table values
         levels = self.power_hist.getLevels()
         self.v_min, self.v_max = levels
