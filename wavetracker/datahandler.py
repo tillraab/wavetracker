@@ -169,13 +169,14 @@ class DataViewer(QWidget):
         self.plot_widgets_trace[0].sigXRangeChanged.connect(self.update_data_in_all_subplotsplot)
         self.power_hist.sigLevelsChanged.connect(self.vmin_vmax_adapt)
 
-        ### loop plot parameters
-    #     self.timer=QTimer()
-    #     self.timer.timeout.connect(self.check)
-    #     self.timer.start(1000)
-    #
-    # def check(self):
-    #     print(self.Spec.nfft, self.Spec.overlap_frac)
+        ## loop plot parameters
+        self.timer=QTimer()
+        self.timer.timeout.connect(self.check)
+        self.timer.start(1000)
+
+    def check(self):
+        print(self.Spec.nfft, self.Spec.overlap_frac)
+
     def setup_plot_environment(self):
         self.plot_handels_trace = []
         self.plot_widgets_trace = []
@@ -219,17 +220,22 @@ class DataViewer(QWidget):
                 plot_widget_s.setXLink(self.plot_widgets_spec[0])
                 plot_widget_s.setYLink(self.plot_widgets_spec[0])
 
+        self.plot_widgets_spec[0].setYRange(self.min_freq, self.max_freq)
+
         ### single spec plot with histogram
         win = pg.GraphicsLayoutWidget()
-        self.sum_spec_img = pg.ImageItem()
+        self.sum_spec_img = pg.ImageItem(ColorMap='viridis')
         self.sum_spec_h = win.addPlot(title="")
-        self.sum_spec_h.addItem(self.sum_spec_img)
+        self.sum_spec_h.addItem(self.sum_spec_img, colorMap='viridis')
         self.sum_spec_h.setLabel('left', 'frequency [Hz]')
         self.sum_spec_h.setLabel('bottom', 'time [s]')
-        # self.sum_spec_h.setYLink(self.plot_widgets_spec[0])
 
+        self.sum_spec_h.setYRange(self.min_freq, self.max_freq)
+
+        # self.sum_spec_h.addColorBar(self.sum_spec_img, colorMap='viridis', values =(self.v_min, self.v_max))
         self.power_hist = pg.HistogramLUTItem()
         self.power_hist.setImageItem(self.sum_spec_img)
+
         self.power_hist.axis.setLabel('power [dB]')
         win.addItem(self.power_hist)
 
@@ -245,7 +251,6 @@ class DataViewer(QWidget):
         self.scroller_position = int(0 * self.x_scrollbar.maximum())
         self.x_scrollbar.setValue(self.scroller_position)
 
-        # self.x_scrollbar.valueChanged.connect(self._update_x_limits_by_scrollbar)
         self.x_scrollbar.sliderReleased.connect(lambda: self.update_plot_x_limits_by_scrollbar(self.x_scrollbar.value()))
 
         self.main_layout.addWidget(self.x_scrollbar, 1, 0, 1, 1)
@@ -353,22 +358,25 @@ class DataViewer(QWidget):
                                                     int(self.current_data_xrange[1] * self.data.samplerate), :].T,
                                           self.current_data_xrange[0])
         f_idx_0 = 0
-        f_idx_1 = np.where(self.Spec.spec_freqs < 2000)[0][-1]
+        # f_idx_1 = np.where(self.Spec.spec_freqs < 2000)[0][-1]
+        f_idx_1 = len(self.Spec.spec_freqs)-1
 
-        if not self.scroll_area_spec.isHidden():
+        if not self.scroll_area_spec.isHidden(): # when scrollare spec is visible
             for ch in range(self.data.channels):
 
-                self.plot_handels_spec[ch].setImage(decibel(self.Spec.spec[ch, f_idx_0:f_idx_1, :].T), levels=[self.v_min, self.v_max])
+                self.plot_handels_spec[ch].setImage(decibel(self.Spec.spec[ch, f_idx_0:f_idx_1, :].T),
+                                                    levels=[self.v_min, self.v_max], colorMap='viridis')
                 self.plot_handels_spec[ch].setRect(
                     pg.QtCore.QRectF(self.Spec.spec_times[0], self.Spec.spec_freqs[f_idx_0],
                                      self.Spec.times[-1] - self.Spec.times[0],
                                      self.Spec.spec_freqs[f_idx_1] - self.Spec.spec_freqs[f_idx_0]))
 
+            self.min_freq, self.max_freq = self.sum_spec_h.getAxis('left').range
             self.plot_widgets_spec[0].setXRange(self.Spec.spec_times[0], self.Spec.spec_times[-1])
             self.plot_widgets_spec[0].setYRange(self.min_freq, self.max_freq)
-        else:
+        else: # if not ... so either we come from spec or traces and go to sum_spec
             self.sum_spec_img.setImage(decibel(self.Spec.sum_spec[f_idx_0:f_idx_1, :].T),
-                                       levels=[self.v_min, self.v_max])
+                                       levels=[self.v_min, self.v_max], colorMap='viridis')
             self.sum_spec_img.setRect(
                 pg.QtCore.QRectF(self.Spec.spec_times[0], self.Spec.spec_freqs[f_idx_0],
                                  self.Spec.times[-1] - self.Spec.times[0],
@@ -407,8 +415,10 @@ class DataViewer(QWidget):
                     self.scroll_val = self.scroll_area_traces.verticalScrollBar().value()
                     self.scroll_area_traces.hide()
                     self.update_switch_spectrograms(update=True)
+                    # self.plot_widgets_spec[0].setYRange(self.min_freq, self.max_freq)
+
                 if not self.content_widget_sum_spec.isHidden():
-                    self.min_freq, self.max_freq = self.sum_spec_h.getAxis('left').range
+                    # self.min_freq, self.max_freq = self.sum_spec_h.getAxis('left').range
                     self.content_widget_sum_spec.hide()
                     self.update_switch_spectrograms()
 
