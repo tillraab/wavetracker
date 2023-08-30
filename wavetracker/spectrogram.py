@@ -194,6 +194,8 @@ class Spectrogram(object):
             self.sum_spec = np.sum(self.spec, axis=0)
             self.itter_count += 1
         else:
+            self.step, self.noverlap = get_step_and_overlap(self._overlap_frac, self.nfft)
+            self.partial_func = partial(mlab_spec, samplerate=self.samplerate, nfft=self.nfft, noverlap=self.noverlap)
             pool = multiprocessing.Pool(self.core_count - 1)
             a = pool.map(self.partial_func, data_snippet)  # ret: spec, freq, time
             self.spec = np.array([a[channel][0] for channel in range(len(a))])
