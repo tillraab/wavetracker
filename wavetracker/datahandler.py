@@ -75,22 +75,151 @@ def open_raw_data(folder: str,
 
 
 class SubplotScrollareaWidget(QScrollArea):
-    pass
+    xlim_signal = pyqtSignal(int, int)
+    def __init__(self, plots_per_row, num_rows_visible, data, parent=None):
+        super(QScrollArea, self).__init__()
+        self._scroll_ylim_per_double_click = False # can be activated
+
+        self.data = data
+
+        # ToDo: Connect the next 4 lines via a parameter setter
+        self.x_min, self.x_max = 0., 1.
+        self.x_min_for_sb = np.linspace(0, (self.data.shape[0] - (self.x_max - self.x_min) * self.data.samplerate) / self.data.samplerate, 100)
+        self.x_max_for_sb = np.linspace(self.x_max - self.x_min, (self.data.shape[0]) / self.data.samplerate, 100)
+        self.plot_max_d_xaxis = 5.
+
+        self.setWidgetResizable(True)
+        self.setVerticalScrollBarPolicy(2)
+
+        self.content_widget = QWidget()
+        self.content_layout = QGridLayout(self.content_widget)
+        self.setWidget(self.content_widget)
+
+        self.plots_per_row = plots_per_row
+        self.num_rows_visible = num_rows_visible
+        rec = QApplication.desktop().screenGeometry()
+        height = rec.height()
+        self.subplot_height = height / self.num_rows_visible
+
+        self.plot_handels = []
+        self.plot_widgets = []
+
+    def create_subplots(self, fn, xlabel='x', ylabel='y'):
+        for channel in range(self.data.channels):
+            row, col = channel // self.plots_per_row, channel % self.plots_per_row
+
+            plot_widget = pg.PlotWidget()
+            plot_widget.setMinimumHeight(int(self.subplot_height))
+
+            plot_widget.setLabel('bottom', xlabel)
+            plot_widget.setLabel('left', ylabel)
+
+            plot_widget.addItem(subplot_h := fn)
+            self.content_layout.addWidget(plot_widget, row, col, 1, 1)
+
+            self.plot_widgets.append(plot_widget)
+            self.plot_handels.append(subplot_h)
+
+            if channel >= 1:
+                plot_widget.setXLink(self.plot_widgets[0])
+                plot_widget.setYLink(self.plot_widgets[0])
+
+        self.plot_widgets[0].sigXRangeChanged.connect(self.xlims_changed)
+
+    def xlims_changed(self):
+        # if self.update_xrange_by_scrollbar:
+        #     self.update_xrange_by_scrollbar = False
+        # else:
+        #     self.x_min, self.x_max = self.plot_widgets_trace[0].getAxis('bottom').range
+        #     self.plot_current_d_xaxis = self.x_max - self.x_min
+        if self.x_min < 0:
+            self.x_max -= self.x_min
+            self.x_min = 0
+            self.plot_widgets[0].setXRange(self.x_min, self.x_max, padding=0)
+        elif self.x_max - self.x_min > self.plot_max_d_xaxis:
+            self.x_max = self.x_min + self.plot_max_d_xaxis
+            self.plot_widgets_trace[0].setXRange(self.x_min, self.x_max, padding=0)  # triggers the same function again
+        else:
+            self.x_min_for_sb = np.linspace(0, (self.data.shape[0] - (self.x_max - self.x_min) * self.data.samplerate) / self.data.samplerate,100)
+            self.x_max_for_sb = np.linspace(self.x_max - self.x_min, (self.data.shape[0]) / self.data.samplerate,100)
+
+            if ((self.x_min < self.x_min - (self.x_max - self.x_min) * 0.9) or
+                    (self.x_max > self.x_max + (self.x_max - self.x_min) * 0.9)):
+
+                plot_x_0 = self.x_min - (self.x_max - self.x_min)
+                plot_x_0 = plot_x_0 if plot_x_0 >= 0 else 0
+                plot_x_1 = self.x_max + (self.x_max - self.x_min)
+
+                plot_x_idx0 = int(plot_x_0 * self.data.samplerate)
+                plot_x_idx1 = int(plot_x_1 * self.data.samplerate)
+
+                self.xlim_signal.emit(plot_x_idx0, plot_x_idx1)
+
+        #         for enu, plot_widget in enumerate(self.plot_handels_trace):
+        #             if plot_x_idx1 - plot_x_idx0 > 10000:
+        #                 x = np.array(np.linspace(plot_x_idx0, plot_x_idx1, 10000), dtype=int)
+        #                 y = self.data[x, enu]
+        #             else:
+        #                 x = np.arange(plot_x_idx0, plot_x_idx1)
+        #                 y = self.data[plot_x_idx0:plot_x_idx1, enu]
+        #
+        #             if len(y) > len(x):
+        #                 y = y[:len(x)]
+        #             elif len(x) > len(y):
+        #                 x = x[:len(y)]
+        #             else:
+        #                 pass
+        #             plot_widget.setData(x / self.data.samplerate, y)
+        #
+        # y_min = np.min(
+        #     self.data[int(self.x_min * self.data.samplerate):int(self.x_max * self.data.samplerate) + 1, :])
+        # y_max = np.max(
+        #     self.data[int(self.x_min * self.data.samplerate):int(self.x_max * self.data.samplerate) + 1, :])
+        #
+        # for pw in self.plot_widgets_trace:
+        #     pw.setYRange(y_min, y_max, padding=0)
+
+    @property
+    def scroll_ylim_per_double_click(self):
+        return self._scroll_ylim_per_double_click
+    @scroll_ylim_per_double_click.setter
+    def scroll_ylim_per_double_click(self, value: bool):
+        self._scroll_ylim_per_double_click = bool(value)
+        if value:
+            for plot_widget in self.plot_widgets:
+                plot_widget.mouseDoubleClickEvent = lambda event, p=plot_widget: self.adjust_ylim_to_double_clicked_subplot(
+                    event, p)
+        else:
+            for plot_widget in self.plot_widgets:
+                plot_widget.mouseDoubleClickEvent = (lambda *args: None)
+
+    def adjust_ylim_to_double_clicked_subplot(self, event, plot):
+        self.x_min, self.x_max = self.plot_widgets[0].getAxis('bottom').range
+        self.plot_current_d_xaxis = self.x_max - self.x_min
+        self.x_min = 0 if self.x_min < 0 else self.x_min
+        plot_idx = self.content_layout.indexOf(plot)
+        doi = self.data[int(self.x_min * self.data.samplerate):int(self.x_max * self.data.samplerate) + 1, plot_idx]
+
+        y_min, y_max = np.min(doi), np.max(doi)
+        dy = (y_max-y_max)
+        y_min -= dy*0.05
+        y_max += dy*0.05
+        for pw in self.plot_widgets:
+            pw.setYRange(y_min, y_max, padding=0)
 
 class DataViewer(QWidget):
     kill = pyqtSignal()
 
     def __init__(self, data=None, cfg=None, parent=None):
         super(DataViewer, self).__init__()
-        # params: scrollbar
-        self._rel_scroller_size = 0.1
+        self.data = data
 
         # params: data plotting
         self.plot_max_d_xaxis = 5.
         self.plot_current_d_xaxis = 1.
         self.x_min, self.x_max = 0., self.plot_current_d_xaxis
-
         self.current_data_xrange = (0, self.plot_current_d_xaxis*2., self.plot_current_d_xaxis*2.)
+
         self.update_xrange_by_scrollbar = False
 
         # params: spectrogram
@@ -118,67 +247,79 @@ class DataViewer(QWidget):
         self.subplot_height = height / self.num_rows_visible
 
         ### layout -- traces per channel
-        self.scroll_val = 0
-
         self.main_layout = QGridLayout(self)
 
-        self.scroll_area_traces = QScrollArea() # this is a widget
-        self.scroll_area_traces.setWidgetResizable(True)
-        self.scroll_area_traces.setVerticalScrollBarPolicy(2)  # Always show scrollbar
+        self.Traces = SubplotScrollareaWidget(plots_per_row=3, num_rows_visible=3, data = self.data)
+        self.Traces.create_subplots(fn=pg.PlotCurveItem())
+        self.Traces.xlim_signal.connect(self.update_trace_plots)
+        self.main_layout.addWidget(self.Traces, 0, 0)
 
-        self.content_widget_traces = QWidget()  # Create a content widget for the scroll area
-        self.content_layout_traces = QGridLayout(self.content_widget_traces)  # Use QGridLayout for the content widget
-        self.scroll_area_traces.setWidget(self.content_widget_traces)  # Set the content widget as the scroll area's content
+        self.Specs = SubplotScrollareaWidget(plots_per_row=3, num_rows_visible=3, data = self.data)
+        self.Specs.create_subplots(fn=pg.ImageItem())
+        self.main_layout.addWidget(self.Specs, 0, 0)
+        self.Specs.hide()
 
-        self.main_layout.addWidget(self.scroll_area_traces, 0, 0)
-
-        ### layout -- specs per channel
-        self.scroll_area_spec = QScrollArea() # this is a widget
-        self.scroll_area_spec.setWidgetResizable(True)
-        self.scroll_area_spec.setVerticalScrollBarPolicy(2)  # Always show scrollbar
-
-        self.content_widget_spec = QWidget()  # Create a content widget for the scroll area
-        self.content_layout_spec = QGridLayout(self.content_widget_spec)  # Use QGridLayout for the content widget
-        self.scroll_area_spec.setWidget(self.content_widget_spec)  # Set the content widget as the scroll area's content
-
-        self.main_layout.addWidget(self.scroll_area_spec, 0, 0)
-        self.scroll_area_spec.hide()
-
-        ### layout -- single spec
-        self.content_widget_sum_spec = QWidget()
-        self.content_layout_sum_spec = QGridLayout(self.content_widget_sum_spec)
-
-        self.main_layout.addWidget(self.content_widget_sum_spec, 0, 0)
-        self.content_widget_sum_spec.hide()
-
-        ### scrollbar for x lims
-        self.add_scrollbar_to_adjust_xrange()
-
-        # Actions
-        self.define_actions()
+        # ### layout -- single spec
+        # self.content_widget_sum_spec = QWidget()
+        # self.content_layout_sum_spec = QGridLayout(self.content_widget_sum_spec)
         #
-        # data init
-        self.data = data
-        self.x_min_for_sb = np.linspace(0, (self.data.shape[0] - self.plot_current_d_xaxis * self.data.samplerate) / self.data.samplerate, 100)
-        self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, (self.data.shape[0] - self.plot_current_d_xaxis * self.data.samplerate) / self.data.samplerate, 100)
-        self.Spec = Spectrogram(data.samplerate, data.shape, snippet_size=self.snippet_size, nfft=self.nfft,
-                                overlap_frac=self.overlap_frac, channels = -1, gpu_use= available_GPU)
+        # self.main_layout.addWidget(self.content_widget_sum_spec, 0, 0)
+        # self.content_widget_sum_spec.hide()
+        #
+        ### scrollbar for x lims
+        self.scroll_val = 0
+        self.add_scrollbar_to_adjust_xrange()
+        #
+        # # Actions
+        # self.define_actions()
+        # #
+        # # data init
+        # self.data = data
+        # self.x_min_for_sb = np.linspace(0, (self.data.shape[0] - self.plot_current_d_xaxis * self.data.samplerate) / self.data.samplerate, 100)
+        # self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, (self.data.shape[0] - self.plot_current_d_xaxis * self.data.samplerate) / self.data.samplerate, 100)
+        # self.Spec = Spectrogram(data.samplerate, data.shape, snippet_size=self.snippet_size, nfft=self.nfft,
+        #                         overlap_frac=self.overlap_frac, channels = -1, gpu_use= available_GPU)
+        #
+        # ### content -- create plots
+        # self.setup_plot_environment()
+        #
+        # ### plots
+        # self.initial_trace_plot()
+        #
+        # ### functions tiggered by actions
+        # self.plot_widgets_trace[0].sigXRangeChanged.connect(self.update_trace_data_in_all_subplotsplot)
+        # # self.plot_widgets_spec[0].sigXRangeChanged.connect(self.update_spec_in_all_subplotsplot)
+        # self.power_hist.sigLevelsChanged.connect(self.vmin_vmax_adapt)
+        #
+        # ## loop plot parameters
+        # self.timer=QTimer()
+        # self.timer.timeout.connect(self.check)
+        # self.timer.start(1000)
 
-        ### content -- create plots
-        self.setup_plot_environment()
+    def update_trace_plots(self, plot_x_idx1, plot_x_idx0):
+        for enu, plot_widget in enumerate(self.Traces.plot_handels):
+            if plot_x_idx1 - plot_x_idx0 > 10000:
+                x = np.array(np.linspace(plot_x_idx0, plot_x_idx1, 10000), dtype=int)
+                y = self.data[x, enu]
+            else:
+                x = np.arange(plot_x_idx0, plot_x_idx1)
+                y = self.data[plot_x_idx0:plot_x_idx1, enu]
 
-        ### plots
-        self.initial_trace_plot()
+            if len(y) > len(x):
+                y = y[:len(x)]
+            elif len(x) > len(y):
+                x = x[:len(y)]
+            else:
+                pass
+            plot_widget.setData(x / self.data.samplerate, y)
 
-        ### functions tiggered by actions
-        self.plot_widgets_trace[0].sigXRangeChanged.connect(self.update_trace_data_in_all_subplotsplot)
-        # self.plot_widgets_spec[0].sigXRangeChanged.connect(self.update_spec_in_all_subplotsplot)
-        self.power_hist.sigLevelsChanged.connect(self.vmin_vmax_adapt)
+        y_min = np.min(
+            self.data[int(self.x_min * self.data.samplerate):int(self.x_max * self.data.samplerate) + 1, :])
+        y_max = np.max(
+            self.data[int(self.x_min * self.data.samplerate):int(self.x_max * self.data.samplerate) + 1, :])
 
-        ## loop plot parameters
-        self.timer=QTimer()
-        self.timer.timeout.connect(self.check)
-        self.timer.start(1000)
+        for pw in self.Traces.plot_widgets:
+            pw.setYRange(y_min, y_max, padding=0)
 
     def check(self):
         print(self.x_min)
@@ -199,7 +340,8 @@ class DataViewer(QWidget):
             plot_widget.setLabel('bottom', "time [s]")
             plot_widget.setLabel('left', "ampl [aU]")
 
-            subplot_h = plot_widget.plot()
+            # subplot_h = plot_widget.plot()
+            plot_widget.addItem(subplot_h := pg.PlotCurveItem())
             self.content_layout_traces.addWidget(plot_widget, row, col, 1, 1)
 
             self.plot_widgets_trace.append(plot_widget)
@@ -211,8 +353,9 @@ class DataViewer(QWidget):
             plot_widget_s.setLabel('bottom', "time [s]")
             plot_widget_s.setLabel('left', "frequency [Hz]")
 
-            subplot_h_s = pg.ImageItem()
-            plot_widget_s.addItem(subplot_h_s)
+            # subplot_h_s = pg.ImageItem()
+            # plot_widget_s.addItem(subplot_h_s)
+            plot_widget_s.addItem(subplot_h_s := pg.ImageItem())
             self.content_layout_spec.addWidget(plot_widget_s, row, col, 1, 1)
 
             self.plot_widgets_spec.append(plot_widget_s)
@@ -255,8 +398,8 @@ class DataViewer(QWidget):
         self.x_scrollbar.setMinimum(0)
         self.x_scrollbar.setMaximum(99)
 
-        self.x_scrollbar.setPageStep(int(self._rel_scroller_size * self.x_scrollbar.maximum()))
-        self.scroller_position = int(0 * self.x_scrollbar.maximum())
+        self.x_scrollbar.setPageStep(int(0.1* self.x_scrollbar.maximum()))
+        self.scroller_position = int(0)
         self.x_scrollbar.setValue(self.scroller_position)
 
         self.x_scrollbar.sliderReleased.connect(lambda: self.update_plot_x_limits_by_scrollbar(self.x_scrollbar.value()))
@@ -306,10 +449,17 @@ class DataViewer(QWidget):
         self.plot_widgets_trace[0].setXRange(self.x_min, self.x_max)
 
     def update_plot_x_limits_by_scrollbar(self, value): #  1-100 as set earlier
-        self.x_min = self.x_min_for_sb[value]
-        self.x_max = self.x_max_for_sb[value]
+        self.x_min = self.Traces.x_min = self.Specs.x_min= self.x_min_for_sb[value]
+        self.x_max = self.Traces.x_max = self.Specs.x_max = self.x_max_for_sb[value]
 
-        self.update_xrange_by_scrollbar = True
+        if self.Traces.isVisible():
+            self.Traces.plot_widgets[0].setXRange(self.Traces.x_min, self.Traces.x_max, padding=0)
+
+        elif self.Specs.isVisible():
+            self.Specs.plot_widgets[0].setXRange(self.Specs.x_min, self.Specs.x_max, padding=0)
+
+
+
 
         if not self.scroll_area_traces.isHidden():
             self.plot_widgets_trace[0].setXRange(self.x_min, self.x_max, padding=0) # triggers self._update_plot
