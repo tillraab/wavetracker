@@ -197,7 +197,6 @@ class DataViewer(QWidget):
 
     def __init__(self, data=None, cfg=None, parent=None):
         super(DataViewer, self).__init__()
-        self.data = data
 
         # params: data plotting
         self.plot_max_d_xaxis = 5.
@@ -223,6 +222,11 @@ class DataViewer(QWidget):
             self.nfft = 2 ** 12
             self.overlap_frac = 0.9
 
+        ### data and spec init
+        self.data = data
+        self.Spec = Spectrogram(data.samplerate, data.shape, snippet_size=self.snippet_size, nfft=self.nfft,
+                                overlap_frac=self.overlap_frac, channels = -1, gpu_use= available_GPU)
+
         ### subplot layout
         self.plots_per_row = 3
         self.num_rows_visible = 3
@@ -242,7 +246,7 @@ class DataViewer(QWidget):
 
         self.Specs = SubplotScrollareaWidget(plots_per_row=3, num_rows_visible=3, data = self.data)
         self.Specs.create_subplots(fn=pg.ImageItem)
-        # self.Specs.update_data_sig.connect(self.plot_update_spec)
+        self.Specs.update_data_sig.connect(self.plot_update_specs)
         self.main_layout.addWidget(self.Specs, 0, 0)
         self.Specs.hide()
 
@@ -264,8 +268,7 @@ class DataViewer(QWidget):
         # self.data = data
         # self.x_min_for_sb = np.linspace(0, (self.data.shape[0] - self.plot_current_d_xaxis * self.data.samplerate) / self.data.samplerate, 100)
         # self.x_max_for_sb = np.linspace(self.plot_current_d_xaxis, (self.data.shape[0] - self.plot_current_d_xaxis * self.data.samplerate) / self.data.samplerate, 100)
-        # self.Spec = Spectrogram(data.samplerate, data.shape, snippet_size=self.snippet_size, nfft=self.nfft,
-        #                         overlap_frac=self.overlap_frac, channels = -1, gpu_use= available_GPU)
+
         #
         # ### content -- create plots
         # self.setup_plot_environment()
@@ -283,6 +286,23 @@ class DataViewer(QWidget):
         # self.timer.timeout.connect(self.check)
         # self.timer.start(1000)
 
+    def plot_update_specs(self, obj):
+        print('fn: plot_update_specs')
+        x_idx_0 = int(obj.data_x_min * self.data.samplerate)
+        x_idx_1 = int(obj.data_x_max * self.data.samplerate)
+
+        self.Spec.snippet_spectrogram(self.data[x_idx_0:x_idx_1, :].T, obj.data_x_min)
+
+        for ch in range(self.data.channels):
+
+            obj.plot_handels[ch].setImage(decibel(self.Spec.spec[ch, :, :].T),
+                                                levels=[self.v_min, self.v_max], colorMap='viridis')
+            obj.plot_handels[ch].setRect(
+                pg.QtCore.QRectF(self.Spec.spec_times[0], self.Spec.spec_freqs[0],
+                                 self.Spec.times[-1] - self.Spec.times[0],
+                                 self.Spec.spec_freqs[-1] - self.Spec.spec_freqs[0]))
+
+        # self.plot_widgets_spec[0].setXRange(self.x_min, self.x_max)
 
     def plot_update_traces(self, obj):
         print('fn: plot_update_traces')
@@ -422,7 +442,6 @@ class DataViewer(QWidget):
         self.Act_spec_overlap_down.setShortcut('Shift+O')
         self.addAction(self.Act_spec_overlap_down)
         pass
-
 
     def update_plot_x_limits_by_scrollbar(self, value): #  1-100 as set earlier
         for obj in [self.Traces, self.Specs]:
