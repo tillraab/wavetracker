@@ -106,7 +106,7 @@ class SubplotScrollareaWidget(QScrollArea):
         self.plot_handels = []
         self.plot_widgets = []
 
-        self.update_xrange_by_scrollbar = False
+        self.update_xrange_without_xlim_grep = False
 
     def create_subplots(self, fn, xlabel='x', ylabel='y'):
         for channel in range(self.data.channels):
@@ -132,10 +132,8 @@ class SubplotScrollareaWidget(QScrollArea):
         self.plot_widgets[0].sigXRangeChanged.connect(self.plot_xlims_changed)
 
     def plot_xlims_changed(self):
-        # print('fn: plot_xlims_changed')
-        # self.update_xrange_by_scrollbar=False
-        if self.update_xrange_by_scrollbar:
-            self.update_xrange_by_scrollbar = False
+        if self.update_xrange_without_xlim_grep:
+            self.update_xrange_without_xlim_grep = False
         else:
             self.plot_x_min, self.plot_x_max = self.plot_widgets[0].getAxis('bottom').range
 
@@ -145,13 +143,15 @@ class SubplotScrollareaWidget(QScrollArea):
         if self.plot_x_min < 0:
             self.plot_x_max -= self.plot_x_min
             self.plot_x_min = 0
+            self.update_xrange_without_xlim_grep = True
             self.plot_widgets[0].setXRange(self.plot_x_min, self.plot_x_max, padding=0)
         elif self.plot_x_max - self.plot_x_min > self.plot_max_d_xaxis:
             self.plot_x_max = self.plot_x_min + self.plot_max_d_xaxis
+            self.update_xrange_without_xlim_grep = True
             self.plot_widgets[0].setXRange(self.plot_x_min, self.plot_x_max, padding=0)  # triggers the same function again
         else:
-            if (((self.plot_x_min < self.plot_x_min - (self.plot_x_min - self.data_x_min) * 0.8) and (self.plot_x_min > (self.plot_x_max - self.plot_x_min))) or
-                 (self.plot_x_max > self.plot_x_max + (self.data_x_max - self.plot_x_max) * 0.8)):
+            if (((self.plot_x_min < self.plot_x_min - (self.plot_x_min - self.data_x_min) * 0.5) and (self.plot_x_min > (self.plot_x_max - self.plot_x_min))) or
+                 (self.plot_x_max > self.plot_x_max + (self.data_x_max - self.plot_x_max) * 0.5)):
                 print('\nemit updating data:')
                 print(f'data_x_min: {self.data_x_min:.2f}s; plot_x_min: {self.plot_x_min:.2f}s')
                 print(f'data_x_max: {self.data_x_max:.2f}s; plot_x_max: {self.plot_x_max:.2f}s')
@@ -161,7 +161,6 @@ class SubplotScrollareaWidget(QScrollArea):
                 self.data_x_max = self.plot_x_max + (self.plot_x_max - self.plot_x_min)
 
                 self.update_data_sig.emit(self)
-
 
     @property
     def scroll_ylim_per_double_click(self):
@@ -191,6 +190,7 @@ class SubplotScrollareaWidget(QScrollArea):
         y_max += dy*0.05
         for pw in self.plot_widgets:
             pw.setYRange(y_min, y_max, padding=0)
+
 
 class DataViewer(QWidget):
     kill = pyqtSignal()
@@ -247,6 +247,7 @@ class DataViewer(QWidget):
         self.Specs = SubplotScrollareaWidget(plots_per_row=3, num_rows_visible=3, data = self.data)
         self.Specs.create_subplots(fn=pg.ImageItem)
         self.Specs.update_data_sig.connect(self.plot_update_specs)
+        self.Specs.plot_widgets[0].setXRange(self.Specs.plot_x_min, self.Specs.plot_x_max)
         self.main_layout.addWidget(self.Specs, 0, 0)
         self.Specs.hide()
 
@@ -294,7 +295,6 @@ class DataViewer(QWidget):
         self.Spec.snippet_spectrogram(self.data[x_idx_0:x_idx_1, :].T, obj.data_x_min)
 
         for ch in range(self.data.channels):
-
             obj.plot_handels[ch].setImage(decibel(self.Spec.spec[ch, :, :].T),
                                                 levels=[self.v_min, self.v_max], colorMap='viridis')
             obj.plot_handels[ch].setRect(
@@ -302,7 +302,7 @@ class DataViewer(QWidget):
                                  self.Spec.times[-1] - self.Spec.times[0],
                                  self.Spec.spec_freqs[-1] - self.Spec.spec_freqs[0]))
 
-        # self.plot_widgets_spec[0].setXRange(self.x_min, self.x_max)
+        obj.plot_widgets[0].setYRange(self.min_freq, self.max_freq)
 
     def plot_update_traces(self, obj):
         print('fn: plot_update_traces')
@@ -450,9 +450,10 @@ class DataViewer(QWidget):
                 obj.plot_x_max = obj.x_max_for_sb[value]
 
                 print(f'\nscrollbar: {obj.plot_x_min, obj.plot_x_max}')
-                obj.update_xrange_by_scrollbar = True
+                obj.update_xrange_without_xlim_grep = True
                 obj.plot_widgets[0].setXRange(obj.plot_x_min, obj.plot_x_max, padding=0)
                 return
+
     def update_trace_data_in_all_subplotsplot(self):
         if self.update_xrange_by_scrollbar:
             self.update_xrange_by_scrollbar = False
@@ -583,55 +584,70 @@ class DataViewer(QWidget):
             pass
 
     def keyPressEvent(self, event):
-        if event.key() == Qt.Key_T:
-            if self.scroll_area_traces.isHidden():
-                self.Act_spec_nfft_up.setEnabled(False)
-                self.Act_spec_nfft_down.setEnabled(False)
-                self.Act_spec_overlap_up.setEnabled(False)
-                self.Act_spec_overlap_down.setEnabled(False)
-                if not self.scroll_area_spec.isHidden():
-                    self.scroll_val = self.scroll_area_spec.verticalScrollBar().value()
-                    self.scroll_area_spec.hide()
-                if not self.content_widget_sum_spec.isHidden():
-                    self.content_widget_sum_spec.hide()
-
-                self.scroll_area_traces.verticalScrollBar().setValue(self.scroll_val)
-                self.scroll_area_traces.show()
-
         if event.key() == Qt.Key_S:
-            if self.scroll_area_spec.isHidden():
-                self.Act_spec_nfft_up.setEnabled(True)
-                self.Act_spec_nfft_down.setEnabled(True)
-                self.Act_spec_overlap_up.setEnabled(True)
-                self.Act_spec_overlap_down.setEnabled(True)
-                self.scroll_area_spec.show()
+            if self.Traces.isVisible():
+                self.Specs.plot_x_min, self.Specs.plot_x_max = self.Traces.plot_x_min, self.Traces.plot_x_max
+                self.Specs.update_xrange_without_xlim_grep = True
+                self.Specs.plot_widgets[0].setXRange(self.Specs.plot_x_min, self.Specs.plot_x_max)
+                self.Specs.show()
+                self.Traces.hide()
 
-                if not self.scroll_area_traces.isHidden():
-                    self.scroll_val = self.scroll_area_traces.verticalScrollBar().value()
-                    self.scroll_area_spec.verticalScrollBar().setValue(self.scroll_val)
-                    self.scroll_area_traces.hide()
-                    # self.scroll_area_spec.show()
-                    self.update_switch_spectrograms(update=True)
-                    # self.plot_widgets_spec[0].setXRange(self.x_min, self.x_max)
-
-                if not self.content_widget_sum_spec.isHidden():
-                    self.content_widget_sum_spec.hide()
-                    self.sum_spec_h.setXRange(self.x_min, self.x_max)
-                    # self.update_switch_spectrograms()
-
-            elif self.content_widget_sum_spec.isHidden():
-                self.content_widget_sum_spec.show()
-                self.scroll_area_spec.hide()
-
-                self.update_switch_spectrograms()
-        if event.key() == Qt.Key_C:
-            reply = QMessageBox.question(self, 'Save config.yaml', 'Want to save the current setting?',
-                                         QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-
-            if reply == QMessageBox.Yes:
-                self.cfg.harmonic_groups['min_good_peak_power'] = self.v_min
-                self.cfg.save()
-                # self.scroll_area_spec.hide()
+        if event.key() == Qt.Key_T:
+            if self.Specs.isVisible():
+                self.Traces.plot_x_min, self.Traces.plot_x_max = self.Specs.plot_x_min, self.Specs.plot_x_max
+                self.Traces.update_xrange_without_xlim_grep = True
+                self.Traces.plot_widgets[0].setXRange(self.Specs.plot_x_min, self.Specs.plot_x_max)
+                self.Traces.show()
+                self.Specs.hide()
+        # if event.key() == Qt.Key_T:
+        #     if self.scroll_area_traces.isHidden():
+        #         self.Act_spec_nfft_up.setEnabled(False)
+        #         self.Act_spec_nfft_down.setEnabled(False)
+        #         self.Act_spec_overlap_up.setEnabled(False)
+        #         self.Act_spec_overlap_down.setEnabled(False)
+        #         if not self.scroll_area_spec.isHidden():
+        #             self.scroll_val = self.scroll_area_spec.verticalScrollBar().value()
+        #             self.scroll_area_spec.hide()
+        #         if not self.content_widget_sum_spec.isHidden():
+        #             self.content_widget_sum_spec.hide()
+        #
+        #         self.scroll_area_traces.verticalScrollBar().setValue(self.scroll_val)
+        #         self.scroll_area_traces.show()
+        #
+        # if event.key() == Qt.Key_S:
+        #     if self.scroll_area_spec.isHidden():
+        #         self.Act_spec_nfft_up.setEnabled(True)
+        #         self.Act_spec_nfft_down.setEnabled(True)
+        #         self.Act_spec_overlap_up.setEnabled(True)
+        #         self.Act_spec_overlap_down.setEnabled(True)
+        #         self.scroll_area_spec.show()
+        #
+        #         if not self.scroll_area_traces.isHidden():
+        #             self.scroll_val = self.scroll_area_traces.verticalScrollBar().value()
+        #             self.scroll_area_spec.verticalScrollBar().setValue(self.scroll_val)
+        #             self.scroll_area_traces.hide()
+        #             # self.scroll_area_spec.show()
+        #             self.update_switch_spectrograms(update=True)
+        #             # self.plot_widgets_spec[0].setXRange(self.x_min, self.x_max)
+        #
+        #         if not self.content_widget_sum_spec.isHidden():
+        #             self.content_widget_sum_spec.hide()
+        #             self.sum_spec_h.setXRange(self.x_min, self.x_max)
+        #             # self.update_switch_spectrograms()
+        #
+        #     elif self.content_widget_sum_spec.isHidden():
+        #         self.content_widget_sum_spec.show()
+        #         self.scroll_area_spec.hide()
+        #
+        #         self.update_switch_spectrograms()
+        # if event.key() == Qt.Key_C:
+        #     reply = QMessageBox.question(self, 'Save config.yaml', 'Want to save the current setting?',
+        #                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        #
+        #     if reply == QMessageBox.Yes:
+        #         self.cfg.harmonic_groups['min_good_peak_power'] = self.v_min
+        #         self.cfg.save()
+        #         # self.scroll_area_spec.hide()
         if event.key() == Qt.Key_Q:
             self.kill.emit()
 
