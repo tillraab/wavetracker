@@ -586,17 +586,21 @@ class DataViewer(QWidget):
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_S:
             if self.Traces.isVisible():
-                self.Specs.plot_x_min, self.Specs.plot_x_max = self.Traces.plot_x_min, self.Traces.plot_x_max
-                self.Specs.update_xrange_without_xlim_grep = True
-                self.Specs.plot_widgets[0].setXRange(self.Specs.plot_x_min, self.Specs.plot_x_max)
+                if (self.Specs.plot_x_min != self.Traces.plot_x_min) or (
+                        self.Specs.plot_x_max != self.Traces.plot_x_max):
+                    self.Specs.plot_x_min, self.Specs.plot_x_max = self.Traces.plot_x_min, self.Traces.plot_x_max
+                    self.Specs.update_xrange_without_xlim_grep = True
+                    self.Specs.plot_widgets[0].setXRange(self.Specs.plot_x_min, self.Specs.plot_x_max)
                 self.Specs.show()
                 self.Traces.hide()
 
         if event.key() == Qt.Key_T:
             if self.Specs.isVisible():
-                self.Traces.plot_x_min, self.Traces.plot_x_max = self.Specs.plot_x_min, self.Specs.plot_x_max
-                self.Traces.update_xrange_without_xlim_grep = True
-                self.Traces.plot_widgets[0].setXRange(self.Specs.plot_x_min, self.Specs.plot_x_max)
+                if (self.Specs.plot_x_min != self.Traces.plot_x_min) or (
+                        self.Specs.plot_x_max != self.Traces.plot_x_max):
+                    self.Traces.plot_x_min, self.Traces.plot_x_max = self.Specs.plot_x_min, self.Specs.plot_x_max
+                    self.Traces.update_xrange_without_xlim_grep = True
+                    self.Traces.plot_widgets[0].setXRange(self.Specs.plot_x_min, self.Specs.plot_x_max)
                 self.Traces.show()
                 self.Specs.hide()
         # if event.key() == Qt.Key_T:
