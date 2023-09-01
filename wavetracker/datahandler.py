@@ -73,6 +73,7 @@ def open_raw_data(folder: str,
 
     return data, samplerate, channels, dataset, shape
 
+
 class ImagePlotWithHist(QWidget):
     update_data_sig = pyqtSignal(object)
     v_min_max_adapt_sig = pyqtSignal(object)
@@ -115,6 +116,7 @@ class ImagePlotWithHist(QWidget):
 
         self.plot_widgets[0].sigXRangeChanged.connect(lambda: DataViewer.plot_xlims_changed(self))
 
+
 class SubplotScrollareaWidget(QScrollArea):
     update_data_sig = pyqtSignal(object)
     def __init__(self, plots_per_row, num_rows_visible, data, parent=None):
@@ -123,7 +125,6 @@ class SubplotScrollareaWidget(QScrollArea):
 
         self.data = data
 
-        # ToDo: Connect the next 4 lines via a parameter setter
         self.plot_x_min, self.plot_x_max = 0., 1.
         self.data_x_min, self.data_x_max = 0., 0.
         self.x_min_for_sb = np.linspace(0, (self.data.shape[0] - (self.plot_x_max - self.plot_x_min) * self.data.samplerate) / self.data.samplerate, 100)
@@ -302,7 +303,6 @@ class DataViewer(QWidget):
                              self.Spec.spec_freqs[-1] - self.Spec.spec_freqs[0]))
 
         # obj.plot_widgets[0].setYRange(self.min_freq, self.max_freq)
-
 
     def plot_update_specs(self, obj):
         print('fn: plot_update_specs')
@@ -512,27 +512,11 @@ class DataViewer(QWidget):
         if event.key() == Qt.Key_Q:
             self.kill.emit()
 
-
     def vmin_vmax_adapt(self, cls):
         # Obtain the new lookup table values
         levels = cls.power_hist.getLevels()
         self.force_update_spec_plot = True
         self.v_min, self.v_max = levels
-
-    def adjust_ylim_to_double_clicked_subplot(self, event, plot):
-        self.x_min, self.x_max = self.plot_widgets_trace[0].getAxis('bottom').range
-        self.plot_current_d_xaxis = self.x_max - self.x_min
-        self.x_min = 0 if self.x_min < 0 else self.x_min
-        plot_idx = self.content_layout_traces.indexOf(plot)
-        doi = self.data[int(self.x_min * self.data.samplerate):int(self.x_max * self.data.samplerate) + 1, plot_idx]
-
-        y_min, y_max = np.min(doi), np.max(doi)
-
-        dy = (y_max-y_max)
-        y_min -= dy*0.05
-        y_max += dy*0.05
-        for pw in self.plot_widgets_trace:
-            pw.setYRange(y_min, y_max, padding=0)
 
 
 class DataViewerStandalone(QMainWindow):
