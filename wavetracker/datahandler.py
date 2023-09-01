@@ -246,6 +246,8 @@ class DataViewer(QWidget):
         ### layout -- traces per channel
         self.main_layout = QGridLayout(self)
 
+        self.force_update_spec_plot = False
+
         self.TracesSubPlots = SubplotScrollareaWidget(plots_per_row=3, num_rows_visible=3, data = self.data)
         self.TracesSubPlots.create_subplots(fn=pg.PlotCurveItem, xlabel ='time [s]', ylabel='ampl. [a.U.]')
         self.TracesSubPlots.update_data_sig.connect(self.plot_update_traces)
@@ -274,7 +276,6 @@ class DataViewer(QWidget):
         self.add_scrollbar_to_adjust_xrange()
 
         ### Actions
-        self.force_update_spec_plot = False
         self.define_actions()
 
         #
@@ -290,9 +291,9 @@ class DataViewer(QWidget):
         print('fn plot_update_sumspec')
         x_idx_0 = int(obj.data_x_min * self.data.samplerate)
         x_idx_1 = int(obj.data_x_max * self.data.samplerate)
-
-        self.Spec.snippet_spectrogram(self.data[x_idx_0:x_idx_1, :].T, obj.data_x_min)
-
+        if not self.force_update_spec_plot:
+            self.Spec.snippet_spectrogram(self.data[x_idx_0:x_idx_1, :].T, obj.data_x_min)
+        self.force_update_spec_plot = False
         obj.plot_handels[0].setImage(decibel(self.Spec.sum_spec.T),
                                    levels=[self.v_min, self.v_max], colorMap='viridis')
         obj.plot_handels[0].setRect(
@@ -308,7 +309,9 @@ class DataViewer(QWidget):
         x_idx_0 = int(obj.data_x_min * self.data.samplerate)
         x_idx_1 = int(obj.data_x_max * self.data.samplerate)
 
-        self.Spec.snippet_spectrogram(self.data[x_idx_0:x_idx_1, :].T, obj.data_x_min)
+        if not self.force_update_spec_plot:
+            self.Spec.snippet_spectrogram(self.data[x_idx_0:x_idx_1, :].T, obj.data_x_min)
+        self.force_update_spec_plot = False
 
         for ch in range(self.data.channels):
             obj.plot_handels[ch].setImage(decibel(self.Spec.spec[ch, :, :].T),
@@ -467,11 +470,9 @@ class DataViewer(QWidget):
                         self.SpecsSubPlots.plot_x_max != self.SumSpecPlot.plot_x_max):
                     self.SpecsSubPlots.plot_x_min, self.SpecsSubPlots.plot_x_max = self.SumSpecPlot.plot_x_min, self.SumSpecPlot.plot_x_max
                     self.SpecsSubPlots.update_xrange_without_xlim_grep = True
-                    self.force_update_spec_plot = False
                     self.SpecsSubPlots.plot_widgets[0].setXRange(self.SpecsSubPlots.plot_x_min, self.SpecsSubPlots.plot_x_max, padding=0)
                 elif self.force_update_spec_plot:
                     self.plot_update_specs(self.SpecsSubPlots)
-                    self.force_update_spec_plot = False
 
                 f0, f1 = self.SumSpecPlot.plot_widgets[0].getAxis('left').range
                 self.SpecsSubPlots.plot_widgets[0].setYRange(f0, f1, padding=0)
