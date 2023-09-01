@@ -287,6 +287,7 @@ class DataViewer(QWidget):
     #     print(self.x_min)
 
     def plot_update_sumspec(self, obj):
+        print('fn plot_update_sumspec')
         x_idx_0 = int(obj.data_x_min * self.data.samplerate)
         x_idx_1 = int(obj.data_x_max * self.data.samplerate)
 
@@ -370,6 +371,14 @@ class DataViewer(QWidget):
 
                 cls.update_data_sig.emit(cls)
 
+    def spec_params_changed(self):
+        if self.SumSpecPlot.isVisible():
+            self.plot_update_sumspec(self.SumSpecPlot)
+        elif self.SpecsSubPlots.isVisible():
+            self.plot_update_specs(self.SpecsSubPlots)
+        else:
+            pass
+
     def add_scrollbar_to_adjust_xrange(self):
         self.x_scrollbar = QScrollBar()
         self.x_scrollbar.setOrientation(1)  # Horizontal orientation
@@ -386,35 +395,35 @@ class DataViewer(QWidget):
 
     def define_actions(self):
         self.Act_spec_nfft_up = QAction('nfft up', self)
-        self.Act_spec_nfft_up.setEnabled(False)
+        # self.Act_spec_nfft_up.setEnabled(False)
         self.Act_spec_nfft_up.triggered.connect(lambda: setattr(self.Spec, "nfft", int(2**(np.log2(self.Spec.nfft)+1))))
-        self.Act_spec_nfft_up.triggered.connect(lambda: self.update_switch_spectrograms(update=True))
+        self.Act_spec_nfft_up.triggered.connect(self.spec_params_changed)
         self.Act_spec_nfft_up.setShortcut('Shift+F')
         self.addAction(self.Act_spec_nfft_up)
 
         self.Act_spec_nfft_down = QAction('nfft down', self)
-        self.Act_spec_nfft_down.setEnabled(False)
+        # self.Act_spec_nfft_down.setEnabled(False)
         self.Act_spec_nfft_down.triggered.connect(lambda: setattr(self.Spec, "nfft",
                                                                   int(2**(np.log2(self.Spec.nfft)-1)) if
                                                                   int(2**(np.log2(self.Spec.nfft)-1)) > 16
                                                                   else self.Spec.nfft))
-        self.Act_spec_nfft_down.triggered.connect(lambda: self.update_switch_spectrograms(update=True))
+        self.Act_spec_nfft_down.triggered.connect(self.spec_params_changed)
         self.Act_spec_nfft_down.setShortcut('F')
         self.addAction(self.Act_spec_nfft_down)
 
         self.Act_spec_overlap_up = QAction('overlap up', self)
-        self.Act_spec_overlap_up.setEnabled(False)
+        # self.Act_spec_overlap_up.setEnabled(False)
         self.Act_spec_overlap_up.triggered.connect(lambda: setattr(self.Spec, "overlap_frac",
                                                                    self.Spec.overlap_frac + 0.05 if self.Spec.overlap_frac < 0.95 else self.Spec.overlap_frac))
-        self.Act_spec_overlap_up.triggered.connect(lambda: self.update_switch_spectrograms(update=True))
+        self.Act_spec_overlap_up.triggered.connect(self.spec_params_changed)
         self.Act_spec_overlap_up.setShortcut('O')
         self.addAction(self.Act_spec_overlap_up)
 
         self.Act_spec_overlap_down = QAction('overlap down', self)
-        self.Act_spec_overlap_down.setEnabled(False)
+        # self.Act_spec_overlap_down.setEnabled(False)
         self.Act_spec_overlap_down.triggered.connect(lambda: setattr(self.Spec, "overlap_frac",
                                                                    self.Spec.overlap_frac - 0.05 if self.Spec.overlap_frac > 0.05 else self.Spec.overlap_frac))
-        self.Act_spec_overlap_down.triggered.connect(lambda: self.update_switch_spectrograms(update=True))
+        self.Act_spec_overlap_down.triggered.connect(self.spec_params_changed)
         self.Act_spec_overlap_down.setShortcut('Shift+O')
         self.addAction(self.Act_spec_overlap_down)
         pass
@@ -437,7 +446,7 @@ class DataViewer(QWidget):
                         self.SpecsSubPlots.plot_x_max != self.TracesSubPlots.plot_x_max):
                     self.SpecsSubPlots.plot_x_min, self.SpecsSubPlots.plot_x_max = self.TracesSubPlots.plot_x_min, self.TracesSubPlots.plot_x_max
                     self.SpecsSubPlots.update_xrange_without_xlim_grep = True
-                    self.SpecsSubPlots.plot_widgets[0].setXRange(self.SpecsSubPlots.plot_x_min, self.SpecsSubPlots.plot_x_max)
+                    self.SpecsSubPlots.plot_widgets[0].setXRange(self.SpecsSubPlots.plot_x_min, self.SpecsSubPlots.plot_x_max, padding=0)
 
                 self.SpecsSubPlots.show()
                 self.TracesSubPlots.hide()
@@ -446,7 +455,7 @@ class DataViewer(QWidget):
                         self.SumSpecPlot.plot_x_max != self.SpecsSubPlots.plot_x_max):
                     self.SumSpecPlot.plot_x_min, self.SumSpecPlot.plot_x_max = self.SpecsSubPlots.plot_x_min, self.SpecsSubPlots.plot_x_max
                     self.SumSpecPlot.update_xrange_without_xlim_grep = True
-                    self.SumSpecPlot.plot_widgets[0].setXRange(self.SumSpecPlot.plot_x_min, self.SumSpecPlot.plot_x_max)
+                    self.SumSpecPlot.plot_widgets[0].setXRange(self.SumSpecPlot.plot_x_min, self.SumSpecPlot.plot_x_max, padding=0)
 
                 f0, f1 = self.SpecsSubPlots.plot_widgets[0].getAxis('left').range
                 self.SumSpecPlot.plot_widgets[0].setYRange(f0, f1, padding=0)
@@ -459,7 +468,7 @@ class DataViewer(QWidget):
                     self.SpecsSubPlots.plot_x_min, self.SpecsSubPlots.plot_x_max = self.SumSpecPlot.plot_x_min, self.SumSpecPlot.plot_x_max
                     self.SpecsSubPlots.update_xrange_without_xlim_grep = True
                     self.force_update_spec_plot = False
-                    self.SpecsSubPlots.plot_widgets[0].setXRange(self.SpecsSubPlots.plot_x_min, self.SpecsSubPlots.plot_x_max)
+                    self.SpecsSubPlots.plot_widgets[0].setXRange(self.SpecsSubPlots.plot_x_min, self.SpecsSubPlots.plot_x_max, padding=0)
                 elif self.force_update_spec_plot:
                     self.plot_update_specs(self.SpecsSubPlots)
                     self.force_update_spec_plot = False
@@ -476,7 +485,7 @@ class DataViewer(QWidget):
                         self.SpecsSubPlots.plot_x_max != self.TracesSubPlots.plot_x_max):
                     self.TracesSubPlots.plot_x_min, self.TracesSubPlots.plot_x_max = self.SpecsSubPlots.plot_x_min, self.SpecsSubPlots.plot_x_max
                     self.TracesSubPlots.update_xrange_without_xlim_grep = True
-                    self.TracesSubPlots.plot_widgets[0].setXRange(self.SpecsSubPlots.plot_x_min, self.SpecsSubPlots.plot_x_max)
+                    self.TracesSubPlots.plot_widgets[0].setXRange(self.SpecsSubPlots.plot_x_min, self.SpecsSubPlots.plot_x_max, padding=0)
 
                 self.TracesSubPlots.show()
                 self.SpecsSubPlots.hide()
@@ -486,7 +495,7 @@ class DataViewer(QWidget):
                         self.SumSpecPlot.plot_x_max != self.TracesSubPlots.plot_x_max):
                     self.TracesSubPlots.plot_x_min, self.TracesSubPlots.plot_x_max = self.SumSpecPlot.plot_x_min, self.SumSpecPlot.plot_x_max
                     self.TracesSubPlots.update_xrange_without_xlim_grep = True
-                    self.TracesSubPlots.plot_widgets[0].setXRange(self.SumSpecPlot.plot_x_min, self.SumSpecPlot.plot_x_max)
+                    self.TracesSubPlots.plot_widgets[0].setXRange(self.SumSpecPlot.plot_x_min, self.SumSpecPlot.plot_x_max, padding=0)
 
                 self.TracesSubPlots.show()
                 self.SumSpecPlot.hide()
