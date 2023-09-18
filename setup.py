@@ -51,6 +51,7 @@ setup(
         #                 "trackingGUI = wavetracker.trackingGUI:main"],
         "console_scripts": ["EODsorter = wavetracker.EODsorter:main",
                             "trackingGUI = wavetracker.trackingGUI:main",
-                            'wavetracker = wavetracker.wavetracker:main']
+                            'wavetracker = wavetracker.wavetracker:main',
+                            'dataviewer = wavetracker.dataviewer:main_UI']
         }
 )
