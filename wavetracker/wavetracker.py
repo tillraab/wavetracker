@@ -276,7 +276,7 @@ def main():
     # load data
     analysis_folders = []
     for dirpath, dirnames, filenames in os.walk(args.folder, topdown=True):
-        for filename in [f for f in filenames if f.endswith(".raw")]: # ToDo: fix for Brasil !!!
+        for filename in [f for f in filenames if any(f.endswith(s) for s in [".raw", ".wav"])]: # ToDo: check if this works
             analysis_folders.append(dirpath)
     analysis_folders = sorted(analysis_folders)
 
