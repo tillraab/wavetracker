@@ -241,7 +241,8 @@ class Analysis_pipeline(object):
 def main():
     example_data = "/home/raab/data/2023-02-09-08_16"
     parser = argparse.ArgumentParser(description='Evaluated electrode array recordings with multiple fish.')
-    parser.add_argument('-f', '--folder', type=str, help='file to be analyzed', default=example_data)
+    # parser.add_argument('-f', '--folder', type=str, help='file to be analyzed', default=example_data)
+    parser.add_argument('file', nargs='?', type=str, help='file to be analyzed')
     parser.add_argument('-c', "--config", type=str, help="<config>.yaml file for analysis", default=None)
     parser.add_argument('-v', '--verbose', action='count', dest='verbose', default=0,
                         help='verbosity level. Increase by specifying -v multiple times, or like -vvv')
@@ -250,8 +251,9 @@ def main():
     parser.add_argument('-l', '--logging', action='store_true', help='store sys.out in log.txt.')
     parser.add_argument('-n', '--nosave', action='store_true', help='dont save spectrograms')
     args = parser.parse_args()
-    args.folder = os.path.abspath(args.folder)
-    # args.folder = os.path.normpath(args.folder)
+
+    if args.file:
+        args.file = os.path.abspath(args.file)
 
     logger = None
     if args.logging:
@@ -274,7 +276,7 @@ def main():
     # load data
     analysis_folders = []
     for dirpath, dirnames, filenames in os.walk(args.folder, topdown=True):
-        for filename in [f for f in filenames if f.endswith(".raw")]:
+        for filename in [f for f in filenames if f.endswith(".raw")]: # ToDo: fix for Brasil !!!
             analysis_folders.append(dirpath)
     analysis_folders = sorted(analysis_folders)
 
