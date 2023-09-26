@@ -55,6 +55,7 @@ def open_raw_data(filename: str,
 
     folder = os.path.split(filename)[0]
     # filename = os.path.join(folder, 'traces-grid1.raw')
+    print(filename)
     data = open_data(filename, buffersize=buffersize, backsize=backsize, channel=channel)
     samplerate = data.samplerate
     channels = data.channels

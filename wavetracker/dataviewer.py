@@ -33,10 +33,11 @@ except ImportError:
 class ImagePlotWithHist(QWidget):
     update_data_sig = pyqtSignal(object)
     v_min_max_adapt_sig = pyqtSignal(object)
-    def __init__(self, data, parent=None):
+    def __init__(self, data, verbose = 0, parent=None):
         super(ImagePlotWithHist, self).__init__()
 
         self.data = data
+        self.verbose = verbose
 
         self.plot_x_min, self.plot_x_max = 0., 1.
         self.data_x_min, self.data_x_max = 0., 0.
@@ -75,10 +76,11 @@ class ImagePlotWithHist(QWidget):
 
 class SubplotScrollareaWidget(QScrollArea):
     update_data_sig = pyqtSignal(object)
-    def __init__(self, plots_per_row, num_rows_visible, data, parent=None):
+    def __init__(self, plots_per_row, num_rows_visible, data, verbose = 0, parent=None):
         super(QScrollArea, self).__init__()
         self._scroll_ylim_per_double_click = False # can be activated
 
+        self.verbose = verbose
         self.data = data
 
         self.plot_x_min, self.plot_x_max = 0., 1.
@@ -136,7 +138,6 @@ class SubplotScrollareaWidget(QScrollArea):
     def scroll_ylim_per_double_click(self, value: bool):
         self._scroll_ylim_per_double_click = bool(value)
         if value == True:
-            print('got here')
             for plot_widget in self.plot_widgets:
                 plot_widget.mouseDoubleClickEvent = lambda event, p=plot_widget: self.adjust_ylim_to_double_clicked_subplot(
                     event, p)
@@ -161,8 +162,10 @@ class SubplotScrollareaWidget(QScrollArea):
 class DataViewer(QWidget):
     kill = pyqtSignal()
 
-    def __init__(self, data=None, cfg=None, parent=None):
+    def __init__(self, data=None, cfg=None, verbose = 0, parent=None):
         super(DataViewer, self).__init__()
+
+        self.verbose = verbose
 
         # params: data plotting
         self.plot_max_d_xaxis = 5.
@@ -205,14 +208,14 @@ class DataViewer(QWidget):
 
         self.force_update_spec_plot = False
 
-        self.TracesSubPlots = SubplotScrollareaWidget(plots_per_row=3, num_rows_visible=3, data = self.data)
+        self.TracesSubPlots = SubplotScrollareaWidget(plots_per_row=3, num_rows_visible=3, data = self.data, verbose=self.verbose)
         self.TracesSubPlots.create_subplots(fn=pg.PlotCurveItem, xlabel ='time [s]', ylabel='ampl. [a.U.]')
         self.TracesSubPlots.update_data_sig.connect(self.plot_update_traces)
         self.TracesSubPlots.scroll_ylim_per_double_click = True
         self.TracesSubPlots.plot_widgets[0].setXRange(self.TracesSubPlots.plot_x_min, self.TracesSubPlots.plot_x_max)
         self.main_layout.addWidget(self.TracesSubPlots, 0, 0)
 
-        self.SpecsSubPlots = SubplotScrollareaWidget(plots_per_row=3, num_rows_visible=3, data = self.data)
+        self.SpecsSubPlots = SubplotScrollareaWidget(plots_per_row=3, num_rows_visible=3, data = self.data, verbose=self.verbose)
         self.SpecsSubPlots.create_subplots(fn=pg.ImageItem, xlabel ='time [s]', ylabel='frequency [Hz]')
         self.SpecsSubPlots.update_data_sig.connect(self.plot_update_specs)
         self.SpecsSubPlots.plot_widgets[0].setXRange(self.SpecsSubPlots.plot_x_min, self.SpecsSubPlots.plot_x_max)
@@ -220,7 +223,7 @@ class DataViewer(QWidget):
         self.main_layout.addWidget(self.SpecsSubPlots, 0, 0)
         self.SpecsSubPlots.hide()
 
-        self.SumSpecPlot = ImagePlotWithHist(data=self.data)
+        self.SumSpecPlot = ImagePlotWithHist(data=self.data, verbose=self.verbose)
         self.SumSpecPlot.update_data_sig.connect(self.plot_update_sumspec)
         self.SumSpecPlot.v_min_max_adapt_sig.connect(self.vmin_vmax_adapt)
         self.SumSpecPlot.plot_widgets[0].setXRange(self.SumSpecPlot.plot_x_min, self.SumSpecPlot.plot_x_max)
@@ -245,7 +248,7 @@ class DataViewer(QWidget):
     #     print(self.x_min)
 
     def plot_update_sumspec(self, obj):
-        print('fn plot_update_sumspec')
+        if self.verbose >= 2: print('fn plot_update_sumspec')
         x_idx_0 = int(obj.data_x_min * self.data.samplerate)
         x_idx_1 = int(obj.data_x_max * self.data.samplerate)
         if not self.force_update_spec_plot:
@@ -261,7 +264,7 @@ class DataViewer(QWidget):
         # obj.plot_widgets[0].setYRange(self.min_freq, self.max_freq)
 
     def plot_update_specs(self, obj):
-        print('fn: plot_update_specs')
+        if self.verbose >= 2: print('fn: plot_update_specs')
         x_idx_0 = int(obj.data_x_min * self.data.samplerate)
         x_idx_1 = int(obj.data_x_max * self.data.samplerate)
 
@@ -280,7 +283,7 @@ class DataViewer(QWidget):
         # obj.plot_widgets[0].setYRange(self.min_freq, self.max_freq, padding=0)
 
     def plot_update_traces(self, obj):
-        print('fn: plot_update_traces')
+        if self.verbose >= 2: print('fn: plot_update_traces')
         x_idx_0 = int(obj.data_x_min * self.data.samplerate)
         x_idx_1 = int(obj.data_x_max * self.data.samplerate)
 
@@ -320,9 +323,10 @@ class DataViewer(QWidget):
         else:
             if (((cls.plot_x_min < cls.plot_x_min - (cls.plot_x_min - cls.data_x_min) * 0.5) and (cls.plot_x_min > (cls.plot_x_max - cls.plot_x_min))) or
                     (cls.plot_x_max > cls.plot_x_max + (cls.data_x_max - cls.plot_x_max) * 0.5)):
-                print('\nemit updating data:')
-                print(f'data_x_min: {cls.data_x_min:.2f}s; plot_x_min: {cls.plot_x_min:.2f}s')
-                print(f'data_x_max: {cls.data_x_max:.2f}s; plot_x_max: {cls.plot_x_max:.2f}s')
+                if cls.verbose >= 1:
+                    print('\nemit updating data:')
+                    print(f'data_x_min: {cls.data_x_min:.2f}s; plot_x_min: {cls.plot_x_min:.2f}s')
+                    print(f'data_x_max: {cls.data_x_max:.2f}s; plot_x_max: {cls.plot_x_max:.2f}s')
 
                 cls.data_x_min = cls.plot_x_min - (cls.plot_x_max - cls.plot_x_min)
                 cls.data_x_min = cls.data_x_min if cls.data_x_min > 0 else 0
@@ -393,7 +397,7 @@ class DataViewer(QWidget):
                 obj.plot_x_min = obj.x_min_for_sb[value]
                 obj.plot_x_max = obj.x_max_for_sb[value]
 
-                print(f'\nscrollbar: {obj.plot_x_min, obj.plot_x_max}')
+                if self.verbose >= 2: print(f'\nscrollbar: {obj.plot_x_min, obj.plot_x_max}')
                 obj.update_xrange_without_xlim_grep = True
                 obj.plot_widgets[0].setXRange(obj.plot_x_min, obj.plot_x_max, padding=0)
                 return
@@ -478,6 +482,8 @@ class DataViewer(QWidget):
 class DataViewerStandalone(QMainWindow):
     def __init__(self, args, parent=None):
         super(DataViewerStandalone, self).__init__(parent)
+        self.args = args
+
         rec = QApplication.desktop().screenGeometry()
         height = rec.height()
         width = rec.width()
@@ -491,15 +497,15 @@ class DataViewerStandalone(QMainWindow):
         self.central_widget.setLayout(self.gridLayout)
         self.setCentralWidget(self.central_widget)
 
-        self.cfg = Configuration(args.config, verbose=args.verbose)
+        self.cfg = Configuration(self.args.config, verbose=self.args.verbose)
 
         ### data
-        if not args.file:
+        if not self.args.file:
             self.open_btn = QPushButton('Open file', self.central_widget)
             self.open_btn.clicked.connect(self.open_with_file_dialog)
             self.gridLayout.addWidget(self.open_btn, 0, 0)
         else:
-            self.file = args.file
+            self.file = self.args.file
             self.go_to_DataViewer()
 
     def open_with_file_dialog(self):
@@ -516,7 +522,7 @@ class DataViewerStandalone(QMainWindow):
     def go_to_DataViewer(self):
         data, samplerate, channels, dataset, data_shape = open_raw_data(filename=self.file)
         # data_viewer_widget = DataViewer(data, self.cfg)
-        data_viewer_widget = DataViewer(data)
+        data_viewer_widget = DataViewer(data, verbose=self.args.verbose)
         self.gridLayout.addWidget(data_viewer_widget, 0, 0, 1, 1)
         data_viewer_widget.kill.connect(lambda: self.close())
 

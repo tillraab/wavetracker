@@ -193,8 +193,7 @@ class Analysis_pipeline(object):
                 self.Spec.terminate = True
 
             t0_spec = time.time()
-            # ToDo: check if i need to transpose this ?!
-            self.Spec.snippet_spectrogram(snippet_data, snipptet_t0=snippet_t0)
+            self.Spec.snippet_spectrogram(tf.transpose(snippet_data), snipptet_t0=snippet_t0)
             t1_spec = time.time()
 
 
@@ -274,30 +273,57 @@ def main():
     cfg = Configuration(args.config, verbose=args.verbose, logger=logger)
 
     # load data
-    analysis_folders = []
-    for dirpath, dirnames, filenames in os.walk(args.folder, topdown=True):
-        for filename in [f for f in filenames if any(f.endswith(s) for s in [".raw", ".wav"])]: # ToDo: check if this works
-            analysis_folders.append(dirpath)
-    analysis_folders = sorted(analysis_folders)
 
-    if args.verbose >= 1: print(f'{"Files found to analyze":^25}: {len(analysis_folders)}')
-    if logger: logger.info(f'{"Files found to analyze":^25}: {len(analysis_folders)}')
+    if os.path.isdir(args.file):
+        pass
+    elif os.path.isfile(args.file):
+        pass
 
-    for folder in analysis_folders:
 
-        data, samplerate, channels, dataset, data_shape = open_raw_data(folder=folder, verbose=args.verbose, logger=logger,
-                                                                        **cfg.spectrogram)
+    data, samplerate, channels, dataset, data_shape = open_raw_data(filename=args.file, verbose=args.verbose,
+                                                                    logger=logger,
+                                                                    **cfg.spectrogram)
 
-        Analysis = Analysis_pipeline(data, samplerate, channels, dataset, data_shape, cfg, folder, args.verbose, logger=logger,
-                                     gpu_use=not args.cpu and available_GPU)
+    folder = os.path.split(args.file)[0]
 
-        if args.renew:
-            Analysis.Spec.get_sparse_spec, Analysis.Spec.get_fine_spec, Analysis.get_signals = True, True, True
+    Analysis = Analysis_pipeline(data, samplerate, channels, dataset, data_shape, cfg, folder, args.verbose,
+                                 logger=logger,
+                                 gpu_use=not args.cpu and available_GPU)
 
-        if args.nosave:
-            Analysis.Spec.get_sparse_spec, Analysis.Spec.get_fine_spec = False, False
+    if args.renew:
+        Analysis.Spec.get_sparse_spec, Analysis.Spec.get_fine_spec, Analysis.get_signals = True, True, True
 
-        Analysis.run()
+    if args.nosave:
+        Analysis.Spec.get_sparse_spec, Analysis.Spec.get_fine_spec = False, False
+
+    Analysis.run()
+
+    # ToDo: rework this section to the current needs!!!
+    # analysis_folders = []
+    # for dirpath, dirnames, filenames in os.walk(args.folder, topdown=True):
+    #     for filename in [f for f in filenames if any(f.endswith(s) for s in [".raw", ".wav"])]: # ToDo: check if this works
+    #         analysis_folders.append(dirpath)
+    #
+    # analysis_folders = sorted(analysis_folders)
+    #
+    # if args.verbose >= 1: print(f'{"Files found to analyze":^25}: {len(analysis_folders)}')
+    # if logger: logger.info(f'{"Files found to analyze":^25}: {len(analysis_folders)}')
+    #
+    # for folder in analysis_folders:
+    #
+    #     data, samplerate, channels, dataset, data_shape = open_raw_data(folder=filename, verbose=args.verbose, logger=logger,
+    #                                                                     **cfg.spectrogram)
+    #
+    #     Analysis = Analysis_pipeline(data, samplerate, channels, dataset, data_shape, cfg, folder, args.verbose, logger=logger,
+    #                                  gpu_use=not args.cpu and available_GPU)
+    #
+    #     if args.renew:
+    #         Analysis.Spec.get_sparse_spec, Analysis.Spec.get_fine_spec, Analysis.get_signals = True, True, True
+    #
+    #     if args.nosave:
+    #         Analysis.Spec.get_sparse_spec, Analysis.Spec.get_fine_spec = False, False
+    #
+    #     Analysis.run()
 
 
         ##########################################
