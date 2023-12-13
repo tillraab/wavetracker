@@ -77,7 +77,7 @@ class Spectrogram(object):
         # meta parameters
         if folder != None:
             save_path = list(folder.split(os.sep))
-            save_path.insert(-1, 'derived_data')
+            save_path.insert(-2, 'derived_data')
             self.save_path = os.sep.join(save_path)
 
         self.verbose = verbose

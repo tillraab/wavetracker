@@ -282,11 +282,7 @@ def peak_detect_coordinater(spec, peaks, troughs, spec_freq, low_threshold, high
         return
     detect_peaks_fixed(spec[i], peaks[i], troughs[i], spec_freq, low_threshold, high_threshold, min_freq, max_freq,
                         mains_freq, mains_freq_tol, min_good_peak_power)
-    # detect_peaks_fixed(spec[i], peaks[i], low_th)
-# tester(spec[i], peaks[i], troughs[i])
     cuda.syncthreads()
-
-########################################################################################
 
 @cuda.jit('f8(f8, f4[:], f8[:], f4[:], i8[:], i8, f8, f8, f8)', device=True)
 def get_group(freq, log_spec, spec_freqs, peaks, out, min_group_size, max_freq_tol, mains_freq, mains_freq_tol):
