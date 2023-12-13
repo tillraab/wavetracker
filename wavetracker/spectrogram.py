@@ -131,7 +131,6 @@ class Spectrogram(object):
                 self.sparse_freq = np.load(os.path.join(self.save_path, 'sparse_freq.npy'))
 
             ### fine spec
-            # ToDo: check if already existing in save folder
             self.fine_spec_str = os.path.join(self.save_path, 'fine_spec.npy')
             self.buffer_spectra = None
 
@@ -184,8 +183,6 @@ class Spectrogram(object):
 
 
     def snippet_spectrogram(self, data_snippet, snipptet_t0):
-        # ToDo: I changed some things here so that the input can be the same for both pathways
-
         if self.gpu:
             self.spec, self.spec_freqs, spec_times = tensorflow_spec(data_snippet, samplerate=self.samplerate,
                                                              verbose=self.verbose, step=self.step, nfft = self.nfft,
@@ -290,17 +287,17 @@ class Spectrogram(object):
 
 
 def main():
-    # ToDo: add example dataset to git
-    example_data = "/home/raab/data/2023-02-09-08_16"
     parser = argparse.ArgumentParser(description='Evaluated electrode array recordings with multiple fish.')
-    parser.add_argument('-f', '--folder', type=str, help='file to be analyzed', default=example_data)
+    parser.add_argument('file', nargs='?', type=str, help='file to be analyzed')
     parser.add_argument('-c', "--config", type=str, help="<config>.yaml file for analysis", default=None)
     parser.add_argument('-v', '--verbose', action='count', dest='verbose', default=0,
                         help='verbosity level. Increase by specifying -v multiple times, or like -vvv')
     parser.add_argument('--cpu', action='store_true', help='analysis using only CPU.')
     parser.add_argument('-r', '--renew', action='store_true', help='redo all analysis; dismiss pre-saved files.')
     args = parser.parse_args()
-    args.folder = os.path.normpath(args.folder)
+
+    args.file = os.path.abspath(args.file)
+    folder = os.path.split(args.file)[0]
 
     if args.verbose >= 1: print(f'\n--- Running wavetracker.spectrogram ---')
 
@@ -312,11 +309,11 @@ def main():
     cfg = Configuration(args.config, verbose=args.verbose)
 
     # load data
-    data, samplerate, channels, dataset, data_shape = open_raw_data(folder=args.folder, verbose=args.verbose,
+    data, samplerate, channels, dataset, data_shape = open_raw_data(filename=args.file, verbose=args.verbose,
                                                                     **cfg.spectrogram)
 
     # Spectrogram
-    Spec = Spectrogram(samplerate, data_shape, folder=args.folder, verbose=args.verbose,
+    Spec = Spectrogram(samplerate, data_shape, folder=folder, verbose=args.verbose,
                        gpu_use=not args.cpu and available_GPU, **cfg.raw, **cfg.spectrogram)
     if args.renew:
         Spec._get_sparse_spec, Spec._get_fine_spec = True, True
@@ -346,29 +343,6 @@ def main():
 
             snippet_data = [data[i0: i0 + Spec.snippet_size, channel] for channel in Spec.channel_list]
             Spec.snippet_spectrogram(snippet_data, snipptet_t0=snippet_t0)
-
-    # Spec.save() # ToDo: this instead of "Spec.terminate = True" ?!?!
-    embed()
-    quit()
-
-
-
-
-
-
-
-
-
-    # if available_GPU and not args.cpu:
-    #     # example how to use gpu pipeline
-    #     # ToDo: implement and test memmap stuff for GPU
-    #     pipeline_spectrogram_gpu(dataset, samplerate=samplerate, data_shape=data_shape, verbose=args.verbose, folder=args.folder,
-    #                              **cfg.raw, **cfg.spectrogram)
-    # else:
-    #     # example how to use cpu pipeline
-    #     # ToDo: implement start and stop time
-    #     pipeline_spectrogram_cpu(data, samplerate=samplerate, data_shape=data_shape, verbose=args.verbose, folder=args.folder,
-    #                              **cfg.raw, **cfg.spectrogram)
 
 
 if __name__ == "__main__":
