@@ -1,20 +1,17 @@
-import sys
 import os
 import argparse
 import time
 import multiprocessing
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 import numpy as np
-import matplotlib.pyplot as plt
-
-from IPython import embed
 from functools import partial, partialmethod
 from matplotlib.mlab import specgram as mspecgram
 from tqdm import tqdm
 
-from thunderfish.powerspectrum import get_window, decibel
 from .config import Configuration
 from .datahandler import open_raw_data
+
+from thunderfish.powerspectrum import get_window, decibel
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
 try:
     import tensorflow as tf
@@ -26,44 +23,133 @@ except:
     available_GPU = False
 
 
-def get_step_and_overlap(overlap_frac: float,
-                         nfft: int,
-                         **kwargs):
+def get_step_and_overlap(overlap_frac, nfft, **kwargs):
+    """
+    Computes step size and overlap for spectrogram computation.
+
+    Parameters
+    ----------
+        overlap_frac : float
+            Fraction of how much nfft windows shall overlap during spectrogram computation.
+        nfft : int
+            Samples in one fft-window.
+        kwargs : dict
+            Excess parameters from the configuration dictionary passed to the function.
+
+    Returns
+    -------
+        step : int
+            Step size (samples) for fft-window in spectrogram analysis.
+        noverlap : int
+            Overlap (samples) of fft-windows.
+    """
     step = int(nfft * (1-overlap_frac))
     noverlap = int(nfft * overlap_frac)
     return step, noverlap
 
 
-def tensorflow_spec(data, samplerate, nfft, step, verbose = 1, **kwargs):
-    def conversion_to_old_scale(x):
-        return x**2 * 4.05e-9
+def tensorflow_spec(data, samplerate, nfft, step, **kwargs):
+    """
+    Computes a soectrogram for a datasnippet with n samples recorded on m channels. The function is based on the
+    tensorflow package and optimized for GPU use.
+
+    Parameters
+    ----------
+        data : 2d-array, 2d-tensor
+            Contains a snippet of raw-data from electrode (grid) recordings of electric fish. Data shape resembles
+            samples (1st dimension) x channels (2nd dimension).
+        samplerate : int
+            Samplerate of the data.
+        nfft : int
+            Samples in one nfft window.
+        step : int
+            Samples by which consecutive nfft windows are shifted by.
+        kwargs : dict
+            Excess parameters from the configuration dictionary passed to the function.
+
+    Returns
+    -------
+        ret_spectra : 2d-tensor
+            Spectrogram computed for the given data.
+        freqs : 1d-array
+            Frequency array corresponding to the 2nd dimension of the computed spectrogram.
+        times : 1d-array
+            Time array corresponding to the 1st dimension of the computed spectrogram.
+    """
+    def conversion_to_old_scale(tf_spectrogram):
+        """
+        Scales the spectrogram computed using the tensporflow functionality to match the scale of the old way decribed
+        in the function mlab_spec().
+
+        Parameters
+        ----------
+            tf_spectrogram : 2d-tenspr
+                Spectrogram
+
+        Returns
+        -------
+            scaled_spectrogram : 2d-tensor
+                Scales spectrogram that matches the the range if spectrograms returned by mlab_spec
+
+        """
+        # ToDo: kill this whole approch and write all spectrogram anaylsis in pytorch (CPU and GPU functionality).
+
+        scaled_spectrogram = tf_spectrogram**2 * 4.05e-9
+        return scaled_spectrogram
 
     # Run the computation on the GPU
-    t0 = time.time()
     with tf.device('GPU:0'):
-        # if verbose >= 3: print(f'tensor transpose: {time.time() - t0}'); t0 = time.time()
-
         # Compute the spectrogram using a short-time Fourier transform
         stft = tf.signal.stft(data, frame_length=nfft, frame_step=step, window_fn=tf.signal.hann_window)
-        # if verbose >= 3: print(f'stft: {time.time() - t0}'); t0 = time.time()
         spectra = tf.abs(stft)
-        # if verbose >= 3: print(f'abs: {time.time() - t0}'); t0 = time.time()
+    ret_spectra = conversion_to_old_scale(spectra)
 
-        # t0 = time.time()
-        # embed()
-        # quit()
-        # spectra = spectra.numpy()
-        # print(f'transfere to numpy took: {time.time()-t0:.4f}s\n')
-        # if verbose == 1: print(f'result: {time.time() - t0} \n')
-
+    # create frequency and time axis returned with the spectrogram
     freqs = np.fft.fftfreq(nfft, 1 / samplerate)[:int(nfft / 2) + 1]
     freqs[-1] = samplerate / 2
-    # ToDo: this is not completely correct
     times = np.linspace(0, int(tf.shape(data)[1]) / samplerate, int(spectra.shape[1]), endpoint=False)
-    return conversion_to_old_scale(spectra), freqs, times
+
+    return ret_spectra, freqs, times
 
 
 def mlab_spec(data, samplerate, nfft, noverlap, detrend='constant', window='hann', **kwargs):
+    """
+    This function maps its input parameters on the mspecgram spectrogram. The use of this function is mainly its
+    utilization as patrial function (see functools) and the extraction if kwargs.
+
+    Parameters
+    ----------
+        data : 2d-array
+            Contains a snippet of raw-data from electrode (grid) recordings of electric fish. Data shape resembles
+            samples (1st dimension) x channels (2nd dimension).
+        samplerate : int
+            Samplerate of the data.
+        nfft : int
+            Samples in one nfft window.
+        noverlap : int
+            Overlap (samples) of fft-windows.
+        detrend: str
+            If 'constant' subtract mean of data.
+            If 'linear' subtract line fitted to the data.
+            If 'none' do not deternd the data.
+        window: str
+            Function used for windowing data segements.
+            One of hann, blackman, hamming, bartlett, boxcar, triang, parzen,
+            bohman, blackmanharris, nuttall, fattop, barthann
+            (see scipy.signal window functions).
+        kwargs : dict
+            Excess parameters from the configuration dictionary passed to the function.
+
+    Returns
+    -------
+        spec : 2d-tensor
+            Spectrogram computed for the given data.
+        freqs : 1d-array
+            Frequency array corresponding to the 2nd dimension of the computed spectrogram.
+        times : 1d-array
+            Time array corresponding to the 1st dimension of the computed spectrogram.
+    """
+
     spec, freqs, times = mspecgram(data, NFFT=nfft, Fs=samplerate,
                                   noverlap=noverlap, detrend=detrend,
                                   scale_by_freq=True,
@@ -72,8 +158,55 @@ def mlab_spec(data, samplerate, nfft, noverlap, detrend='constant', window='hann
 
 
 class Spectrogram(object):
+    """
+    Tools to compute and collect spectrogram data while analyzing large files of electric fish. This includes the
+    computation of spectrograms for data snippets and all channels separately and the storage and generation of a
+    spares-  and full spectrogram which is summed up over all electrodes for the whole recording which is filled while
+    different data snippets are analyzed. The sparse spectrogram is convinient for plotting larger data snippets,
+    whereas the full spectrogram shows the original temporal and frequency resolution.
+
+    The key function of this class is "snippet_spectrogram". Here, spectrograms of data snippets are computed, either
+    using CPU or GPU depending on availability, and the generation and storage of spares- and full spectrograms are
+    coordinated.
+
+    """
     def __init__(self, samplerate, data_shape, snippet_size, nfft, overlap_frac, channels, gpu_use, verbose=0, folder=None,
                  core_count = None, **kwargs):
+        """
+        Constructs all the necessary attributes for the spectrogram analysis pipeline of the wavetracker-package to
+        analyse electric grid recordings of wave-type electric fish. When a folder, corresponding to the datapath of
+        the data that shall be analysed, is passed, this class checks if there is already a spare- and fine-spectrogram
+        computed and stored for the respective dataset. If not, these are generated here while a full raw-file is
+        processed except told else.
+
+        Parameters
+        ----------
+            samplerate : int
+                Samplerate of the data that shall be analyzed.
+            data_shape : tuple
+                Total length and channel count of the data that shall be analized,
+            snippet_size : int
+                Sample count that is contained in one data snippet handled by the respective spectogram functions at
+                once.
+            nfft : int
+                Samples in one nfft window.
+            overlap_frac : float
+                Overlap (samples) of fft-windows.
+            channels : int
+                Channel count for the data the shall be analized
+            gpu_use : bool
+                If GPU is available chooses a different and faster analysis pathway.
+            verbose : int
+                Verbosity level regulating shell/logging feedback during analysis. Suggested for debugging in
+                development.
+            folder : str
+                Folder where raw-data that shall be analysed here is stored.
+            core_count : int
+                CPU core count that can be used for simultaneous spectrogram analysis of different channels in one
+                data-snippet.
+            kwargs : dict
+                Excess parameters from the configuration dictionary passed to the function.
+        """
         # meta parameters
         if folder != None:
             save_path = list(folder.split(os.sep))
@@ -149,19 +282,44 @@ class Spectrogram(object):
 
     @property
     def overlap_frac(self):
+        """
+        Get the overlap fraction of fft-windows for spectrogram analysis.
+        """
         return self._overlap_frac
 
     @overlap_frac.setter
     def overlap_frac(self, value):
+        """
+        Sets the overlap fraction of fft-windows for spectrogram analysis. Since the overlap fraction directly
+        influences the "step" and "noverlap" parameter, these are adjusted accordingly.
+
+        Parameters
+        ----------
+            value : float
+                Overlap fraction of fft-windows.
+        """
         self._overlap_frac = value
         self.step, self.noverlap = get_step_and_overlap(self._overlap_frac, self.nfft)
 
     @property
     def get_sparse_spec(self):
+        """
+        Gets information whether a sparse spectrogram for the whole recording is computed on the fly while analyzing a
+        whole file.
+        """
         return bool(self._get_sparse_spec)
 
     @get_sparse_spec.setter
     def get_sparse_spec(self, get_sparse_s):
+        """
+        Sets whether a sparse spectrogram for the whole recording is computed on the fly while analyzing a whole file.
+        If this is set to "True" associated parameters are set accordingly.
+
+        Parameters
+        ----------
+            get_sparse_s : bool
+                If "True" generates the sparse spectrogram during file analysis.
+        """
         if get_sparse_s:
             self.sparse_spectra = None
             self.sparse_time_borders, self.sparse_freq_borders = None, None
@@ -170,10 +328,23 @@ class Spectrogram(object):
 
     @property
     def get_fine_spec(self):
+        """
+        Gets information whether a fine spectrogram for the whole recording is generated and directly stored on the fly
+        while analyzing a whole file.
+        """
         return bool(self._get_fine_spec)
 
     @get_fine_spec.setter
     def get_fine_spec(self, get_fine_s):
+        """
+        Sets whether a fine spectrogram for the whole recording is generated and directly stored on the fly while
+        analyzing a whole file. Associated parameters are set accordingly.
+
+        Parameters
+        ----------
+            get_fine_s : bool
+                If "True" generates and stores the fine spectrogram during file analysis.
+        """
         if get_fine_s:
             self._get_fine_spec = True
             self.fine_spec = None
@@ -183,10 +354,22 @@ class Spectrogram(object):
 
 
     def snippet_spectrogram(self, data_snippet, snipptet_t0):
+        """
+        As the key element of this class, this function computes a spectrogram for a passed data snippet.
+        This is done using either CPU or GPU Hardware, depending on availability and settings. Furthermore, sparse- and
+        full spectrograms for the covering the while recording can be generated.
+
+        Parameters
+        ----------
+            data_snippet : 2d-array, 2d-tensor
+                The current data snippet to analyse. The 1st dimension contains the data for the different recording
+                channels (2nd dimension).
+            snipptet_t0 : float
+                Timeponit of the first datapoint in the data snippet in respect to the whole recording analized.
+        """
         if self.gpu:
             self.spec, self.spec_freqs, spec_times = tensorflow_spec(data_snippet, samplerate=self.samplerate,
-                                                             verbose=self.verbose, step=self.step, nfft = self.nfft,
-                                                             **self.kwargs)
+                                                                     step=self.step, nfft = self.nfft, **self.kwargs)
             self.spec = np.swapaxes(self.spec, 1, 2)
             self.sum_spec = np.sum(self.spec, axis=0)
             self.itter_count += 1
@@ -216,6 +399,15 @@ class Spectrogram(object):
             self.save()
 
     def create_plotable_spec(self):
+        """
+        Create a sparse/plottable spectrogram for the whole recording (not only a data snippet). This is done by
+        separating the time and frequency range of the whole recording into n time- and m frequency-segments, whereby n
+        and m, the quantity of segments, correspond to the class attribute "monitor_resolution". For each combination of
+        time and frequency segment the maximum value of the corresponding spectral powers in the summed up spectrogram
+        of the corresponding snippet is extracted and assigned to the corresponding index in the sparse spectrogram
+        matrix. Accordingly, this matrix is filled while analysing a whole recording file.
+
+        """
         f1 = np.argmax(self.spec_freqs > self.max_freq)
         plot_freqs = self.spec_freqs[:f1]
         plot_spectra = self.sum_spec[:f1, :]
@@ -253,6 +445,13 @@ class Spectrogram(object):
                 self.sparse_spectra[i, j] = np.max(plot_spectra[f_mask[:, None], t_mask])
 
     def create_fine_spec(self):
+        """
+        Creates and updates a full spectrogram for the whole recording stored directly on the harddrive, via memmory
+        mapping. Accordingly, this matrix is extended while analysing a whole recording file. Be cautious, since files
+        get very large due to the lack of reduction in frequency and time resolution. Similar to the sparse spectrogram,
+        this full spectrogram resembles the summed up spectrograms over all electrodes.
+
+        """
         if not hasattr(self.fine_spec, '__len__'):
             if not os.path.exists(self.save_path):
                 os.makedirs(self.save_path)
@@ -273,6 +472,9 @@ class Spectrogram(object):
                 self.buffer_spectra = np.empty((self.fine_spec_shape[0], 0))
 
     def save(self):
+        """
+        Saves sparse and full spectrograms when the analysis is complete.
+        """
         if self._get_sparse_spec:
             np.save(os.path.join(self.save_path, 'sparse_spectra.npy'), self.sparse_spectra)
             self.sparse_time = self.sparse_time_borders[:-1] + np.diff(self.sparse_time_borders) / 2
