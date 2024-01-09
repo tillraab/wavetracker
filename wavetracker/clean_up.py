@@ -8,7 +8,7 @@ from IPython import embed
 from tqdm import tqdm
 import sys
 
-illustrate_cleanup = False
+illustrate_cleanup = True
 
 def gauss(t, shift, sigma, size, norm = False):
     if not hasattr(shift, '__len__'):
@@ -25,7 +25,7 @@ def gauss(t, shift, sigma, size, norm = False):
 
 
 def get_valid_ids_by_freq_dist(times, idx_v, ident_v, fund_v, valid_v, old_valid_ids, i0, stride, f_th, kde_th):
-    plot=True if not kde_th else False
+    # plot = True if not kde_th else False
     # plot=True
 
     window_t_mask = (times[idx_v] >= i0) & (times[idx_v] < i0 + stride)
@@ -50,6 +50,7 @@ def get_valid_ids_by_freq_dist(times, idx_v, ident_v, fund_v, valid_v, old_valid
         ax[1].plot(kde, convolve_f)
         ax[1].plot([kde_th, kde_th], [convolve_f[0], convolve_f[-1]], '--', color='k', lw=2)
         ax[0].set_ylim(np.min(ff)-10, np.max(ff)+10)
+        # plt.show()
     ###################################################
 
     valid_f = convolve_f[kde > kde_th]
@@ -79,7 +80,10 @@ def get_valid_ids_by_freq_dist(times, idx_v, ident_v, fund_v, valid_v, old_valid
             ax[0].plot(t, f, color=c, alpha = a, marker='.')
             # if valid:
             #     ax[0].text(t[0], f[0], f'{id:.0f}', ha='center', va='bottom')
-    # plt.show()
+    if illustrate_cleanup:
+        plt.show()
+    else:
+        plt.close()
     return kde_th, np.array(valid_ids)
 
 
@@ -88,7 +92,6 @@ def connect_by_similarity(times, idx_v, ident_v, fund_v, sign_v, valid_v, valid_
     window_t_mask = (times[idx_v] >= i0) & (times[idx_v] < i0 + stride)
 
     d_med_f = np.abs(valid_ids[:, 1] - valid_ids[:, 1][:, np.newaxis])
-
 
     med_power_id = np.zeros(len(valid_ids))
     for enu, id in enumerate(valid_ids[:, 0]):
@@ -243,8 +246,8 @@ def connect_with_overlap(fund_v, ident_v, valid_v, idx_v, times):
         if len(idx_v0) == 0 or len(idx_v1) == 0:
             continue
 
-        # fund_v0 = fund_v[(ident_v == id0)]
-        # fund_v1 = fund_v[(ident_v == id1)]
+        fund_v0 = fund_v[(ident_v == id0)]
+        fund_v1 = fund_v[(ident_v == id1)]
 
         first_last_idxs = np.array([idx_v0[0], idx_v0[-1], idx_v1[0], idx_v1[-1]])
 
@@ -349,7 +352,6 @@ def connect_with_overlap(fund_v, ident_v, valid_v, idx_v, times):
         # jump_freqs = join_fund_v[:-1][np.diff(id_switch_helper) != 0]
 
 
-        # if len(jump_idxs) > 1:
         if illustrate_cleanup:
             fig, ax = plt.subplots()
             ax.plot(times[idx_v0], fund_v0+0.5, marker='.',zorder=1, color='forestgreen')
@@ -550,7 +552,7 @@ def main(folder = None):
             ax[0].text(times[i[0]], f[0], f'{id:.0f}', ha='center', va='bottom')
             ax[0].plot(times[idx_v[ident_v == id]], fund_v[ident_v == id], marker='.')
         ax[0].set_title('after snippet connections')
-        #plt.show()
+        plt.show()
     ###################################################
 
     valid_v = power_density_filter(valid_v, sign_v, ident_v, idx_v, fund_v, times)
