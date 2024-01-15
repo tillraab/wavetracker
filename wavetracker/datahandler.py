@@ -33,6 +33,18 @@ except ImportError:
 def multi_channel_audio_file_generator(filename: str,
                                        channels: int,
                                        data_snippet_idxs: int):
+    """
+
+    Parameters
+    ----------
+        filename : str
+            Path to the file that shall be analyzed.
+        channels : int
+            Channel count of the data to be analysed.
+        data_snippet_idxs : int
+
+    """
+
     with tf.io.gfile.GFile(filename, 'rb') as f:
         while True:
             chunk = f.read(data_snippet_idxs * channels * 4) # 4 bytes per float32 value
@@ -52,7 +64,46 @@ def open_raw_data(filename: str,
                   verbose: int = 0,
                   logger = None,
                   **kwargs: dict):
+    """
+    Loades data from electric fish grid recordings and provides it as accessible variable. Since files are rather large,
+    retured arrays are either based on a buffer (for details see thunderfish.dataloader) or are yielded from a
+    generator (GPU pathway using tensorflow).
 
+    Parameters
+    ----------
+        filename : str
+            Path to the file that shall be analyzed.
+        buffersize : float
+            Size of internal buffer in seconds.
+        backsize : float
+            Part of the buffer to be loaded before the requested start index in seconds.
+        channel : int
+            The single channel to be worked on or all channels if negative.
+        snippet_size : int
+            Sample count that is contained in one data snippet handled by the respective spectogram functions at once.
+        verbose : int
+            Verbosity level regulating shell/logging feedback during analysis. Suggested for debugging in development.
+        logger : object
+            If not None, logger object that stores feedback about processing status
+        kwargs : dict
+             Excess parameters from the configuration dictionary passed to the function.
+
+    Returns
+    -------
+        data : 2d-array
+            Contains the raw-data from electrode (grid) recordings of electric fish. Data shape resembles samples
+            (1st dimension) x channels (2nd dimension).
+        samplerate : float
+            Samplerate of the data that shall be analyzed.
+        channels : int
+            Channel count of the data to be analysed.
+        dataset : 2d-tensor
+            Contains the same values as data, but is presented as data from generator, that is efficiently used by
+            tensorflow in the current GPU analysis pipeline.
+        shape : tuple
+            Shape of data.
+
+    """
     folder = os.path.split(filename)[0]
     # filename = os.path.join(folder, 'traces-grid1.raw')
     print(filename)
