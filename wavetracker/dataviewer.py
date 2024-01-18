@@ -461,14 +461,6 @@ class DataViewer(QWidget):
                 self.TracesSubPlots.show()
                 self.SumSpecPlot.hide()
 
-        # if event.key() == Qt.Key_C:
-        #     reply = QMessageBox.question(self, 'Save config.yaml', 'Want to save the current setting?',
-        #                                  QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
-        #
-        #     if reply == QMessageBox.Yes:
-        #         self.cfg.harmonic_groups['min_good_peak_power'] = self.v_min
-        #         self.cfg.save()
-        #         # self.scroll_area_spec.hide()
         if event.key() == Qt.Key_Q:
             self.kill.emit()
 
